@@ -1,0 +1,42 @@
+<section>
+
+    <div class="page-header">
+
+        <h2>🏆 Panther Leaderboard</h2>
+
+        <p>Recognizing the players who consistently build our culture.</p>
+
+    </div>
+
+    <div class="card">
+
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;">
+
+            <input
+                id="leaderboardSearch"
+                class="input"
+                placeholder="Search player..."
+                onkeyup="loadLeaderboard()"
+                style="max-width:300px;">
+
+            <select
+                id="leaderboardTeam"
+                class="input"
+                onchange="loadLeaderboard()"
+                style="max-width:180px;">
+
+                <option value="">All Teams</option>
+
+            </select>
+
+        </div>
+
+        <div id="leaderboardContent">
+
+            Loading Leaderboard...
+
+        </div>
+
+    </div>
+
+</section>

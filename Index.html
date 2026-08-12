@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+
+  <base target="_top">
+
+  <?!= include('Styles'); ?>
+
+</head>
+
+<body>
+
+  <div id="app">
+
+    <?!= include('Sidebar'); ?>
+
+    <main id="content">
+
+      <?!= include('Header'); ?>
+
+      <div id="page-content"></div>
+
+    </main>
+
+  </div>
+
+  <!-- Confirmation Modal -->
+  <div id="confirmModal" class="modal" style="display:none;">
+
+    <div class="modal-content" style="max-width:450px;">
+
+      <h2 id="confirmTitle">Confirm</h2>
+
+      <p id="confirmMessage"></p>
+
+      <br>
+
+      <div style="display:flex;justify-content:flex-end;gap:10px;">
+
+        <button
+          class="btn"
+          onclick="closeConfirmModal()">
+
+          Cancel
+
+        </button>
+
+        <button
+          id="confirmButton"
+          class="btn btn-danger">
+
+          Delete
+
+        </button>
+
+      </div>
+
+    </div>
+
+  </div>
+
+  <div id="toast" class="toast"></div>
+
+ <?!= include('Scripts'); ?>
+<?!= include('PlayerModule'); ?>
+<?!= include('PlayerModal'); ?>
+
+</body>
+
+</html>

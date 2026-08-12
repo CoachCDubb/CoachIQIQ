@@ -1,0 +1,2006 @@
+<script>
+
+function loadPage(page) {
+
+  google.script.run
+    .withSuccessHandler(function(html) {
+
+      document.getElementById("page-content").innerHTML = html;
+
+      // Update active navigation
+      document.querySelectorAll(".nav-item").forEach(item => {
+        item.classList.remove("active");
+
+        if (item.dataset.page === page) {
+          item.classList.add("active");
+        }
+      });
+
+      // Auto-load page data
+     switch(page){
+
+case "Dashboard":
+    loadDashboard();
+    break;
+
+  case "Players":
+    loadPlayers();
+    break;
+
+  case "Settings":
+    loadSettings();
+    break;
+
+case "Evaluations":
+    loadEvaluations();
+    break;
+
+    case "Sessions":
+    loadSessions();
+    break;
+
+    case "Leaderboard":
+    loadLeaderboard();
+    break;
+
+    case "PlayerProfile":
+    loadPlayerProfile();
+    break;
+}
+
+    })
+    .getPage(page);
+
+}
+
+function loadPlayers(){
+
+  google.script.run
+    .withSuccessHandler(showPlayers)
+    .getPlayersForUI();
+
+}
+
+const CoachIQ = {
+
+  settings: {},
+
+  players: []
+
+};
+
+function showPlayers(players){
+
+  CoachIQ.players = players;
+
+  loadDropdownSettings(function(settings){
+
+    CoachIQ.settings = settings;
+
+    populateTeamFilter(settings.teams);
+
+    renderPlayers(players);
+
+  });
+
+}
+function populateTeamFilter(teams){
+
+  const teamFilter = document.getElementById("teamFilter");
+
+  teamFilter.innerHTML = "";
+
+  teamFilter.innerHTML += `
+    <option value="All">All Teams</option>
+  `;
+
+  teams.forEach(team => {
+
+    teamFilter.innerHTML += `
+      <option value="${team}">${team}</option>
+    `;
+
+  });
+
+}
+function buildOptions(options, selectedValue = ""){
+
+  let html = "";
+
+  options.forEach(function(option){
+
+    html += `
+      <option value="${option}"
+        ${option === selectedValue ? "selected" : ""}>
+        ${option}
+      </option>
+    `;
+
+  });
+
+  return html;
+
+}
+
+function openAddPlayerModal(){
+
+  google.script.run
+    .withSuccessHandler(function(nextPlayerId){
+
+      document.getElementById("playerModalTitle").textContent = "Add Player";
+
+      document.getElementById("playerProfileContent").innerHTML = `
+
+<div class="edit-form">
+
+    <div class="form-group">
+
+        <label>Player ID</label>
+        <input type="text" value="${nextPlayerId}" disabled>
+
+        <div class="form-row">
+
+            <div class="form-field">
+
+                <label>First Name</label>
+                <input id="addFirstName" type="text">
+
+            </div>
+
+            <div class="form-field">
+
+                <label>Last Name</label>
+                <input id="addLastName" type="text">
+
+            </div>
+
+        </div>
+
+        <div class="form-row">
+
+            <div class="form-field">
+
+                <label>Jersey Number</label>
+                <input id="addJersey" type="number">
+
+            </div>
+
+            <div class="form-field">
+
+                <label>Grade</label>
+
+                <select id="addGrade">
+
+                    <option value="">Select Grade</option>
+                    <option>9</option>
+                    <option>10</option>
+                    <option>11</option>
+                    <option>12</option>
+
+                </select>
+
+            </div>
+
+        </div>
+
+        <div class="form-row">
+
+            <div class="form-field">
+
+                <label>Team</label>
+
+<select id="addTeam">
+
+    <option value="">Select Team</option>
+
+    ${buildOptions(CoachIQ.settings.teams)}
+
+</select>
+
+            </div>
+
+            <div class="form-field">
+
+                <label>Position</label>
+
+<select id="addPosition">
+
+    <option value="">Select Position</option>
+
+    ${buildOptions(CoachIQ.settings.positions)}
+
+</select>
+
+
+            </div>
+
+        </div>
+
+        <label>Status</label>
+
+<select id="addStatus">
+
+    ${buildOptions(CoachIQ.settings.statuses, "Active")}
+
+</select>
+
+        <div class="form-actions">
+
+            <button
+                class="btn btn-primary"
+                onclick="addPlayer('${nextPlayerId}')">
+
+                Add Player
+
+            </button>
+
+        </div>
+
+    </div>
+
+</div>
+
+`;
+
+      document.getElementById("playerModal").style.display = "block";
+
+    })
+    .getNextPlayerId();
+
+}
+function savePlayerChanges(playerId){
+
+  const updatedPlayer = {
+
+    id: playerId,
+    firstName: document.getElementById("editFirstName").value,
+    lastName: document.getElementById("editLastName").value,
+    jersey: document.getElementById("editJersey").value,
+    grade: document.getElementById("editGrade").value,
+    team: document.getElementById("editTeam").value,
+    position: document.getElementById("editPosition").value,
+    status: document.getElementById("editStatus").value
+
+  };
+
+  google.script.run
+    .withSuccessHandler(function(){
+
+      closePlayerModal();
+      loadPlayers();
+
+    })
+    .updatePlayer(updatedPlayer);
+
+}
+function addPlayer(playerId){
+
+  const newPlayer = {
+
+    id: playerId,
+    firstName: document.getElementById("addFirstName").value,
+    lastName: document.getElementById("addLastName").value,
+    jersey: document.getElementById("addJersey").value,
+    grade: document.getElementById("addGrade").value,
+    team: document.getElementById("addTeam").value,
+    position: document.getElementById("addPosition").value,
+    status: document.getElementById("addStatus").value
+
+  };
+
+  google.script.run
+    .withSuccessHandler(function(){
+
+      closePlayerModal();
+      loadPlayers();
+
+    })
+    .addPlayer(newPlayer);
+
+}
+function archivePlayer(playerId){
+
+    const player = CoachIQ.players.find(p => p[0] === playerId);
+
+    const confirmArchive = confirm(
+        `Archive ${player[1]} ${player[2]}?\n\nThis player will be removed from the active roster but all history will be preserved.`
+    );
+
+    if (!confirmArchive){
+        return;
+    }
+
+    google.script.run
+        .withSuccessHandler(function(){
+
+            loadPlayers();
+
+        })
+        .archivePlayer(playerId);
+
+}
+function loadDropdownSettings(callback){
+
+  google.script.run
+    .withSuccessHandler(function(settings){
+
+      CoachIQ.settings = settings;
+
+      callback(settings);
+
+    })
+    .getDropdownSettings();
+
+}
+function loadSettings(){
+
+  google.script.run
+    .withSuccessHandler(showSettings)
+    .getCoachIQSettings();
+
+}
+
+function showSettings(settings){
+
+  document.getElementById("programName").value =
+    settings.programName;
+
+  document.getElementById("schoolName").value =
+    settings.schoolName;
+
+  document.getElementById("currentSeason").value =
+    settings.currentSeason;
+
+  renderSettingsList("teamsContainer", settings.teams);
+
+  renderSettingsList("positionsContainer", settings.positions);
+
+  renderSettingsList("statusesContainer", settings.statuses);
+
+  renderSettingsList("cultureContainer", settings.cultureCategories);
+
+  renderSettingsList("staffContainer", settings.staff);
+
+  renderRewards(settings.rewards);
+
+}
+function saveProgramInformation(){
+
+  const data = {
+
+    programName: document.getElementById("programName").value,
+
+    schoolName: document.getElementById("schoolName").value,
+
+    currentSeason: document.getElementById("currentSeason").value
+
+  };
+
+  google.script.run
+    .withSuccessHandler(function(){
+
+      showToast("Program Information Saved!");
+
+      loadSettings();
+
+    })
+    .saveProgramInformation(data);
+
+}
+
+function saveSettingsList(containerId, settingName){
+
+  const items = [];
+
+  document
+    .querySelectorAll(`#${containerId} .setting-input`)
+    .forEach(function(input){
+
+      if(input.value.trim() !== ""){
+
+        items.push(input.value.trim());
+
+      }
+
+    });
+
+  google.script.run
+    .withSuccessHandler(function(){
+
+      showToast(settingName + " Saved!");
+
+      loadSettings();
+
+    })
+    .saveSettingList(settingName, items);
+
+}
+function showToast(message){
+
+  const toast = document.getElementById("toast");
+
+  toast.textContent = message;
+
+  toast.classList.add("show");
+
+  setTimeout(function(){
+
+    toast.classList.remove("show");
+
+  }, 2000);
+
+}
+
+document.addEventListener("DOMContentLoaded", function () {
+    loadPage("Dashboard");
+});
+function renderSettingsList(containerId, items){
+
+  const container = document.getElementById(containerId);
+
+  container.innerHTML = "";
+
+  items.forEach(function(item){
+
+    container.innerHTML += `
+
+<div class="setting-item">
+
+    <input
+        type="text"
+        value="${item}"
+        class="setting-input">
+
+    <button
+        class="delete-setting-btn"
+        onclick="deleteSettingItem(this)">
+
+        🗑
+
+    </button>
+
+</div>
+
+`;
+
+  });
+
+}
+function renderRewards(rewards){
+
+  const container = document.getElementById("pointRewardsContainer");
+
+  container.innerHTML = "";
+
+  rewards.forEach(function(reward){
+
+    container.innerHTML += `
+
+      <div class="reward-row" style="
+        display:flex;
+        align-items:center;
+        gap:15px;
+        margin-bottom:12px;
+      ">
+
+        <input
+          type="text"
+          value="${reward["Reward Name"]}"
+          class="setting-input reward-name"
+          style="flex:1;">
+
+        <input
+          type="number"
+          value="${reward.Points}"
+          class="setting-input reward-points"
+          style="width:80px;">
+
+        <label style="
+          display:flex;
+          align-items:center;
+          gap:6px;
+        ">
+
+          <input
+            type="checkbox"
+            class="reward-active"
+            ${reward.Active ? "checked" : ""}>
+
+          Active
+
+        </label>
+
+        <button
+          class="delete-setting-btn"
+          onclick="this.parentElement.remove()">
+
+          🗑
+
+        </button>
+
+      </div>
+
+    `;
+
+  });
+
+}
+function addSettingField(containerId, placeholder){
+
+  const container = document.getElementById(containerId);
+
+  container.innerHTML += `
+
+<div class="setting-item">
+
+    <input
+        type="text"
+        class="setting-input"
+        placeholder="${placeholder}">
+
+    <button
+        class="delete-setting-btn"
+        onclick="deleteSettingItem(this)">
+
+        🗑
+
+    </button>
+
+</div>
+
+`;
+
+}
+function addPointReward(){
+
+  const container = document.getElementById("pointRewardsContainer");
+
+  container.innerHTML += `
+
+    <div class="reward-row" style="
+      display:flex;
+      align-items:center;
+      gap:15px;
+      margin-bottom:12px;
+    ">
+
+      <input
+        type="text"
+        class="setting-input reward-name"
+        placeholder="Reward Name"
+        style="flex:1;">
+
+      <input
+        type="number"
+        class="setting-input reward-points"
+        placeholder="Points"
+        style="width:80px;">
+
+      <label style="
+        display:flex;
+        align-items:center;
+        gap:6px;
+      ">
+
+        <input
+          type="checkbox"
+          class="reward-active"
+          checked>
+
+        Active
+
+      </label>
+
+      <button
+        class="delete-setting-btn"
+        onclick="this.parentElement.remove()">
+
+        🗑
+
+      </button>
+
+    </div>
+
+  `;
+
+}
+function deleteSettingItem(button){
+
+  button.parentElement.remove();
+
+}
+function loadEvaluations(){
+
+  google.script.run
+    .withSuccessHandler(showEvaluationPage)
+    .getDropdownSettings();
+
+}
+function loadSessions(){
+
+  google.script.run
+    .withSuccessHandler(function(result){
+
+      console.log("Result from Apps Script:", result);
+
+      showSessionsPage(result);
+
+    })
+    .withFailureHandler(function(error){
+
+      console.error(error);
+
+    })
+    .getAllSessions();
+
+}
+function showEvaluationPage(settings){
+
+  // Today's date
+  const today = new Date().toISOString().split("T")[0];
+  document.getElementById("practiceDate").value = today;
+
+  // Evaluator Dropdown
+  const evaluator = document.getElementById("evaluatorSelect");
+
+  evaluator.innerHTML = "";
+
+  settings.staff.forEach(function(coach){
+
+    evaluator.innerHTML += `
+      <option value="${coach}">
+        ${coach}
+      </option>
+    `;
+
+  });
+
+  // Team Checkboxes
+  const teamContainer = document.getElementById("teamCheckboxes");
+
+  teamContainer.innerHTML = "";
+
+  settings.teams.forEach(function(team){
+
+    teamContainer.innerHTML += `
+      <label style="display:block; margin-bottom:8px;">
+
+        <input
+          type="checkbox"
+          class="evaluationTeam"
+          value="${team}">
+
+        ${team}
+
+      </label>
+    `;
+
+  });
+  window.evaluationSettings = settings;
+  window.pointRewards = settings.rewards || [];
+
+  // Check if we're resuming a session
+if(window.resumeSessionId && !window.viewMode){
+
+  loadResumeSession(window.resumeSessionId);
+
+}
+if(window.pendingViewSession){
+
+    const pending = window.pendingViewSession;
+
+    window.pendingViewSession = null;
+
+    openSession(
+        pending.sessionId,
+        pending.teams,
+        true
+    );
+
+    window.viewMode = false;
+
+}
+}
+function showSessionsPage(sessions){
+
+  console.log("Sessions:", sessions);
+
+  const container = document.getElementById("sessionsContainer");
+
+  if(!container){
+    console.error("sessionsContainer not found.");
+    return;
+  }
+
+  container.innerHTML = "";
+
+  if(!sessions || sessions.length === 0){
+
+    container.innerHTML = `
+      <div class="card">
+        <h3>No Sessions Found</h3>
+        <p>Create your first session to get started.</p>
+      </div>
+    `;
+
+    return;
+
+  }
+
+  sessions.reverse().forEach(function(session){
+
+   container.innerHTML += `
+
+<div
+    class="card session-card"
+    id="session-${session["Session ID"]}"
+    style="margin-bottom:18px;">
+
+  <div style="display:flex;justify-content:space-between;align-items:center;">
+
+    <div>
+
+      <h3 style="margin-bottom:10px;">
+        🏀 ${session["Session Type"]}
+      </h3>
+
+      <div>📅 ${session["Created"]}</div>
+      <div>👥 ${session["Teams"]}</div>
+      <div>👤 ${session["Evaluators"]}</div>
+      <div>📊 ${session["Players"] || 0} Players</div>
+
+<div>✅ ${session["Completed Evaluations"] || 0} Evaluations</div>
+
+<div>⏱ ${session["Duration"] || "--"} minutes</div>
+
+    </div>
+
+    <div>
+
+     <span class="status-pill ${session["Status"] == "Completed" ? "status-completed" : "status-progress"}">
+
+  ${session["Status"]}
+
+</span>
+
+    </div>
+
+  </div>
+
+  <hr style="margin:15px 0;">
+
+ <div style="display:flex;gap:10px;">
+
+    ${session["Status"] === "In Progress" ? `
+      <button
+        class="btn btn-primary"
+        onclick="resumeSession('${session["Session ID"]}')">
+
+        Resume
+
+      </button>
+    ` : ""}
+
+    <button
+      class="btn"
+      onclick="viewSession('${session["Session ID"]}')">
+
+      View
+
+    </button>
+
+    <button
+      class="btn btn-danger"
+      onclick="deleteSession('${session["Session ID"]}')">
+
+      Delete
+
+    </button>
+
+</div>
+
+</div>
+
+`;
+
+  });
+
+}
+function showSessionSummary(session, status){
+
+    document.getElementById("sessionSetupCard").style.display = "none";
+    document.getElementById("sessionSummaryCard").style.display = "block";
+
+    document.getElementById("summarySessionType").innerText =
+        session.sessionType || "Practice";
+
+    const displayDate = new Date(session.date);
+
+if (!isNaN(displayDate.getTime())) {
+
+    document.getElementById("summaryDate").innerText =
+        "📅 " + displayDate.toLocaleDateString();
+
+} else {
+
+    document.getElementById("summaryDate").innerText =
+        "📅 " + session.date;
+
+}
+
+if(session.created){
+
+    const time = new Date(session.created);
+
+    document.getElementById("summaryTime").innerText =
+        "🕒 " + time.toLocaleTimeString([], {
+            hour: "numeric",
+            minute: "2-digit"
+        });
+
+}else{
+
+    document.getElementById("summaryTime").innerText = "";
+
+}
+    document.getElementById("summaryTeams").innerText =
+        "👥 " + session.teams.join(", ");
+
+    document.getElementById("summaryEvaluator").innerText =
+        "👤 " + session.evaluators.join(", ");
+
+    document.getElementById("summaryStatus").innerText =
+        status;
+
+    document.getElementById("summaryStatus").className =
+        status === "Completed"
+            ? "status-pill status-completed"
+            : "status-pill status-progress";
+
+    if(session.sessionNotes){
+
+        document.getElementById("summaryNotes").style.display = "block";
+        document.getElementById("summaryNotesText").innerText =
+            session.sessionNotes;
+
+    }else{
+
+        document.getElementById("summaryNotes").style.display = "none";
+
+    }
+
+}
+function startSession(){
+
+  const selectedTeams = [];
+
+  document
+    .querySelectorAll(".evaluationTeam:checked")
+    .forEach(function(box){
+
+      selectedTeams.push(box.value);
+
+    });
+
+  if(selectedTeams.length === 0){
+
+    alert("Please select at least one team.");
+
+    return;
+
+  }
+
+  // Get evaluator(s)
+  const evaluators = [
+    document.getElementById("evaluatorSelect").value
+  ];
+
+  // Build Practice Session
+const session = {
+
+    sessionType: "Practice",
+
+    date: document.getElementById("practiceDate").value,
+
+    phase: "",
+
+    teams: selectedTeams,
+
+    evaluators: evaluators,
+
+    sessionNotes: document.getElementById("practiceNotes").value
+
+};
+
+ google.script.run
+  .withSuccessHandler(function(sessionId){
+
+      window.currentPracticeSession = sessionId;
+
+   google.script.run
+  .withSuccessHandler(function(players){
+
+      const evaluator =
+          document.getElementById("evaluatorSelect").value;
+
+      google.script.run
+      .withSuccessHandler(function(){
+
+    document.getElementById("sessionSetupCard").style.display = "none";
+    document.getElementById("sessionSummaryCard").style.display = "block";
+
+    document.getElementById("summarySessionType").innerText =
+        session.sessionType;
+
+    document.getElementById("summaryDate").innerText =
+        "📅 " + session.date;
+
+    document.getElementById("summaryTeams").innerText =
+        "👥 " + session.teams.join(", ");
+
+    document.getElementById("summaryEvaluator").innerText =
+        "👤 " + evaluator;
+
+    document.getElementById("summaryStatus").innerText =
+        "In Progress";
+
+    document.getElementById("summaryStatus").className =
+        "status-pill status-progress";
+
+    if(session.sessionNotes){
+
+        document.getElementById("summaryNotes").style.display = "block";
+
+        document.getElementById("summaryNotesText").innerText =
+            session.sessionNotes;
+
+    }else{
+
+        document.getElementById("summaryNotes").style.display = "none";
+
+    }
+
+    openSession(
+        sessionId,
+        selectedTeams
+    );
+
+})
+        .createEvaluationRows(
+          sessionId,
+          players,
+          evaluator
+        );
+
+  })
+  .getPlayersByTeams(selectedTeams);
+
+  })
+  .createPracticeSession(session);
+
+}
+function showEvaluationTable(players){
+
+console.log("SHOW TABLE");
+console.log(players);
+console.log(Array.isArray(players));
+console.log(Array.isArray(players[0]));
+console.log(typeof players[0]);
+console.log(Object.keys(players[0]));
+console.log(players[0]);
+console.log(window.evaluationSettings);
+
+  const container = document.getElementById("evaluationContainer");
+
+  console.log(container);
+
+  const categories = evaluationSettings.cultureCategories;
+
+  let html = `
+   <div class="card">
+
+    <h3>Player Evaluations</h3>
+
+    <div class="evaluation-table-wrapper">
+
+        <table>
+
+        <thead>
+
+          <tr>
+
+    <th class="sticky-attendance">Att.</th>
+
+    <th class="sticky-player">Player</th>
+  `;
+
+  // Dynamic Category Headers
+  categories.forEach(function(category){
+
+    html += `<th>${category}</th>`;
+
+  });
+
+ html += `
+
+        <th>Reward</th>
+
+        <th>Notes</th>
+
+      </tr>
+
+    </thead>
+
+    <tbody>
+`;
+
+console.log("FIRST PLAYER");
+console.log(players[0]);
+console.log(Array.isArray(players[0]));
+
+  players.forEach(function(player){
+
+    html += `
+
+      <tr
+    class="evaluation-row"
+    data-player="${player["Player ID"]}">
+
+    <td class="sticky-attendance" style="text-align:center;">
+
+        <input
+            type="checkbox"
+            class="attendance-check"
+            checked>
+
+   </td>
+
+<td class="sticky-player">
+
+    ${player["First Name"]} ${player["Last Name"]}
+
+    <span class="absent-badge">
+        ABSENT
+    </span>
+
+</td>
+
+    `;
+
+   // Rating Buttons
+categories.forEach(function(category){
+
+  html += `<td><div class="rating-group">`;
+
+  for(let score = 1; score <= 5; score++){
+
+  html += `
+    <button
+      class="rating-btn"
+      data-session="${window.currentPracticeSession}"
+      data-player="${player["Player ID"]}"
+      data-category="${category}"
+      data-score="${score}"
+      title="${score} Star Rating">
+
+      ★
+
+    </button>
+  `;
+
+}
+
+  html += `</div></td>`;
+
+});
+
+html += `
+
+<td>
+
+    <select
+        class="reward-select"
+        data-player="${player["Player ID"]}">
+
+        <option value="">-- Reward --</option>
+
+        ${(window.pointRewards || []).map(function(reward){
+
+            return `
+                <option value="${reward["Reward ID"]}">
+                    ${reward["Reward Name"]}
+                </option>
+            `;
+
+        }).join("")}
+
+    </select>
+
+</td>
+
+    <td>
+
+        <button
+            class="action-btn"
+            onclick="openNotesModal('${player["Player ID"]}')">
+
+            💬
+
+        </button>
+
+    </td>
+
+</tr>
+
+`;
+
+  });
+
+  html += `
+
+    </tbody>
+
+    </table>
+
+</div>
+
+`;
+
+console.log("Finished building HTML");
+
+  container.innerHTML = html;
+
+  console.log("Container after insert:");
+console.log(container.innerHTML);
+
+initializeRatingButtons();
+
+initializeAttendanceCheckboxes();
+
+initializeRewardDropdowns();
+
+document.getElementById("finishSessionContainer").style.display = "block";
+
+}
+function initializeRatingButtons(){
+
+    document.querySelectorAll(".rating-group").forEach(function(group){
+
+        group.querySelectorAll(".rating-btn").forEach(function(button){
+
+            button.addEventListener("click", function(){
+
+                // Update button color
+                group.querySelectorAll(".rating-btn").forEach(function(btn){
+                    btn.classList.remove("selected");
+                });
+
+                button.classList.add("selected");
+
+                // Read button data
+                const sessionId = button.dataset.session;
+                const playerId = button.dataset.player;
+                const category = button.dataset.category;
+                const score = Number(button.dataset.score);
+
+                // Save to Google Sheets
+                google.script.run
+                    .withFailureHandler(function(error){
+                        alert(error.message);
+                    })
+                    .updateEvaluationScore(
+                        sessionId,
+                        playerId,
+                        category,
+                        score
+                    );
+
+            });
+
+        });
+
+    });
+
+}
+function initializeAttendanceCheckboxes(){
+
+    document
+        .querySelectorAll(".attendance-check")
+        .forEach(function(box){
+
+            box.addEventListener("change", function(){
+
+                const row = box.closest(".evaluation-row");
+
+                const sessionId = window.currentPracticeSession;
+
+                const playerId = row.dataset.player;
+
+                const buttons = row.querySelectorAll(".rating-btn");
+
+                if(box.checked){
+
+                    row.classList.remove("player-absent");
+
+                    buttons.forEach(function(btn){
+                        btn.disabled = false;
+                    });
+
+                }else{
+
+                    row.classList.add("player-absent");
+
+                    buttons.forEach(function(btn){
+                        btn.disabled = true;
+                    });
+
+                }
+
+                console.log("Saving attendance...");
+                console.log({
+                    sessionId: sessionId,
+                    playerId: playerId,
+                    present: box.checked
+                });
+
+                google.script.run
+                    .withSuccessHandler(function(){
+                        console.log("Attendance saved successfully.");
+                    })
+                    .withFailureHandler(function(error){
+                        console.error("Attendance save failed:", error);
+                    })
+                    .updateAttendance(
+                        sessionId,
+                        playerId,
+                        box.checked
+                    );
+
+            });
+
+        });
+
+}
+function finishCurrentSession(){
+
+    google.script.run
+        .withSuccessHandler(function(){
+
+            alert("Session Completed!");
+
+            window.resumeSessionId = null;
+            window.currentPracticeSession = null;
+
+            loadPage("Sessions");
+
+        })
+        .finishEntireSession(window.currentPracticeSession);
+
+}
+function resumeSession(sessionId){
+
+  // Save the session we're resuming
+  window.resumeSessionId = sessionId;
+
+  // Open the Evaluation page
+  loadPage("Evaluations");
+
+}
+function openEvaluationSession(session, evaluations){
+
+  console.log("SESSION");
+  console.log(session);
+
+  console.log("EVALUATIONS");
+  console.log(evaluations);
+
+}
+
+function viewSession(sessionId){
+
+    window.resumeSessionId = null;
+    window.viewMode = true;
+
+    loadPage("Evaluations");
+
+    google.script.run
+        .withSuccessHandler(function(data){
+
+            console.log("SESSION VIEW DATA");
+            console.log(data);
+
+            const waitForPage = setInterval(function(){
+
+                if(
+                    document.getElementById("evaluationContainer") &&
+                    window.evaluationSettings
+                ){
+
+                    clearInterval(waitForPage);
+
+                    window.currentPracticeSession = sessionId;
+
+                    populateSessionSummary(data.session);
+
+                    window.pointRewards = data.rewards;
+
+                    showEvaluationTable(data.players);
+
+                    restoreEvaluationScores(data.scores);
+
+                    makeEvaluationReadOnly();
+
+                    document.getElementById("sessionSetupCard").style.display = "none";
+                    document.getElementById("sessionSummaryCard").style.display = "block";
+
+                }
+
+            }, 50);
+
+        })
+        .getSessionViewData(sessionId);
+
+}
+
+function deleteSession(sessionId){
+
+    showConfirmModal(
+
+        "Delete Session",
+
+        `This will permanently delete:<br><br>
+        • The session<br>
+        • All player evaluations<br><br>
+        <strong>This cannot be undone.</strong>`,
+
+        "Delete",
+
+        function(){
+
+            google.script.run
+               .withSuccessHandler(function(){
+
+    const card = document.getElementById("session-" + sessionId);
+
+    if(card){
+
+        card.style.transition = "all .25s ease";
+
+        card.style.opacity = "0";
+
+        card.style.transform = "translateX(30px)";
+
+        setTimeout(function(){
+
+            card.remove();
+
+        }, 250);
+
+    }
+
+    showToast("Session deleted.");
+
+})
+                .withFailureHandler(function(error){
+
+                    showToast(error.message || error);
+
+                })
+                .deleteSession(sessionId);
+
+        }
+
+    );
+
+}
+function openSession(sessionId, selectedTeams, readOnly = false){
+
+  window.currentPracticeSession = sessionId;
+
+google.script.run
+.withSuccessHandler(function(players){
+
+    showEvaluationTable(players);
+
+    google.script.run
+    .withSuccessHandler(function(rewards){
+
+        populateRewardDropdowns(rewards);
+
+        google.script.run
+        .withSuccessHandler(function(scores){
+
+            restoreEvaluationScores(scores);
+
+            if(readOnly){
+                makeEvaluationReadOnly();
+            }
+
+        })
+        .getEvaluationScores(sessionId);
+
+    })
+    .getActiveRewards();
+
+})
+.getPlayersForSession(sessionId);
+
+}
+
+function restoreEvaluationScores(scores){
+
+  Object.keys(scores).forEach(function(playerId){
+
+    const playerScores = scores[playerId];
+
+    console.log("Player:", playerId);
+console.log("Attendance:", playerScores.Attendance);
+console.log("Type:", typeof playerScores.Attendance);
+console.log(playerScores);
+
+    // -------------------------
+    // Restore Attendance
+    // -------------------------
+
+    if(playerScores.Attendance === false){
+
+      const row = document.querySelector(
+        `.evaluation-row[data-player="${playerId}"]`
+      );
+
+      if(row){
+
+        const checkbox = row.querySelector(".attendance-check");
+
+        checkbox.checked = false;
+
+        row.classList.add("player-absent");
+
+        row.querySelectorAll(".rating-btn").forEach(function(btn){
+          btn.disabled = true;
+        });
+
+      }
+
+    }
+
+    // -------------------------
+    // Restore Ratings
+    // -------------------------
+
+    Object.keys(playerScores).forEach(function(category){
+
+  if(category === "Attendance"){
+    return;
+  }
+
+  if(category === "Reward"){
+
+    const dropdown = document.querySelector(
+      `.reward-select[data-player="${playerId}"]`
+    );
+
+    if(dropdown){
+      dropdown.value = playerScores.Reward;
+    }
+
+    return;
+
+  }
+
+  const score = playerScores[category];
+
+      if(score === "" || score == null){
+        return;
+      }
+
+      const button = document.querySelector(
+        `.rating-btn[data-player="${playerId}"][data-category="${category}"][data-score="${score}"]`
+      );
+
+      if(button){
+
+        button.classList.add("selected");
+
+      }
+
+    });
+
+  });
+
+}
+// ---------------------------
+// Notes Modal
+// ---------------------------
+
+function openNotesModal(playerId){
+
+    window.currentNotesPlayer = playerId;
+
+    google.script.run
+        .withSuccessHandler(function(notes){
+
+            document.getElementById("evaluationNotes").value = notes;
+
+            document.getElementById("notesModal").style.display = "block";
+
+        })
+        .getEvaluationNotes(
+            window.currentPracticeSession,
+            playerId
+        );
+
+}
+
+function closeNotesModal(){
+
+    document.getElementById("notesModal").style.display = "none";
+
+}
+
+function saveEvaluationNotes(){
+
+    google.script.run
+        .withSuccessHandler(function(){
+
+            closeNotesModal();
+
+        })
+        .updateEvaluationNotes(
+            window.currentPracticeSession,
+            window.currentNotesPlayer,
+            document.getElementById("evaluationNotes").value
+        );
+
+}
+function loadResumeSession(sessionId){
+
+  google.script.run
+    .withSuccessHandler(function(session){
+
+      const teams = session["Teams"]
+        .split(",")
+        .map(team => team.trim());
+
+     showSessionSummary({
+
+    sessionType: session["Session Type"],
+    date: session["Date"],
+    created: session["Created"],
+    teams: session["Teams"]
+        .split(",")
+        .map(team => team.trim()),
+    evaluators: session["Evaluators"]
+        .split(",")
+        .map(evaluator => evaluator.trim()),
+    sessionNotes: session["Session Notes"]
+
+}, "In Progress");
+
+openSession(
+    session["Session ID"],
+    teams
+);
+
+    })
+    .withFailureHandler(function(error){
+
+      console.error(error);
+
+    })
+    .getSession(sessionId);
+
+}
+function makeEvaluationReadOnly(){
+
+    document
+        .querySelectorAll(".rating-btn")
+        .forEach(function(btn){
+
+            btn.disabled = true;
+
+        });
+
+    document
+        .querySelectorAll(".attendance-check")
+        .forEach(function(box){
+
+            box.disabled = true;
+
+        });
+
+    document
+        .querySelectorAll(".action-btn")
+        .forEach(function(btn){
+
+            btn.disabled = true;
+
+        });
+
+    document.getElementById("finishSessionContainer").style.display = "none";
+
+}
+let confirmAction = null;
+
+function showConfirmModal(title, message, buttonText, callback){
+
+    document.getElementById("confirmTitle").innerText = title;
+
+    document.getElementById("confirmMessage").innerHTML = message;
+
+    const button = document.getElementById("confirmButton");
+
+    button.innerText = buttonText;
+
+    confirmAction = callback;
+
+    document.getElementById("confirmModal").style.display = "block";
+
+}
+
+function closeConfirmModal(){
+
+    document.getElementById("confirmModal").style.display = "none";
+
+}
+
+document.addEventListener("click", function(e){
+
+    if(e.target.id === "confirmButton"){
+
+        closeConfirmModal();
+
+        if(confirmAction){
+
+            confirmAction();
+
+        }
+
+    }
+
+});
+function loadDashboard(){
+
+    google.script.run
+        .withSuccessHandler(function(data){
+
+            // Active Players
+            document.getElementById("dashboardPlayers").innerText =
+                data.activePlayers;
+
+            // Latest Session
+            document.getElementById("dashboardLatestSession").innerText =
+                data.latestSession;
+
+            // Attendance
+            if(document.getElementById("dashboardAttendance")){
+                document.getElementById("dashboardAttendance").innerText =
+                    (data.attendance ?? "--") + "%";
+            }
+
+            // Culture Score
+            if(document.getElementById("dashboardCulture")){
+                document.getElementById("dashboardCulture").innerText =
+                    data.cultureScore ?? "--";
+            }
+
+            // Panther Point Leader
+            if(document.getElementById("dashboardLeader")){
+                document.getElementById("dashboardLeader").innerHTML =
+                    data.pointLeader || "No Panther Points yet.";
+            }
+
+            // Recent Activity
+            if(document.getElementById("dashboardActivity")){
+                document.getElementById("dashboardActivity").innerHTML =
+                    data.recentActivity || "No recent activity.";
+            }
+
+            // AI Insight
+            if(document.getElementById("dashboardInsight")){
+                document.getElementById("dashboardInsight").innerHTML =
+                    data.insight || "CoachIQ is analyzing your program.";
+            }
+            // Today's Focus
+if(document.getElementById("dashboardFocus")){
+    document.getElementById("dashboardFocus").innerHTML =
+        data.focus || "Everything looks great today.";
+}
+            // Program Trends
+if(document.getElementById("dashboardTrends")){
+    document.getElementById("dashboardTrends").innerHTML =
+        data.trends || "No trend data available.";
+}
+
+        })
+        .withFailureHandler(function(error){
+
+            console.error(error);
+
+        })
+        .getDashboardData();
+
+}
+function loadLeaderboard(){
+
+  google.script.run
+    .withSuccessHandler(showLeaderboard)
+    .getLeaderboard();
+
+}
+function showLeaderboard(players){
+
+  const container = document.getElementById("leaderboardContent");
+
+  let html = "";
+
+  players.forEach(function(player){
+
+    let badgeClass = "default-rank";
+    let badgeText = player.rank;
+
+    if(player.rank === 1){
+
+      badgeClass = "gold";
+      badgeText = "🥇";
+
+    }else if(player.rank === 2){
+
+      badgeClass = "silver";
+      badgeText = "🥈";
+
+    }else if(player.rank === 3){
+
+      badgeClass = "bronze";
+      badgeText = "🥉";
+
+    }
+
+    html += `
+
+<div class="leaderboard-card"
+
+onclick="openPlayerModal('${player.playerId}',false)">
+
+<div style="display:flex;align-items:center;justify-content:space-between;">
+
+<div style="display:flex;align-items:center;gap:20px;">
+
+<div class="rank-badge ${badgeClass}">
+
+${badgeText}
+
+</div>
+
+<div>
+
+<div style="font-size:24px;font-weight:bold;">
+
+${player.firstName} ${player.lastName}
+
+</div>
+
+<div style="margin-top:8px;color:#666;">
+
+🏀 #${player.jersey}
+
+&nbsp;&nbsp;
+
+${player.team}
+
+&nbsp;&nbsp;
+
+Grade ${player.grade}
+
+</div>
+
+</div>
+
+</div>
+
+<div style="text-align:right;">
+
+<div class="points-total">
+
+${player.points}
+
+</div>
+
+<div class="points-label">
+
+Panther Points
+
+</div>
+
+<div style="margin-top:12px;">
+
+🟢 ${player.positive}
+
+&nbsp;&nbsp;
+
+🔴 ${player.negative}
+
+</div>
+
+</div>
+
+</div>
+
+</div>
+
+`;
+
+  });
+
+  container.innerHTML = html;
+
+}
+function savePointRewards(){
+
+  const rewards = [];
+
+  document.querySelectorAll(".reward-row").forEach(function(row,index){
+
+    const name = row.querySelector(".reward-name").value.trim();
+
+    const points = Number(
+      row.querySelector(".reward-points").value
+    );
+
+    const active =
+      row.querySelector(".reward-active").checked;
+
+    if(name === ""){
+      return;
+    }
+
+    rewards.push({
+
+      id: "R" + String(index + 1).padStart(3,"0"),
+
+      name: name,
+
+      points: points,
+
+      active: active,
+
+      order: index + 1
+
+    });
+
+  });
+
+  google.script.run
+    .withSuccessHandler(function(){
+
+      showToast("Point Rewards Saved!");
+
+      loadSettings();
+
+    })
+    .savePointRewards(rewards);
+
+}
+function populateRewardDropdowns(rewards){
+
+console.log(rewards);
+
+    document
+        .querySelectorAll(".reward-select")
+        .forEach(function(select){
+
+            select.innerHTML = "";
+
+            const blank = document.createElement("option");
+            blank.value = "";
+            blank.textContent = "-- Reward --";
+
+            select.appendChild(blank);
+
+            rewards.forEach(function(reward){
+
+                const option = document.createElement("option");
+
+              option.value = reward["Reward Name"];
+
+option.textContent =
+    reward["Reward Name"] + " (+" + reward.Points + ")";
+
+                select.appendChild(option);
+
+            });
+
+        });
+
+}
+function initializeRewardDropdowns(){
+
+    document
+        .querySelectorAll(".reward-select")
+        .forEach(function(select){
+
+            select.addEventListener("change", function(){
+
+                const playerId = select.dataset.player;
+
+                google.script.run
+                .withSuccessHandler(function(){
+
+                    showToast("Reward saved!");
+
+                })
+                .withFailureHandler(function(error){
+
+                    console.error(error);
+
+                })
+                .updateReward(
+                    window.currentPracticeSession,
+                    playerId,
+                    select.value
+                );
+
+            });
+
+        });
+
+}
+function loadPlayerProfile(playerId){
+
+    if(!playerId){
+        playerId = window.selectedPlayerId;
+    }
+
+    google.script.run
+        .withSuccessHandler(function(profile){
+
+            console.log(profile);
+
+        })
+        .getPlayerProfile(playerId);
+
+}
+function populateSessionSummary(session){
+
+    console.log("populateSessionSummary()");
+    console.log(session);
+
+    console.log(document.getElementById("summarySessionType"));
+    console.log(document.getElementById("summaryDate"));
+    console.log(document.getElementById("summaryTeams"));
+    console.log(document.getElementById("summaryEvaluator"));
+    console.log(document.getElementById("summaryStatus"));
+    console.log(document.getElementById("summaryNotes"));
+    console.log(document.getElementById("summaryNotesText"));
+
+    document.getElementById("summarySessionType").innerText =
+        session["Session Type"];
+
+    document.getElementById("summaryDate").innerText =
+        "📅 " + session["Date"];
+
+    document.getElementById("summaryTeams").innerText =
+        "👥 " + session["Teams"];
+
+    document.getElementById("summaryEvaluator").innerText =
+        "👤 " + session["Evaluators"];
+
+    document.getElementById("summaryStatus").innerText =
+        session["Status"];
+
+    if(session["Session Notes"]){
+
+        document.getElementById("summaryNotes").style.display = "block";
+
+        document.getElementById("summaryNotesText").innerText =
+            session["Session Notes"];
+
+    }else{
+
+        document.getElementById("summaryNotes").style.display = "none";
+
+    }
+
+}
+
+</script>

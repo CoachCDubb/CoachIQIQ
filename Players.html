@@ -1,0 +1,85 @@
+<section>
+
+<div class="page-header">
+
+    <div>
+
+        <h2>Players</h2>
+
+        <p class="page-subtitle">
+            Manage your roster and player information.
+        </p>
+
+    </div>
+
+    <button
+        class="btn-v2 btn-primary-v2 btn-lg-v2"
+        onclick="openAddPlayerModal()">
+
+        + Add Player
+
+    </button>
+
+</div>
+
+</div>
+
+<div class="search-bar">
+
+    <input
+    type="text"
+    id="playerSearch"
+    placeholder="Search players..."
+    onkeyup="searchPlayers()"
+>
+
+</div>
+<div class="filter-bar">
+
+    <select id="teamFilter" onchange="filterPlayers()">
+        <option value="All">All Teams</option>
+        <option value="Varsity">Varsity</option>
+        <option value="JV">JV</option>
+        <option value="Freshman">Freshman</option>
+    </select>
+
+    <select id="gradeFilter" onchange="filterPlayers()">
+        <option value="All">All Grades</option>
+        <option value="9">9th</option>
+        <option value="10">10th</option>
+        <option value="11">11th</option>
+        <option value="12">12th</option>
+    </select>
+
+    <select id="statusFilter" onchange="filterPlayers()">
+        <option value="All">All Statuses</option>
+        <option value="Active">Active</option>
+        <option value="Inactive">Inactive</option>
+    </select>
+
+</div>
+
+<table id="playersTable">
+<thead>
+
+    <tr>
+
+        <th>ID</th>
+        <th>Name</th>
+        <th>#</th>
+        <th>Grade</th>
+        <th>Team</th>
+        <th>Actions</th>
+
+    </tr>
+
+</thead>
+
+    <tbody>
+
+</tbody>
+
+</table>
+
+
+</section>

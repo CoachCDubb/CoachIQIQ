@@ -1,0 +1,219 @@
+<section>
+
+    <h2>📝 Session Evaluations</h2>
+
+    <p class="page-subtitle">
+        Evaluate your team's culture after practice.
+    </p>
+
+    <br>
+
+    <!-- ========================================= -->
+    <!-- Session Setup -->
+    <!-- ========================================= -->
+
+    <div class="card" id="sessionSetupCard">
+
+        <h3>Session Information</h3>
+
+        <div class="form-row">
+
+            <div class="form-field">
+
+                <label>Session Type</label>
+
+                <select id="sessionType">
+
+                    <option value="Practice">Practice</option>
+                    <option value="Breakfast Club">Breakfast Club</option>
+
+                </select>
+
+            </div>
+
+            <div class="form-field">
+
+                <label>Session Date</label>
+
+                <input
+                    id="practiceDate"
+                    type="date">
+
+            </div>
+
+            <div class="form-field">
+
+                <label>Evaluator</label>
+
+                <select id="evaluatorSelect">
+
+                    <option>Loading...</option>
+
+                </select>
+
+            </div>
+
+        </div>
+
+        <br>
+
+        <label>Select Team(s)</label>
+
+        <div id="teamCheckboxes">
+
+            Loading...
+
+        </div>
+
+        <br>
+
+        <label>Session Notes</label>
+
+        <textarea
+            id="practiceNotes"
+            rows="4"
+            style="width:100%;padding:12px;border:1px solid #ddd;border-radius:10px;"></textarea>
+
+        <br><br>
+
+        <button
+            class="btn btn-primary"
+            onclick="startSession()">
+
+            Start Session
+
+        </button>
+
+    </div>
+
+    <!-- ========================================= -->
+    <!-- Session Summary -->
+    <!-- ========================================= -->
+
+    <div
+        class="card"
+        id="sessionSummaryCard"
+        style="display:none;">
+
+        <div
+            style="
+                display:flex;
+                justify-content:space-between;
+                align-items:center;
+            ">
+
+            <div>
+
+                <h3 id="summarySessionType"></h3>
+
+                <div id="summaryDate"></div>
+
+                <div id="summaryTime"></div>
+
+                <div id="summaryTeams"></div>
+
+                <div id="summaryEvaluator"></div>
+
+            </div>
+
+            <div>
+
+                <span
+                    id="summaryStatus"
+                    class="status-pill status-progress">
+
+                </span>
+
+            </div>
+
+        </div>
+
+        <div
+            id="summaryNotes"
+            style="margin-top:15px;display:none;">
+
+            <strong>Session Notes</strong>
+
+            <p id="summaryNotesText"></p>
+
+        </div>
+
+    </div>
+
+    <br>
+
+    <!-- ========================================= -->
+    <!-- Player Evaluations -->
+    <!-- ========================================= -->
+
+    <div id="evaluationContainer"></div>
+
+    <br>
+
+    <!-- ========================================= -->
+    <!-- Finish Session -->
+    <!-- ========================================= -->
+
+    <div
+        id="finishSessionContainer"
+        style="display:none;">
+
+        <button
+            class="btn btn-primary"
+            onclick="finishCurrentSession()">
+
+            Finish Session
+
+        </button>
+
+    </div>
+
+    <!-- ========================================= -->
+    <!-- Notes Modal -->
+    <!-- ========================================= -->
+
+    <div
+        id="notesModal"
+        class="modal"
+        style="display:none;">
+
+        <div
+            class="modal-content"
+            style="max-width:600px;">
+
+            <h2>Player Notes</h2>
+
+            <textarea
+                id="evaluationNotes"
+                rows="8"
+                style="
+                    width:100%;
+                    padding:12px;
+                    border:1px solid #ccc;
+                    border-radius:8px;
+                "
+                placeholder="Enter player notes..."></textarea>
+
+            <br><br>
+
+            <button
+                class="btn btn-primary"
+                onclick="saveEvaluationNotes()">
+
+                Save Notes
+
+            </button>
+
+            <button
+                class="btn"
+                onclick="closeNotesModal()">
+
+                Cancel
+
+            </button>
+
+        </div>
+
+    </div>
+
+</section>

@@ -1,0 +1,948 @@
+<script>
+
+let currentPlayerProfile = null;
+
+/* ==========================================================
+   CoachIQ Player Module
+   ========================================================== */
+
+function renderPlayers(players){
+
+  const tbody = document.querySelector("#playersTable tbody");
+
+  tbody.innerHTML = "";
+
+  players.forEach(function(player){
+
+    tbody.innerHTML += `
+      <tr>
+
+        <td>${player[0]}</td>
+
+        <td>${player[1]} ${player[2]}</td>
+
+        <td>${player[3]}</td>
+
+        <td>${player[4]}</td>
+
+        <td>${player[5]}</td>
+
+        <td class="action-cell">
+
+          <button
+            class="action-btn view-btn"
+            onclick="openPlayerModal('${player[0]}', false)">
+            👁
+          </button>
+
+          <button
+            class="action-btn edit-btn"
+            onclick="openPlayerModal('${player[0]}', true)">
+            ✏️
+          </button>
+
+          <button
+            class="action-btn delete-btn"
+            onclick="archivePlayer('${player[0]}')">
+            📦
+          </button>
+
+        </td>
+
+      </tr>
+    `;
+
+  });
+
+}
+
+function searchPlayers(){
+
+  filterPlayers();
+
+}
+
+function filterPlayers(){
+
+  const search =
+    document
+      .getElementById("playerSearch")
+      .value
+      .toLowerCase();
+
+  const team =
+    document.getElementById("teamFilter").value;
+
+  const grade =
+    document.getElementById("gradeFilter").value;
+
+  const status =
+    document.getElementById("statusFilter").value;
+
+  const filtered = CoachIQ.players.filter(function(player){
+
+    const matchesSearch =
+      player.some(value =>
+        String(value).toLowerCase().includes(search)
+      );
+
+    const matchesTeam =
+      team === "All" ||
+      player[5] === team;
+
+    const matchesGrade =
+      grade === "All" ||
+      String(player[4]) === grade;
+
+    const matchesStatus =
+      status === "All" ||
+      player[7] === status;
+
+    return (
+      matchesSearch &&
+      matchesTeam &&
+      matchesGrade &&
+      matchesStatus
+    );
+
+  });
+
+  renderPlayers(filtered);
+
+}
+
+function openPlayerModal(playerId, editMode){
+
+  if(editMode){
+    openEditPlayer(playerId);
+    return;
+  }
+
+  document.getElementById("playerModalTitle").textContent =
+    "Player Profile";
+
+  document.getElementById("playerProfileContent").innerHTML = `
+    <div style="padding:40px;text-align:center;">
+      Loading Player...
+    </div>
+  `;
+
+  document.getElementById("playerModal").style.display = "block";
+
+  google.script.run
+
+    .withSuccessHandler(function(profile){
+
+      try{
+
+        renderPlayerProfile(profile);
+
+        loadPlayerCulturePoints(playerId);
+
+      }catch(err){
+
+        console.error(err);
+        alert(err.stack);
+
+      }
+
+    })
+
+    .withFailureHandler(function(error){
+
+      console.error(error);
+
+      document.getElementById("playerProfileContent").innerHTML = `
+        <div style="padding:30px;">
+          Unable to load player profile.
+        </div>
+      `;
+
+    })
+
+    .getPlayerProfile(playerId);
+
+}
+
+function closePlayerModal(){
+
+  document.getElementById("playerModal").style.display = "none";
+
+}
+function getStars(score){
+
+  score = Number(score);
+
+  let stars = "";
+
+  for(let i = 1; i <= 5; i++){
+
+    stars += i <= Math.round(score)
+      ? "⭐"
+      : "☆";
+
+  }
+
+  return stars;
+
+}
+function renderPlayerProfile(profile){
+
+    currentPlayerProfile = profile;
+
+    if(!profile){
+
+        document.getElementById("playerProfileContent").innerHTML = `
+            <div style="padding:40px;text-align:center;">
+                Unable to load player profile.
+            </div>
+        `;
+        return;
+    }
+
+  const attendancePercent = profile.attendance.seasonPercentage;
+
+  let attendanceBar = `
+    <div style="
+      width:100%;
+      height:18px;
+      background:#ddd;
+      border-radius:10px;
+      overflow:hidden;
+      margin-top:10px;
+      margin-bottom:15px;
+    ">
+
+      <div style="
+        width:${attendancePercent}%;
+        height:100%;
+        background:#22C55E;
+      "></div>
+
+    </div>
+  `;
+
+// =============================
+// Overall Player Grade
+// =============================
+
+const overallGrade = profile.overallGrade;
+const overallStars = getStars(profile.overallGrade);
+const overallLabel = profile.overallLabel;
+  let pillarsHTML = "";
+
+  Object.entries(profile.trend).forEach(([pillar,data])=>{
+
+    pillarsHTML += `
+
+      <div style="
+        background:white;
+        border-radius:12px;
+        padding:18px;
+        box-shadow:0 3px 10px rgba(0,0,0,.08);
+      ">
+
+       <div style="
+      font-size:17px;
+      font-weight:bold;
+      color:#333;
+      margin-bottom:10px;
+    ">
+      ${pillar}
+    </div>
+
+<div style="
+  font-size:24px;
+  margin-bottom:10px;
+">
+
+  ${getStars(data.average)}
+
+  <div style="
+      margin-top:8px;
+      font-weight:bold;
+      font-size:20px;
+  ">
+      ${data.average.toFixed(1)} / 5.0
+  </div>
+
+</div>
+
+        <div style="
+          color:${data.color};
+          font-weight:bold;
+          margin-top:10px;
+        ">
+
+         ${data.icon} ${data.trend}
+
+        </div>
+
+      </div>
+
+    `;
+
+  });
+
+  const pointHistoryHTML = renderPantherPointHistory(profile.points.history);
+
+let practiceHistoryHTML = "";
+
+profile.history
+  .slice(0,5)
+  .forEach(function(session){
+
+  practiceHistoryHTML += `
+
+    <div style="
+      border-bottom:1px solid #eee;
+      padding:16px 0;
+    ">
+
+      <div style="
+        font-weight:bold;
+        font-size:16px;
+        margin-bottom:10px;
+      ">
+        🏀 ${session.sessionId}
+      </div>
+
+      <div>
+        Attendance:
+        ${session.attendance ? "✅ Present" : "❌ Absent"}
+      </div>
+
+      <div style="margin-top:8px;">
+        Effort:
+        ${getStars(session.pillars.Effort)}
+      </div>
+
+      <div>
+        Communication:
+        ${getStars(session.pillars.Communication)}
+      </div>
+
+      <div>
+        Leadership:
+        ${getStars(session.pillars.Leadership)}
+      </div>
+
+      <div>
+        Accountability:
+        ${getStars(session.pillars.Accountability)}
+      </div>
+
+    </div>
+
+  `;
+
+});
+  let timelineHTML = "";
+
+  profile.timeline.forEach(event=>{
+
+    timelineHTML += `
+
+      <div style="
+        border-left:4px solid #FDB927;
+        padding-left:18px;
+        margin-bottom:20px;
+      ">
+
+        <div style="
+          font-weight:bold;
+          font-size:17px;
+        ">
+
+          ${getTimelineIcon(event.category)}
+          ${event.title}
+
+        </div>
+
+        <div style="
+          color:#888;
+          font-size:13px;
+          margin:4px 0 8px;
+        ">
+
+          ${new Date(event.date).toLocaleDateString()}
+
+        </div>
+
+        <div>
+
+          ${event.details}
+
+        </div>
+
+      </div>
+
+    `;
+
+  });
+
+  document.getElementById("playerProfileContent").innerHTML = `
+
+<div style="
+background:linear-gradient(135deg,#111827,#1F2937);
+color:white;
+padding:35px;
+border-radius:20px;
+margin-bottom:30px;
+box-shadow:0 10px 25px rgba(0,0,0,.25);
+">
+
+    <div style="
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    ">
+
+        <div>
+
+            <h1 style="
+            margin:0;
+            font-size:40px;
+            font-weight:800;
+            ">
+                ${profile.player.firstName} ${profile.player.lastName}
+            </h1>
+
+            <div style="
+margin-top:12px;
+font-size:22px;
+font-weight:bold;
+color:#FDB927;
+">
+
+    ${overallStars}
+
+</div>
+
+<div style="
+font-size:16px;
+margin-top:6px;
+color:white;
+">
+
+    Overall Player Grade
+
+    <strong>
+        ${overallGrade.toFixed(1)} / 5.0
+    </strong>
+
+    • ${overallLabel}
+
+</div>
+
+            <div style="
+            margin-top:12px;
+            color:#D1D5DB;
+            font-size:18px;
+            ">
+                🏀 #${profile.player.jersey}
+                &nbsp;&nbsp;|&nbsp;&nbsp;
+                🟦 ${profile.player.team}
+                &nbsp;&nbsp;|&nbsp;&nbsp;
+                🎯 ${profile.player.position}
+                &nbsp;&nbsp;|&nbsp;&nbsp;
+                🎓 Grade ${profile.player.grade}
+            </div>
+
+        </div>
+
+        <div style="
+        font-size:90px;
+        opacity:.08;
+        font-weight:900;
+        ">
+            #${profile.player.jersey}
+        </div>
+
+    </div>
+
+    <hr style="
+    border:none;
+    border-top:1px solid rgba(255,255,255,.15);
+    margin:30px 0;
+    ">
+
+    <div style="
+    display:grid;
+    grid-template-columns:repeat(4,1fr);
+    gap:30px;
+    ">
+
+        <div>
+
+            <div style="font-size:13px;color:#9CA3AF;">
+                Attendance
+            </div>
+
+            <div style="
+            font-size:34px;
+            font-weight:700;
+            ">
+                ${profile.attendance.seasonPercentage}%
+            </div>
+
+        </div>
+
+        <div>
+
+            <div style="font-size:13px;color:#9CA3AF;">
+                Practices
+            </div>
+
+            <div style="
+            font-size:34px;
+            font-weight:700;
+            ">
+                ${profile.attendance.present + profile.attendance.absent}
+            </div>
+
+        </div>
+
+        <div>
+
+            <div style="font-size:13px;color:#9CA3AF;">
+                Events
+            </div>
+
+            <div style="
+            font-size:34px;
+            font-weight:700;
+            ">
+                ${profile.timeline.length}
+            </div>
+
+        </div>
+
+        <div>
+
+            <div style="font-size:13px;color:#9CA3AF;">
+                Panther Points
+            </div>
+
+            <div
+            id="playerPointTotal"
+            style="
+            font-size:34px;
+            font-weight:700;
+            ">
+                --
+            </div>
+
+            <div style="
+            margin-top:8px;
+            font-size:14px;
+            color:#D1D5DB;
+            ">
+
+                🟢 <span id="playerPositivePoints">--</span>
+
+                &nbsp;&nbsp;
+
+                🔴 <span id="playerNegativePoints">--</span>
+
+            </div>
+
+        </div>
+
+    </div>
+
+</div>
+<h2>🧠 CoachIQ Insight</h2>
+
+<p style="
+font-size:16px;
+line-height:1.8;
+margin-top:15px;
+">
+
+${profile.summary}
+
+</p>
+
+</div>
+
+<h2 style="margin-bottom:18px;">📊 Program Pillars</h2>
+
+<div style="
+display:grid;
+grid-template-columns:repeat(2,1fr);
+gap:18px;
+margin-bottom:30px;
+">
+
+${pillarsHTML}
+
+</div>
+
+<div style="
+background:white;
+padding:25px;
+border-radius:18px;
+box-shadow:0 4px 12px rgba(0,0,0,.08);
+margin-bottom:30px;
+">
+
+<h2>📅 Attendance</h2>
+
+<div style="
+font-size:42px;
+font-weight:bold;
+margin-top:15px;
+">
+
+${attendancePercent}%
+
+</div>
+
+${attendanceBar}
+
+<div style="
+display:flex;
+justify-content:space-between;
+font-size:15px;
+">
+
+<div>
+<strong>Present</strong><br>
+${profile.attendance.present}
+</div>
+
+<div>
+<strong>Absent</strong><br>
+${profile.attendance.absent}
+</div>
+
+</div>
+
+<div style="
+margin-top:25px;
+font-size:22px;
+">
+
+${profile.attendance.last5.map(x=>x?"✅":"❌").join(" ")}
+
+</div>
+
+</div>
+
+<div style="
+background:white;
+padding:25px;
+border-radius:18px;
+box-shadow:0 4px 12px rgba(0,0,0,.08);
+">
+
+<div style="
+background:white;
+padding:25px;
+border-radius:18px;
+box-shadow:0 4px 12px rgba(0,0,0,.08);
+margin-bottom:30px;
+">
+
+<div style="
+background:white;
+padding:25px;
+border-radius:18px;
+box-shadow:0 4px 12px rgba(0,0,0,.08);
+margin-bottom:30px;
+">
+
+<h2>🐾 Panther Point History</h2>
+
+<div style="margin-top:20px;">
+
+${pointHistoryHTML}
+
+</div>
+
+</div>
+
+<div style="
+background:white;
+padding:25px;
+border-radius:18px;
+box-shadow:0 4px 12px rgba(0,0,0,.08);
+margin-bottom:30px;
+">
+
+<h2>🏀 Recent Practices</h2>
+
+${practiceHistoryHTML}
+
+<div style="
+margin-top:20px;
+text-align:center;
+">
+
+<button
+    class="secondary-btn"
+    onclick="openPracticeHistory()">
+
+    View All Practices
+
+</button>
+
+</div>
+
+</div>
+
+<div style="
+background:white;
+padding:25px;
+border-radius:18px;
+box-shadow:0 4px 12px rgba(0,0,0,.08);
+">
+
+<h2>📋 Recent Activity</h2>
+
+<div style="margin-top:20px;">
+
+${timelineHTML}
+
+</div>
+
+</div>
+
+</div>
+
+`;
+
+}
+
+function loadPlayerCulturePoints(playerId){
+
+  console.log("Loading Panther Points for:", playerId);
+
+  google.script.run
+
+.withSuccessHandler(function(points){
+
+    document.getElementById("playerPointTotal").textContent =
+        points.total;
+
+    document.getElementById("playerPositivePoints").textContent =
+        points.positive;
+
+    document.getElementById("playerNegativePoints").textContent =
+        points.negative;
+
+})
+
+    .getPlayerCulturePoints(playerId);
+
+}
+
+function renderPantherPointHistory(history){
+
+    if(!history || history.length === 0){
+
+        return `
+            <div style="text-align:center;padding:25px;color:#777;">
+                No Panther Point history.
+            </div>
+        `;
+
+    }
+
+    let html = "";
+
+    history.forEach(function(point){
+
+        const positive = Number(point.Points) >= 0;
+
+        html += `
+
+        <div style="
+            display:flex;
+            justify-content:space-between;
+            align-items:flex-start;
+            padding:15px 0;
+            border-bottom:1px solid #eee;
+        ">
+
+            <div>
+
+                <div style="
+                    font-weight:bold;
+                    font-size:16px;
+                ">
+                    ${point["Category Name"]}
+                </div>
+
+                <div style="
+                    color:#666;
+                    margin-top:4px;
+                ">
+                    ${point.Notes || ""}
+                </div>
+
+                <div style="
+                    color:#999;
+                    font-size:12px;
+                    margin-top:6px;
+                ">
+                    ${new Date(point.Date).toLocaleDateString()}
+                    •
+                    ${point.Coach}
+                </div>
+
+            </div>
+
+            <div style="
+                font-size:22px;
+                font-weight:bold;
+                color:${positive ? "#22C55E" : "#EF4444"};
+            ">
+
+                ${positive ? "+" : ""}
+                ${point.Points}
+
+            </div>
+
+        </div>
+
+        `;
+
+    });
+
+    return html;
+
+}
+function openPracticeHistory(){
+
+    alert("Function started");
+
+alert(JSON.stringify(currentPlayerProfile));
+
+if(!currentPlayerProfile){
+    alert("No current player profile");
+    return;
+}
+
+    let html = "";
+
+    currentPlayerProfile.history.forEach(function(session){
+
+        html += `
+
+        <div style="
+            border-bottom:1px solid #ddd;
+            padding:18px 0;
+        ">
+
+            <h3>🏀 ${session.sessionId}</h3>
+
+            <p>
+                Attendance:
+                ${session.attendance ? "✅ Present" : "❌ Absent"}
+            </p>
+
+            <p>
+                Effort:
+                ${getStars(session.pillars.Effort)}
+            </p>
+
+            <p>
+                Communication:
+                ${getStars(session.pillars.Communication)}
+            </p>
+
+            <p>
+                Leadership:
+                ${getStars(session.pillars.Leadership)}
+            </p>
+
+            <p>
+                Accountability:
+                ${getStars(session.pillars.Accountability)}
+            </p>
+
+        </div>
+
+        `;
+
+    });
+
+  alert("Built HTML");
+
+const content = document.getElementById("practiceHistoryContent");
+alert("Content Div: " + content);
+
+const modal = document.getElementById("practiceHistoryModal");
+alert("Modal Div: " + modal);
+
+content.innerHTML = html;
+
+alert("Inserted HTML");
+
+modal.style.display = "block";
+modal.style.position = "fixed";
+modal.style.zIndex = "999999";
+modal.style.background = "rgba(0,0,0,.65)";
+
+alert("Opened Modal");
+
+}
+
+function closePracticeHistory(){
+
+    document.getElementById("practiceHistoryModal").style.display = "none";
+
+}
+function getTimelineIcon(category){
+
+    switch(category){
+
+        case "Note":
+            return "📝";
+
+        case "Award":
+            return "🏆";
+
+        case "Attendance":
+            return "📅";
+
+        case "Evaluation":
+            return "📈";
+
+        case "Academic":
+            return "🎓";
+
+        case "Injury":
+            return "🏥";
+
+        default:
+            return "📌";
+
+    }
+
+}
+
+</script>
+<div id="practiceHistoryModal" class="modal" style="display:none;">
+
+  <div class="modal-content" style="max-width:900px;">
+
+    <span
+      class="close"
+      onclick="closePracticeHistory()">
+      &times;
+    </span>
+
+    <h2>🏀 Practice History</h2>
+
+    <div id="practiceHistoryContent">
+
+      Loading...
+
+    </div>
+
+  </div>
+
+</div>

@@ -1,0 +1,241 @@
+<section>
+
+    <h2>⚙️ Program Settings</h2>
+
+    <p class="page-subtitle">
+        Customize CoachIQ for your program.
+    </p>
+
+    <br>
+
+    <!-- Program Information -->
+
+    <div class="card">
+
+        <h3>Program Information</h3>
+
+        <div class="form-row">
+
+            <div class="form-field">
+
+                <label>Program Name</label>
+
+                <input
+                    id="programName"
+                    type="text">
+
+            </div>
+
+            <div class="form-field">
+
+                <label>School Name</label>
+
+                <input
+                    id="schoolName"
+                    type="text">
+
+            </div>
+
+        </div>
+
+        <br>
+
+        <div class="form-row">
+
+            <div class="form-field">
+
+                <label>Current Season</label>
+
+                <input
+                    id="currentSeason"
+                    type="text"
+                    placeholder="2026-2027">
+
+            </div>
+
+        </div>
+
+        <button
+    class="btn btn-primary"
+    onclick="saveProgramInformation()">
+
+    Save Program Information
+
+</button>
+<br>
+<hr style="margin:30px 0; border:none; border-top:1px solid #E5E7EB;">
+
+<h3>Coaching Staff</h3>
+
+<div id="staffContainer"></div>
+
+<br>
+
+<button
+    class="btn btn-primary"
+    onclick="addSettingField('staffContainer', 'New Staff Member')">
+
+    + Add Staff Member
+
+</button>
+
+<button
+    class="btn btn-primary"
+    onclick="saveSettingsList('staffContainer', 'Staff')">
+
+    Save Staff
+
+</button>
+
+    </div>
+
+    <br>
+
+    <!-- Teams -->
+
+    <div class="card">
+
+        <h3>Teams</h3>
+
+        <div id="teamsContainer"></div>
+
+        <br>
+
+        <button
+    class="btn btn-primary"
+    onclick="addSettingField('teamsContainer', 'New Team')">
+
+    + Add Team
+
+</button>
+
+<button
+    class="btn btn-primary"
+    onclick="saveSettingsList('teamsContainer', 'Teams')">
+
+    Save Teams
+
+</button>
+
+    </div>
+
+    <br>
+
+    <!-- Positions -->
+
+    <div class="card">
+
+        <h3>Positions</h3>
+
+        <div id="positionsContainer"></div>
+
+        <br>
+
+        <button
+    class="btn btn-primary"
+    onclick="addSettingField('positionsContainer', 'New Position')">
+
+    + Add Position
+
+</button>
+<button
+    class="btn btn-primary"
+    onclick="saveSettingsList('positionsContainer', 'Positions')">
+
+    Save Positions
+
+</button>
+
+    </div>
+
+    <br>
+
+    <!-- Player Statuses -->
+
+    <div class="card">
+
+        <h3>Player Statuses</h3>
+
+        <div id="statusesContainer"></div>
+
+<br>
+
+<button
+    class="btn btn-primary"
+    onclick="addSettingField('statusesContainer', 'New Status')">
+
+    + Add Status
+
+</button>
+
+<button
+    class="btn btn-primary"
+    onclick="saveSettingsList('statusesContainer', 'Player Statuses')">
+
+    Save Statuses
+
+</button>
+
+    </div>
+
+    <br>
+
+    <!-- Culture Categories -->
+
+    <div class="card">
+
+        <h3>Culture Categories</h3>
+
+        <div id="cultureContainer"></div>
+
+<br>
+
+<button
+    class="btn btn-primary"
+    onclick="addSettingField('cultureContainer', 'New Category')">
+
+    + Add Category
+
+</button>
+
+<button
+    class="btn btn-primary"
+    onclick="saveSettingsList('cultureContainer', 'Culture Categories')">
+
+    Save Categories
+
+</button>
+
+    </div>
+    <br>
+<!-- Point Rewards -->
+
+<div class="card">
+
+    <h3>Point Rewards</h3>
+
+    <div id="pointRewardsContainer"></div>
+
+    <br>
+
+    <button
+        class="btn btn-primary"
+        onclick="addPointReward()">
+
+        + Add Reward
+
+    </button>
+
+    <button
+        class="btn btn-success"
+        onclick="savePointRewards()">
+
+        Save Rewards
+
+    </button>
+
+</div>
+
+<br>
+
+</section>
