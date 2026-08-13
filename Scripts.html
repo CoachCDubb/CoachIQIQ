@@ -1,60 +1,84 @@
 <script>
 
-function loadPage(page, callback) {
+function loadPage(page, callback){
 
-  google.script.run
-    .withSuccessHandler(function(html) {
+    google.script.run
+    .withSuccessHandler(function(html){
 
-      document.getElementById("page-content").innerHTML = html;
+        const container = document.getElementById("page-content");
 
-      // Update active navigation
-      document.querySelectorAll(".nav-item").forEach(item => {
-        item.classList.remove("active");
-
-        if (item.dataset.page === page) {
-          item.classList.add("active");
+        if(!container){
+            console.error("page-content not found.");
+            return;
         }
-      });
 
-      // Auto-load page data
-     switch(page){
+        container.innerHTML = html;
 
-case "Dashboard":
-    loadDashboard();
-    break;
+        // Update Navigation
+        document.querySelectorAll(".nav-item").forEach(function(item){
 
-  case "Players":
-    loadPlayers();
-    break;
+            item.classList.remove("active");
 
-  case "Settings":
-    loadSettings();
-    break;
+            if(item.dataset.page === page){
+                item.classList.add("active");
+            }
 
-case "Evaluations":
+        });
 
-    if (!window.viewMode) {
-        loadEvaluations();
-    }
+        // Wait until browser finishes rendering
+        requestAnimationFrame(function(){
 
-    break;
+            switch(page){
 
-    case "Sessions":
-    loadSessions();
-    break;
+                case "Dashboard":
+                    loadDashboard();
+                    break;
 
-    case "Leaderboard":
-    loadLeaderboard();
-    break;
+                case "Players":
+                    loadPlayers();
+                    break;
 
-    case "PlayerProfile":
-    loadPlayerProfile();
-    break;
-}
-// Run callback after page has been inserted
-if (typeof callback === "function") {
-    callback();
-}
+                case "Sessions":
+                    loadSessions();
+                    break;
+
+                case "Evaluations":
+
+                    if(!window.viewMode){
+                        loadEvaluations();
+                    }
+
+                    break;
+
+                case "Leaderboard":
+                    loadLeaderboard();
+                    break;
+
+                case "Settings":
+                    loadSettings();
+                    break;
+
+                case "PlayerProfile":
+                    loadPlayerProfile();
+                    break;
+
+            }
+
+            if(typeof callback === "function"){
+                callback();
+            }
+
+        });
+
+    })
+    .withFailureHandler(function(error){
+
+        console.error(error);
+
+        showToast(
+            "Unable to load page.",
+            "error"
+        );
 
     })
     .getPage(page);
@@ -1973,42 +1997,44 @@ function loadPlayerProfile(playerId){
 }
 function populateSessionSummary(session){
 
-    console.log("populateSessionSummary()");
-    console.log(session);
+    const sessionType = document.getElementById("summarySessionType");
+    const date = document.getElementById("summaryDate");
+    const teams = document.getElementById("summaryTeams");
+    const evaluator = document.getElementById("summaryEvaluator");
+    const status = document.getElementById("summaryStatus");
+    const notes = document.getElementById("summaryNotes");
+    const notesText = document.getElementById("summaryNotesText");
 
-    console.log(document.getElementById("summarySessionType"));
-    console.log(document.getElementById("summaryDate"));
-    console.log(document.getElementById("summaryTeams"));
-    console.log(document.getElementById("summaryEvaluator"));
-    console.log(document.getElementById("summaryStatus"));
-    console.log(document.getElementById("summaryNotes"));
-    console.log(document.getElementById("summaryNotesText"));
+    if(sessionType)
+        sessionType.innerText = session["Session Type"];
 
-    document.getElementById("summarySessionType").innerText =
-        session["Session Type"];
+    if(date)
+        date.innerText = "📅 " + session["Date"];
 
-    document.getElementById("summaryDate").innerText =
-        "📅 " + session["Date"];
+    if(teams)
+        teams.innerText = "👥 " + session["Teams"];
 
-    document.getElementById("summaryTeams").innerText =
-        "👥 " + session["Teams"];
+    if(evaluator)
+        evaluator.innerText = "👤 " + session["Evaluators"];
 
-    document.getElementById("summaryEvaluator").innerText =
-        "👤 " + session["Evaluators"];
+    if(status)
+        status.innerText = session["Status"];
 
-    document.getElementById("summaryStatus").innerText =
-        session["Status"];
+    if(notes){
 
-    if(session["Session Notes"]){
+        if(session["Session Notes"]){
 
-        document.getElementById("summaryNotes").style.display = "block";
+            notes.style.display = "block";
 
-        document.getElementById("summaryNotesText").innerText =
-            session["Session Notes"];
+            if(notesText){
+                notesText.innerText = session["Session Notes"];
+            }
 
-    }else{
+        }else{
 
-        document.getElementById("summaryNotes").style.display = "none";
+            notes.style.display = "none";
+
+        }
 
     }
 
