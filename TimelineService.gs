@@ -39,7 +39,7 @@ const data = sheet
     return {
       id: event["Timeline ID"],
       playerId: event["Player ID"],
-      date: String(event["Date"]),
+      date: formatTimelineDate_(event["Date"]),
       category: event["Category"],
       title: event["Title"],
       details: event["Details"],
@@ -50,9 +50,24 @@ const data = sheet
 
   .sort(function(a,b){
 
-    return new Date(b.date) - new Date(a.date);
+    const bTime = b.date ? new Date(b.date).getTime() : 0;
+    const aTime = a.date ? new Date(a.date).getTime() : 0;
+
+    return (isNaN(bTime) ? 0 : bTime) - (isNaN(aTime) ? 0 : aTime);
 
   });
+
+}
+
+function formatTimelineDate_(value){
+
+  if(!value){
+    return "";
+  }
+
+  const date = value instanceof Date ? value : new Date(value);
+
+  return isNaN(date.getTime()) ? "" : date.toISOString();
 
 }
 function testPlayerTimeline(){

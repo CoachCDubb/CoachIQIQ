@@ -304,6 +304,41 @@ maxScore: maxScore,
 };
 
 }
+
+/**
+ * Browser-safe player profile endpoint. The response wrapper prevents an
+ * empty Apps Script response from being mistaken for a valid profile.
+ */
+function getPlayerProfileForUI(playerId){
+
+  if(!playerId){
+    throw new Error("Player ID is required.");
+  }
+
+  const profile = getPlayerProfile(playerId);
+
+  if(!profile || !profile.player){
+    throw new Error("No player profile data was returned for " + playerId + ".");
+  }
+
+  const serialized = JSON.stringify(profile, function(key, value){
+    if(typeof value === "number" && !isFinite(value)){
+      return null;
+    }
+
+    return value;
+  });
+
+  if(!serialized){
+    throw new Error("Player profile could not be serialized for " + playerId + ".");
+  }
+
+  return {
+    ok: true,
+    profile: JSON.parse(serialized)
+  };
+
+}
 function calculateOverallPlayerGrade(playerId){
 
   const trend = calculatePlayerTrend(playerId, 5);
