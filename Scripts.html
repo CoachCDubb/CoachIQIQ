@@ -1304,10 +1304,22 @@ function viewSession(sessionId){
     loadPage("Evaluations");
 
     google.script.run
-        .withSuccessHandler(function(data){
+    .withSuccessHandler(function(data){
 
-            console.log("SESSION VIEW DATA");
-            console.log(data);
+        console.log("SESSION VIEW DATA");
+        console.log(data);
+
+        if (!data) {
+            console.error("getSessionViewData() returned:", data);
+            showToast("Unable to load session.", "error");
+            return;
+        }
+
+        if (!data.session) {
+            console.error("Missing session object:", data);
+            showToast("Session data is incomplete.", "error");
+            return;
+        }
 
             const waitForPage = setInterval(function(){
 
