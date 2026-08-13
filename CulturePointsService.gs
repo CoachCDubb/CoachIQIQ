@@ -5,56 +5,6 @@
  */
 
 const CULTURE_POINTS_SHEET = "Culture Points";
-const POINT_AWARDS_SHEET = "Point Awards";
-/**
- * Returns all enabled point categories.
- */
-function getPointAwards(){
-
-const sheet = SpreadsheetApp
-.getActive()
-.getSheetByName(POINT_AWARDS_SHEET);
-
-  const headers = sheet
-    .getRange(1,1,1,sheet.getLastColumn())
-    .getValues()[0];
-
-  if(sheet.getLastRow() < 2){
-    return [];
-  }
-
-  const data = sheet
-    .getRange(2,1,sheet.getLastRow()-1,sheet.getLastColumn())
-    .getValues();
-
- return data
-
-.map(row => rowToObject(headers,row))
-
-.filter(function(reward){
-
-    return reward.Active === true;
-
-})
-
-.sort(function(a,b){
-
-    return Number(a["Display Order"]) - Number(b["Display Order"]);
-
-});
-
-}
-function testPointAwards(){
-
-  Logger.log(
-    JSON.stringify(
-      getPointAwards(),
-      null,
-      2
-    )
-  );
-
-}
 /**
  * Returns one point category.
  */
@@ -67,6 +17,110 @@ return awards.find(function(award){
     return award["Reward ID"] == rewardId;
 
 }) || null;
+
+}
+
+/**
+ * Creates, replaces, or removes the Culture Points entry associated with one
+ * player's session evaluation. There can be at most one such entry.
+ */
+function setSessionRewardPoints(sessionId, playerId, rewardId, coach, previousRewardId){
+
+  const lock = LockService.getDocumentLock();
+  lock.waitLock(10000);
+
+  try {
+    return setSessionRewardPoints_(
+      sessionId,
+      playerId,
+      rewardId,
+      coach,
+      previousRewardId
+    );
+  } finally {
+    lock.releaseLock();
+  }
+
+}
+
+function setSessionRewardPoints_(sessionId, playerId, rewardId, coach, previousRewardId){
+
+  const sheet = SpreadsheetApp
+    .getActive()
+    .getSheetByName(CULTURE_POINTS_SHEET);
+  const data = sheet.getDataRange().getValues();
+  const headers = data[0] || [];
+  const sessionColumn = headers.indexOf("Session ID");
+  const playerColumn = headers.indexOf("Player ID");
+  const rewardColumn = headers.indexOf("Category ID") >= 0
+    ? headers.indexOf("Category ID")
+    : headers.indexOf("Reward ID");
+  const matchingRows = [];
+
+  if(sessionColumn < 0 || playerColumn < 0 || rewardColumn < 0){
+    throw new Error(
+      "Culture Points sheet is missing Session ID, Player ID, or reward ID column."
+    );
+  }
+
+  for(let i = 1; i < data.length; i++){
+    const isSameEvaluation =
+      data[i][sessionColumn] == sessionId &&
+      data[i][playerColumn] == playerId;
+    // Some existing Culture Points sheets use a different header for the
+    // description column, so locate our marker by value instead of header.
+    const hasGeneratedMarker = data[i].some(function(value){
+      return value === "Session evaluation reward";
+    });
+    const hasPreviousReward = previousRewardId &&
+      data[i][rewardColumn] == previousRewardId;
+
+    if(isSameEvaluation && (hasGeneratedMarker || hasPreviousReward)){
+      matchingRows.push(i + 1);
+    }
+  }
+
+  const existingRow = matchingRows.length ? matchingRows[0] : -1;
+
+  if(!rewardId){
+    matchingRows.reverse().forEach(function(rowNumber){
+      sheet.deleteRow(rowNumber);
+    });
+    return "";
+  }
+
+  const reward = getPointAward(rewardId);
+
+  if(!reward || !(reward.Active === true || reward.Active === "TRUE")){
+    throw new Error("Active point reward not found: " + rewardId);
+  }
+
+  const pointId = existingRow > 0
+    ? sheet.getRange(existingRow, 1).getValue()
+    : getNextPointId();
+  const row = new Array(sheet.getLastColumn()).fill("");
+
+  row[0] = pointId;
+  row[1] = playerId;
+  row[2] = reward["Reward ID"];
+  row[3] = reward["Reward Name"];
+  row[4] = Number(reward.Points);
+  row[5] = coach || "";
+  row[6] = new Date();
+  row[7] = "Session evaluation reward";
+  row[8] = sessionId;
+
+  if(existingRow > 0){
+    sheet.getRange(existingRow, 1, 1, row.length).setValues([row]);
+
+    matchingRows.slice(1).reverse().forEach(function(rowNumber){
+      sheet.deleteRow(rowNumber);
+    });
+  }else{
+    sheet.appendRow(row);
+  }
+
+  return reward["Reward ID"];
 
 }
 function testPointCategory(){
@@ -97,7 +151,7 @@ function awardPoints(data){
 
 const reward = getPointAward(data.rewardId);
 
-if(!reward){
+if(!reward || !(reward.Active === true || reward.Active === "TRUE")){
   throw new Error("Point reward not found.");
 }
 
