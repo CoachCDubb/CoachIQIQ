@@ -19,14 +19,24 @@ function createEvaluationRows(sessionId, players, evaluator){
 
     const cols = getColumnMap("Practice Evaluations");
 
+  const playerIds = players.map(function(player){
+    return player && !Array.isArray(player)
+      ? player["Player ID"]
+      : player && player[0];
+  });
+
+  if(playerIds.some(function(playerId){ return !playerId; })){
+    throw new Error("Cannot create evaluations: a player is missing Player ID.");
+  }
+
   const rows = [];
 
-  players.forEach(function(player){
+  playerIds.forEach(function(playerId){
 
  const row = new Array(sheet.getLastColumn()).fill("");
 
 row[cols["Session ID"] - 1] = sessionId;
-row[cols["Player ID"] - 1] = player[0];
+row[cols["Player ID"] - 1] = playerId;
 row[cols["Evaluator"] - 1] = evaluator;
 row[cols["Attendance"] - 1] = true;
 row[cols["Created"] - 1] = new Date();
@@ -300,23 +310,27 @@ function updateReward(sessionId, playerId, reward){
       data[i][cols["Player ID"] - 1] === playerId
     ){
 
+      const evaluator = data[i][cols["Evaluator"] - 1] || "";
+
+      setSessionRewardPoints(sessionId, playerId, reward, evaluator);
+
       sheet
         .getRange(i + 1, cols["Reward"])
-        .setValue(reward);
+        .setValue(reward || "");
 
       sheet
         .getRange(i + 1, cols["Last Updated"])
         .setValue(new Date());
 
-awardRewardPoints(playerId, reward);
-
 practiceEvaluationCache = null;
 
-      return;
+      return reward || "";
 
     }
 
   }
+
+  throw new Error("Evaluation row not found for reward update.");
 
 }
 function getPracticeEvaluations(){
