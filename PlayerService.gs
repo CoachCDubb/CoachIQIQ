@@ -253,6 +253,26 @@ const maxScore =
   5;
 
 const overallScore = calculateOverallPlayerGrade(playerId);
+const pointHistory = getPointHistory(playerId);
+const pointBreakdown = {};
+let totalPoints = 0;
+let positivePoints = 0;
+let negativePoints = 0;
+
+pointHistory.forEach(function(point){
+  const points = Number(point.Points || 0);
+  const category = point["Category Name"] || "Other";
+
+  totalPoints += points;
+
+  if(points > 0){
+    positivePoints += points;
+  }else if(points < 0){
+    negativePoints += Math.abs(points);
+  }
+
+  pointBreakdown[category] = (pointBreakdown[category] || 0) + points;
+});
 
 return {
 
@@ -294,11 +314,11 @@ Math.round(overallScore),
 maxScore: maxScore,
 
   points: {
-    total: getPlayerPoints(playerId),
-    positive: getPositivePoints(playerId),
-    negative: getNegativePoints(playerId),
-    breakdown: getPointBreakdown(playerId),
-    history: getPointHistory(playerId)
+    total: totalPoints,
+    positive: positivePoints,
+    negative: negativePoints,
+    breakdown: pointBreakdown,
+    history: pointHistory
   }
 
 };

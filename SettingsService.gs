@@ -49,14 +49,48 @@ function getSettingList(settingName) {
  */
 function getDropdownSettings() {
 
+const settings = getSettingsMap_();
+
 return {
-teams: getSettingList("Teams"),
-positions: getSettingList("Positions"),
-statuses: getSettingList("Player Statuses"),
-cultureCategories: getSettingList("Culture Categories"),
-staff: getSettingList("Staff"),
+teams: splitSettingList_(settings["Teams"]),
+positions: splitSettingList_(settings["Positions"]),
+statuses: splitSettingList_(settings["Player Statuses"]),
+cultureCategories: splitSettingList_(settings["Culture Categories"]),
+staff: splitSettingList_(settings["Staff"]),
 rewards: getActiveRewards()
 };
+
+}
+
+function getSettingsMap_() {
+
+  const sheet = SpreadsheetApp
+    .getActive()
+    .getSheetByName(SETTINGS_SHEET);
+  const data = sheet.getDataRange().getValues();
+  const settings = {};
+
+  data.forEach(function(row){
+    const name = row[0];
+
+    if(name !== "" && !Object.prototype.hasOwnProperty.call(settings, name)){
+      settings[name] = row[1];
+    }
+  });
+
+  return settings;
+
+}
+
+function splitSettingList_(value) {
+
+  if (!value) {
+    return [];
+  }
+
+  return String(value).split(",").map(function(item){
+    return item.trim();
+  });
 
 }
 
@@ -65,31 +99,33 @@ rewards: getActiveRewards()
  */
 function getCoachIQSettings() {
 
+const settings = getSettingsMap_();
+
 return {
 
-    programName: getSetting("Program Name"),
+    programName: settings["Program Name"] || "",
 
-    schoolName: getSetting("School Name"),
+    schoolName: settings["School Name"] || "",
 
-    currentSeason: getSetting("Current Season"),
+    currentSeason: settings["Current Season"] || "",
 
-    teams: getSettingList("Teams"),
+    teams: splitSettingList_(settings["Teams"]),
 
-    positions: getSettingList("Positions"),
+    positions: splitSettingList_(settings["Positions"]),
 
-    statuses: getSettingList("Player Statuses"),
+    statuses: splitSettingList_(settings["Player Statuses"]),
 
-    cultureCategories: getSettingList("Culture Categories"),
+    cultureCategories: splitSettingList_(settings["Culture Categories"]),
 
-   staff: getSettingList("Staff"),
+   staff: splitSettingList_(settings["Staff"]),
 
-rewards: getActiveRewards(),
+rewards: getPointAwards(),
 
-playerRequiredFields: getSettingList("Player Required Fields"),
+playerRequiredFields: splitSettingList_(settings["Player Required Fields"]),
 
-playerIdPrefix: getSetting("Player ID Prefix"),
+playerIdPrefix: settings["Player ID Prefix"] || "",
 
-version: getSetting("CoachIQ Version")
+version: settings["CoachIQ Version"] || ""
 
 };
 

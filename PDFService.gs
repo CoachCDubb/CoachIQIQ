@@ -3,9 +3,21 @@
  * Builds the Player Report HTML
  * ======================================
  */
-function buildPlayerReportHTML(playerId){
+function buildPlayerReportHTML(playerId, report){
 
-  const report = getPlayerReportData(playerId);
+  report = report || getPlayerReportData(playerId);
+  const player = report.player || {};
+  const attendance = report.attendance || {};
+  const points = report.points || {};
+  const overallGrade = Number(report.overallGrade || 0);
+  const escapeHtml = function(value){
+    return String(value == null ? "" : value)
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
+      .replace(/'/g, "&#39;");
+  };
 
   return `
   <html>
@@ -24,8 +36,8 @@ function buildPlayerReportHTML(playerId){
   </h1>
 
   <h2 style="margin-top:8px;">
-      ${report.player.firstName}
-      ${report.player.lastName}
+      ${escapeHtml(player.firstName)}
+      ${escapeHtml(player.lastName)}
   </h2>
 
   <hr>
@@ -39,17 +51,17 @@ function buildPlayerReportHTML(playerId){
 
   <tr>
       <td><strong>Overall Grade</strong></td>
-      <td>${report.overallGrade.toFixed(1)} / 5</td>
+      <td>${overallGrade.toFixed(1)} / 5</td>
   </tr>
 
   <tr>
       <td><strong>Attendance</strong></td>
-      <td>${report.attendance.seasonPercentage}%</td>
+      <td>${Number(attendance.seasonPercentage || 0)}%</td>
   </tr>
 
   <tr>
       <td><strong>Panther Points</strong></td>
-      <td>${report.points.total}</td>
+      <td>${Number(points.total || 0)}</td>
   </tr>
 
   </table>
@@ -60,7 +72,7 @@ function buildPlayerReportHTML(playerId){
 
   <p>
 
-      ${report.summary}
+      ${escapeHtml(report.summary)}
 
   </p>
 
@@ -68,6 +80,25 @@ function buildPlayerReportHTML(playerId){
 
   </html>
   `;
+
+}
+
+function getPlayerReportPdf(playerId){
+
+  const report = getPlayerReportData(playerId);
+  const player = report.player || {};
+  const safeName = String(
+    (player.firstName || "Player") + "_" + (player.lastName || "Report")
+  ).replace(/[^A-Za-z0-9_-]/g, "_");
+  const html = buildPlayerReportHTML(playerId, report);
+  const pdf = Utilities.newBlob(html, "text/html", safeName + ".html")
+    .getAs(MimeType.PDF)
+    .setName(safeName + "_CoachIQ_Report.pdf");
+
+  return {
+    fileName: pdf.getName(),
+    base64: Utilities.base64Encode(pdf.getBytes())
+  };
 
 }
 function testPlayerReportHTML(){
