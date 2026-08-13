@@ -1,9 +1,79 @@
 <script>
 
+const PageNavigation = {
+    currentPage: null,
+    requestId: 0,
+    loadingPage: null,
+    evaluationMode: "new",
+    evaluationSessionId: null
+};
+
+const EvaluationSaves = {
+    pending: 0,
+    failed: false
+};
+
+function updateEvaluationSaveStatus(){
+    const status = document.getElementById("evaluationSaveStatus");
+    const finishButton = document.getElementById("finishSessionButton");
+
+    if(status){
+        status.style.display = "block";
+        status.style.color = EvaluationSaves.failed ? "#b42318" : "#666";
+        status.textContent = EvaluationSaves.failed
+            ? "A change failed to save. Retry it before finishing."
+            : EvaluationSaves.pending > 0
+                ? "Saving " + EvaluationSaves.pending + " change(s)…"
+                : "All changes saved.";
+    }
+
+    if(finishButton){
+        finishButton.disabled = EvaluationSaves.pending > 0 || EvaluationSaves.failed;
+    }
+}
+
+function beginEvaluationSave(){
+    EvaluationSaves.pending++;
+    updateEvaluationSaveStatus();
+}
+
+function endEvaluationSave(succeeded){
+    EvaluationSaves.pending = Math.max(0, EvaluationSaves.pending - 1);
+    EvaluationSaves.failed = EvaluationSaves.failed || !succeeded;
+    updateEvaluationSaveStatus();
+}
+
+function retryEvaluationSave(){
+    EvaluationSaves.failed = false;
+    beginEvaluationSave();
+}
+
+function resetEvaluationSaveState(){
+    EvaluationSaves.pending = 0;
+    EvaluationSaves.failed = false;
+    updateEvaluationSaveStatus();
+}
+
+function isCurrentPage(page, requestId){
+    return PageNavigation.currentPage === page &&
+        (requestId == null || PageNavigation.requestId === requestId);
+}
+
 function loadPage(page, callback){
+
+    if(PageNavigation.loadingPage === page){
+        return;
+    }
+
+    const requestId = ++PageNavigation.requestId;
+    PageNavigation.loadingPage = page;
 
     google.script.run
     .withSuccessHandler(function(html){
+
+        if(requestId !== PageNavigation.requestId){
+            return;
+        }
 
         const container = document.getElementById("page-content");
 
@@ -13,6 +83,8 @@ function loadPage(page, callback){
         }
 
         container.innerHTML = html;
+        PageNavigation.currentPage = page;
+        PageNavigation.loadingPage = null;
 
         // Update Navigation
         document.querySelectorAll(".nav-item").forEach(function(item){
@@ -28,34 +100,34 @@ function loadPage(page, callback){
         // Wait until browser finishes rendering
         requestAnimationFrame(function(){
 
+            if(!isCurrentPage(page, requestId)){
+                return;
+            }
+
             switch(page){
 
                 case "Dashboard":
-                    loadDashboard();
+                    loadDashboard(requestId);
                     break;
 
                 case "Players":
-                    loadPlayers();
+                    loadPlayers(requestId);
                     break;
 
                 case "Sessions":
-                    loadSessions();
+                    loadSessions(requestId);
                     break;
 
                 case "Evaluations":
-
-                    if(!window.viewMode){
-                        loadEvaluations();
-                    }
-
+                    initializeEvaluationsPage(requestId);
                     break;
 
                 case "Leaderboard":
-                    loadLeaderboard();
+                    loadLeaderboard(requestId);
                     break;
 
                 case "Settings":
-                    loadSettings();
+                    loadSettings(requestId);
                     break;
 
                 case "PlayerProfile":
@@ -73,6 +145,12 @@ function loadPage(page, callback){
     })
     .withFailureHandler(function(error){
 
+        if(requestId !== PageNavigation.requestId){
+            return;
+        }
+
+        PageNavigation.loadingPage = null;
+
         console.error(error);
 
         showToast(
@@ -85,10 +163,14 @@ function loadPage(page, callback){
 
 }
 
-function loadPlayers(){
+function loadPlayers(requestId){
 
   google.script.run
-    .withSuccessHandler(showPlayers)
+    .withSuccessHandler(function(players){
+      if(isCurrentPage("Players", requestId)){
+        showPlayers(players, requestId);
+      }
+    })
     .getPlayersForUI();
 
 }
@@ -101,11 +183,15 @@ const CoachIQ = {
 
 };
 
-function showPlayers(players){
+function showPlayers(players, requestId){
 
   CoachIQ.players = players;
 
   loadDropdownSettings(function(settings){
+
+    if(!isCurrentPage("Players", requestId)){
+      return;
+    }
 
     CoachIQ.settings = settings;
 
@@ -364,10 +450,14 @@ function loadDropdownSettings(callback){
     .getDropdownSettings();
 
 }
-function loadSettings(){
+function loadSettings(requestId){
 
   google.script.run
-    .withSuccessHandler(showSettings)
+    .withSuccessHandler(function(settings){
+      if(isCurrentPage("Settings", requestId)){
+        showSettings(settings);
+      }
+    })
     .getCoachIQSettings();
 
 }
@@ -508,7 +598,9 @@ function renderRewards(rewards){
 
     container.innerHTML += `
 
-      <div class="reward-row" style="
+      <div class="reward-row"
+        data-reward-id="${reward["Reward ID"] || ""}"
+        style="
         display:flex;
         align-items:center;
         gap:15px;
@@ -536,7 +628,7 @@ function renderRewards(rewards){
           <input
             type="checkbox"
             class="reward-active"
-            ${reward.Active ? "checked" : ""}>
+            ${reward.Active === true || reward.Active === "TRUE" ? "checked" : ""}>
 
           Active
 
@@ -589,7 +681,7 @@ function addPointReward(){
 
   container.innerHTML += `
 
-    <div class="reward-row" style="
+    <div class="reward-row" data-reward-id="" style="
       display:flex;
       align-items:center;
       gap:15px;
@@ -641,10 +733,14 @@ function deleteSettingItem(button){
   button.parentElement.remove();
 
 }
-function loadEvaluations(callback){
+function loadEvaluations(callback, requestId){
 
     google.script.run
     .withSuccessHandler(function(settings){
+
+        if(!isCurrentPage("Evaluations", requestId)){
+            return;
+        }
 
         showEvaluationPage(settings);
 
@@ -655,6 +751,10 @@ function loadEvaluations(callback){
     })
     .withFailureHandler(function(error){
 
+        if(!isCurrentPage("Evaluations", requestId)){
+            return;
+        }
+
         console.error(error);
         showToast("Unable to load evaluation page.","error");
 
@@ -662,10 +762,14 @@ function loadEvaluations(callback){
     .getDropdownSettings();
 
 }
-function loadSessions(){
+function loadSessions(requestId){
 
   google.script.run
     .withSuccessHandler(function(result){
+
+      if(!isCurrentPage("Sessions", requestId)){
+        return;
+      }
 
       console.log("Result from Apps Script:", result);
 
@@ -725,13 +829,31 @@ function showEvaluationPage(settings){
   window.evaluationSettings = settings;
   window.pointRewards = settings.rewards || [];
 
-  // Check if we're resuming a session
-if(window.resumeSessionId && !window.viewMode){
+}
 
-  loadResumeSession(window.resumeSessionId);
+function initializeEvaluationsPage(requestId){
+
+    if(PageNavigation.evaluationMode === "view" ||
+        PageNavigation.evaluationMode === "resume"){
+        loadSessionView(
+            PageNavigation.evaluationSessionId,
+            requestId,
+            PageNavigation.evaluationMode === "view"
+        );
+        return;
+    }
+
+    loadEvaluations(null, requestId);
 
 }
 
+function startNewSession(){
+    PageNavigation.evaluationMode = "new";
+    PageNavigation.evaluationSessionId = null;
+    window.viewMode = false;
+    window.resumeSessionId = null;
+    window.currentPracticeSession = null;
+    loadPage("Evaluations");
 }
 function showSessionsPage(sessions){
 
@@ -811,7 +933,13 @@ function showSessionsPage(sessions){
         Resume
 
       </button>
-    ` : ""}
+    ` : `
+      <button
+        class="btn btn-primary"
+        onclick="confirmReopenSession('${session["Session ID"]}')">
+        Reopen
+      </button>
+    `}
 
     <button
       class="btn"
@@ -904,6 +1032,8 @@ if(session.created){
 }
 function startSession(){
 
+  const requestId = PageNavigation.requestId;
+
   const selectedTeams = [];
 
   document
@@ -927,10 +1057,31 @@ function startSession(){
     document.getElementById("evaluatorSelect").value
   ];
 
+  if(!evaluators[0] || evaluators[0] === "Loading..."){
+    showToast("Please select an evaluator.");
+    return;
+  }
+
+  if(!document.getElementById("practiceDate").value){
+    showToast("Please select a session date.");
+    return;
+  }
+
+  const startButton = document.getElementById("startSessionButton");
+
+  if(startButton && startButton.disabled){
+    return;
+  }
+
+  if(startButton){
+    startButton.disabled = true;
+    startButton.textContent = "Starting…";
+  }
+
   // Build Practice Session
 const session = {
 
-    sessionType: "Practice",
+    sessionType: document.getElementById("sessionType").value,
 
     date: document.getElementById("practiceDate").value,
 
@@ -945,18 +1096,16 @@ const session = {
 };
 
  google.script.run
-  .withSuccessHandler(function(sessionId){
+  .withSuccessHandler(function(result){
 
+      if(!isCurrentPage("Evaluations", requestId)){
+          return;
+      }
+
+      const sessionId = result.sessionId;
+      const players = result.players || [];
       window.currentPracticeSession = sessionId;
-
-   google.script.run
-  .withSuccessHandler(function(players){
-
-      const evaluator =
-          document.getElementById("evaluatorSelect").value;
-
-      google.script.run
-      .withSuccessHandler(function(){
+      const evaluator = session.evaluators[0];
 
     document.getElementById("sessionSetupCard").style.display = "none";
     document.getElementById("sessionSummaryCard").style.display = "block";
@@ -992,39 +1141,37 @@ const session = {
 
     }
 
-    openSession(
-        sessionId,
-        selectedTeams
-    );
-
-})
-        .createEvaluationRows(
-          sessionId,
-          players,
-          evaluator
-        );
-
+    showEvaluationTable(players);
   })
-  .getPlayersByTeams(selectedTeams);
-
+  .withFailureHandler(function(error){
+      if(startButton){
+          startButton.disabled = false;
+          startButton.textContent = "Start Session";
+      }
+      showToast(error && error.message
+          ? error.message
+          : "Unable to start session.");
   })
-  .createPracticeSession(session);
+  .createPracticeSessionWithEvaluations(session);
 
 }
 function showEvaluationTable(players){
 
-console.log("SHOW TABLE");
-console.log(players);
-console.log(Array.isArray(players));
-console.log(Array.isArray(players[0]));
-console.log(typeof players[0]);
-console.log(Object.keys(players[0]));
-console.log(players[0]);
-console.log(window.evaluationSettings);
-
   const container = document.getElementById("evaluationContainer");
 
-  console.log(container);
+  if(!container){
+    return;
+  }
+
+  if(!Array.isArray(players) || players.length === 0){
+    container.innerHTML = `
+      <div class="card">
+        <h3>No Active Players Found</h3>
+        <p>No active players were found for this session.</p>
+      </div>`;
+    document.getElementById("finishSessionContainer").style.display = "none";
+    return;
+  }
 
   const categories = evaluationSettings.cultureCategories;
 
@@ -1044,6 +1191,10 @@ console.log(window.evaluationSettings);
     <th class="sticky-attendance">Att.</th>
 
     <th class="sticky-player">Player</th>
+
+    <th>Reward</th>
+
+    <th>Notes</th>
   `;
 
   // Dynamic Category Headers
@@ -1054,21 +1205,12 @@ console.log(window.evaluationSettings);
   });
 
  html += `
-
-        <th>Reward</th>
-
-        <th>Notes</th>
-
       </tr>
 
     </thead>
 
     <tbody>
 `;
-
-console.log("FIRST PLAYER");
-console.log(players[0]);
-console.log(Array.isArray(players[0]));
 
   players.forEach(function(player){
 
@@ -1095,6 +1237,31 @@ console.log(Array.isArray(players[0]));
         ABSENT
     </span>
 
+</td>
+
+<td>
+    <select
+        class="reward-select"
+        data-player="${player["Player ID"]}">
+        <option value="">-- Reward --</option>
+        ${(window.pointRewards || []).map(function(reward){
+            return `<option value="${reward["Reward ID"]}">
+                ${reward["Reward Name"]}
+            </option>`;
+        }).join("")}
+    </select>
+</td>
+
+<td>
+    <span
+        class="evaluation-note-preview"
+        data-player="${player["Player ID"]}"></span>
+    <button
+        class="action-btn"
+        onclick="openNotesModal('${player["Player ID"]}')"
+        title="View or edit player notes">
+        💬 Notes
+    </button>
 </td>
 
     `;
@@ -1126,45 +1293,7 @@ categories.forEach(function(category){
 
 });
 
-html += `
-
-<td>
-
-    <select
-        class="reward-select"
-        data-player="${player["Player ID"]}">
-
-        <option value="">-- Reward --</option>
-
-        ${(window.pointRewards || []).map(function(reward){
-
-            return `
-                <option value="${reward["Reward ID"]}">
-                    ${reward["Reward Name"]}
-                </option>
-            `;
-
-        }).join("")}
-
-    </select>
-
-</td>
-
-    <td>
-
-        <button
-            class="action-btn"
-            onclick="openNotesModal('${player["Player ID"]}')">
-
-            💬
-
-        </button>
-
-    </td>
-
-</tr>
-
-`;
+html += `</tr>`;
 
   });
 
@@ -1178,12 +1307,7 @@ html += `
 
 `;
 
-console.log("Finished building HTML");
-
   container.innerHTML = html;
-
-  console.log("Container after insert:");
-console.log(container.innerHTML);
 
 initializeRatingButtons();
 
@@ -1192,6 +1316,7 @@ initializeAttendanceCheckboxes();
 initializeRewardDropdowns();
 
 document.getElementById("finishSessionContainer").style.display = "block";
+resetEvaluationSaveState();
 
 }
 function initializeRatingButtons(){
@@ -1201,6 +1326,12 @@ function initializeRatingButtons(){
         group.querySelectorAll(".rating-btn").forEach(function(button){
 
             button.addEventListener("click", function(){
+
+                if(group.dataset.saving === "true"){
+                    return;
+                }
+
+                const previousButton = group.querySelector(".rating-btn.selected");
 
                 // Update button color
                 group.querySelectorAll(".rating-btn").forEach(function(btn){
@@ -1215,10 +1346,32 @@ function initializeRatingButtons(){
                 const category = button.dataset.category;
                 const score = Number(button.dataset.score);
 
+                group.dataset.saving = "true";
+                group.querySelectorAll(".rating-btn").forEach(function(btn){
+                    btn.disabled = true;
+                });
+                retryEvaluationSave();
+
                 // Save to Google Sheets
                 google.script.run
+                    .withSuccessHandler(function(){
+                        group.dataset.saving = "false";
+                        group.querySelectorAll(".rating-btn").forEach(function(btn){
+                            btn.disabled = false;
+                        });
+                        endEvaluationSave(true);
+                    })
                     .withFailureHandler(function(error){
-                        alert(error.message);
+                        group.dataset.saving = "false";
+                        group.querySelectorAll(".rating-btn").forEach(function(btn){
+                            btn.disabled = false;
+                            btn.classList.remove("selected");
+                        });
+                        if(previousButton){
+                            previousButton.classList.add("selected");
+                        }
+                        endEvaluationSave(false);
+                        showToast(error.message || "Unable to save score.");
                     })
                     .updateEvaluationScore(
                         sessionId,
@@ -1249,6 +1402,10 @@ function initializeAttendanceCheckboxes(){
                 const playerId = row.dataset.player;
 
                 const buttons = row.querySelectorAll(".rating-btn");
+                const newValue = box.checked;
+
+                box.disabled = true;
+                retryEvaluationSave();
 
                 if(box.checked){
 
@@ -1268,24 +1425,25 @@ function initializeAttendanceCheckboxes(){
 
                 }
 
-                console.log("Saving attendance...");
-                console.log({
-                    sessionId: sessionId,
-                    playerId: playerId,
-                    present: box.checked
-                });
-
                 google.script.run
                     .withSuccessHandler(function(){
-                        console.log("Attendance saved successfully.");
+                        box.disabled = false;
+                        endEvaluationSave(true);
                     })
                     .withFailureHandler(function(error){
-                        console.error("Attendance save failed:", error);
+                        box.checked = !newValue;
+                        box.disabled = false;
+                        row.classList.toggle("player-absent", !box.checked);
+                        buttons.forEach(function(btn){
+                            btn.disabled = !box.checked;
+                        });
+                        endEvaluationSave(false);
+                        showToast(error.message || "Unable to save attendance.");
                     })
                     .updateAttendance(
                         sessionId,
                         playerId,
-                        box.checked
+                        newValue
                     );
 
             });
@@ -1295,6 +1453,23 @@ function initializeAttendanceCheckboxes(){
 }
 function finishCurrentSession(){
 
+    if(EvaluationSaves.pending > 0){
+        showToast("Please wait for changes to finish saving.");
+        return;
+    }
+
+    if(EvaluationSaves.failed){
+        showToast("Retry the failed change before finishing.");
+        return;
+    }
+
+    const finishButton = document.getElementById("finishSessionButton");
+
+    if(finishButton){
+        finishButton.disabled = true;
+        finishButton.textContent = "Finishing…";
+    }
+
     google.script.run
         .withSuccessHandler(function(){
 
@@ -1302,16 +1477,28 @@ function finishCurrentSession(){
 
             window.resumeSessionId = null;
             window.currentPracticeSession = null;
+            PageNavigation.evaluationMode = "new";
+            PageNavigation.evaluationSessionId = null;
+            window.viewMode = false;
 
             loadPage("Sessions");
 
+        })
+        .withFailureHandler(function(error){
+            if(finishButton){
+                finishButton.disabled = false;
+                finishButton.textContent = "Finish Session";
+            }
+            showToast(error.message || "Unable to finish session.");
         })
         .finishEntireSession(window.currentPracticeSession);
 
 }
 function resumeSession(sessionId){
 
-  // Save the session we're resuming
+  PageNavigation.evaluationMode = "resume";
+  PageNavigation.evaluationSessionId = sessionId;
+  window.viewMode = false;
   window.resumeSessionId = sessionId;
 
   // Open the Evaluation page
@@ -1332,13 +1519,44 @@ function viewSession(sessionId){
 
     window.resumeSessionId = null;
     window.viewMode = true;
+    PageNavigation.evaluationMode = "view";
+    PageNavigation.evaluationSessionId = sessionId;
 
-    loadPage("Evaluations", function(){
+    loadPage("Evaluations");
 
-        loadEvaluations(function(){
+}
+
+function confirmReopenSession(sessionId){
+
+  showConfirmModal(
+    "Reopen Completed Session",
+    "This session will become editable and must be finished again after changes.",
+    "Reopen",
+    function(){
+      google.script.run
+        .withSuccessHandler(function(){
+          resumeSession(sessionId);
+        })
+        .withFailureHandler(function(error){
+          showToast(error.message || "Unable to reopen session.");
+        })
+        .reopenSession(sessionId);
+    }
+  );
+
+}
+
+function loadSessionView(sessionId, requestId, readOnly){
 
             google.script.run
                 .withSuccessHandler(function(data){
+
+                    if(!isCurrentPage("Evaluations", requestId) ||
+                        PageNavigation.evaluationMode !==
+                            (readOnly ? "view" : "resume") ||
+                        PageNavigation.evaluationSessionId !== sessionId){
+                        return;
+                    }
 
                     if(!data || !data.session){
                         showToast("Unable to load session.","error");
@@ -1349,15 +1567,34 @@ function viewSession(sessionId){
                     window.evaluationSettings = data.settings;
                     window.pointRewards = data.rewards;
 
-                    populateSessionSummary(data.session);
-
                     showEvaluationPage(data.settings);
+
+                    if(readOnly){
+                        populateSessionSummary(data.session);
+                    }else{
+                        showSessionSummary({
+                            sessionType: data.session["Session Type"],
+                            date: data.session["Date"],
+                            created: data.session["Created"],
+                            teams: String(data.session["Teams"] || "")
+                                .split(",")
+                                .map(function(team){ return team.trim(); })
+                                .filter(Boolean),
+                            evaluators: String(data.session["Evaluators"] || "")
+                                .split(",")
+                                .map(function(evaluator){ return evaluator.trim(); })
+                                .filter(Boolean),
+                            sessionNotes: data.session["Session Notes"]
+                        }, data.session["Status"] || "In Progress");
+                    }
 
                     showEvaluationTable(data.players);
 
                     restoreEvaluationScores(data.scores);
 
-                    makeEvaluationReadOnly();
+                    if(readOnly){
+                        makeEvaluationReadOnly();
+                    }
 
                     document.getElementById("sessionSetupCard").style.display = "none";
                     document.getElementById("sessionSummaryCard").style.display = "block";
@@ -1365,15 +1602,15 @@ function viewSession(sessionId){
                 })
                 .withFailureHandler(function(err){
 
+                    if(!isCurrentPage("Evaluations", requestId)){
+                        return;
+                    }
+
                     console.error(err);
                     showToast("Unable to load session.","error");
 
                 })
-                .getSessionViewData(sessionId);
-
-        });
-
-    });
+                .getSessionViewData(sessionId, !readOnly);
 
 }
 
@@ -1428,22 +1665,34 @@ function deleteSession(sessionId){
     );
 
 }
-function openSession(sessionId, selectedTeams, readOnly = false){
+function openSession(sessionId, selectedTeams, readOnly = false, requestId){
 
   window.currentPracticeSession = sessionId;
 
 google.script.run
 .withSuccessHandler(function(players){
 
+    if(requestId != null && !isCurrentPage("Evaluations", requestId)){
+        return;
+    }
+
     showEvaluationTable(players);
 
     google.script.run
     .withSuccessHandler(function(rewards){
 
+        if(requestId != null && !isCurrentPage("Evaluations", requestId)){
+            return;
+        }
+
         populateRewardDropdowns(rewards);
 
         google.script.run
         .withSuccessHandler(function(scores){
+
+            if(requestId != null && !isCurrentPage("Evaluations", requestId)){
+                return;
+            }
 
             restoreEvaluationScores(scores);
 
@@ -1516,11 +1765,34 @@ console.log(playerScores);
     );
 
     if(dropdown){
-      dropdown.value = playerScores.Reward;
+      let rewardId = playerScores.Reward || "";
+
+      if(rewardId && !Array.from(dropdown.options).some(function(option){
+        return option.value === rewardId;
+      })){
+        const legacyReward = (window.pointRewards || []).find(function(reward){
+          return reward["Reward Name"] === rewardId;
+        });
+        rewardId = legacyReward ? legacyReward["Reward ID"] : "";
+      }
+
+      dropdown.value = rewardId;
+      dropdown.dataset.savedValue = rewardId;
     }
 
     return;
 
+  }
+
+  if(category === "Notes"){
+    const preview = document.querySelector(
+      `.evaluation-note-preview[data-player="${playerId}"]`
+    );
+    if(preview){
+      preview.textContent = playerScores.Notes || "";
+      preview.title = playerScores.Notes || "";
+    }
+    return;
   }
 
   const score = playerScores[category];
@@ -1575,23 +1847,47 @@ function closeNotesModal(){
 
 function saveEvaluationNotes(){
 
+    const notes = document.getElementById("evaluationNotes").value;
+    const playerId = window.currentNotesPlayer;
+
+    retryEvaluationSave();
+
     google.script.run
         .withSuccessHandler(function(){
 
-            closeNotesModal();
+            const preview = document.querySelector(
+                `.evaluation-note-preview[data-player="${playerId}"]`
+            );
+            if(preview){
+                preview.textContent = notes;
+                preview.title = notes;
+            }
 
+            closeNotesModal();
+            endEvaluationSave(true);
+
+        })
+        .withFailureHandler(function(error){
+            endEvaluationSave(false);
+            showToast(error.message || "Unable to save notes.");
         })
         .updateEvaluationNotes(
             window.currentPracticeSession,
-            window.currentNotesPlayer,
-            document.getElementById("evaluationNotes").value
+            playerId,
+            notes
         );
 
 }
-function loadResumeSession(sessionId){
+function loadResumeSession(sessionId, requestId){
 
   google.script.run
     .withSuccessHandler(function(session){
+
+      if(!isCurrentPage("Evaluations", requestId) ||
+          PageNavigation.evaluationMode !== "resume" ||
+          PageNavigation.evaluationSessionId !== sessionId){
+        return;
+      }
 
       const teams = session["Teams"]
         .split(",")
@@ -1614,7 +1910,9 @@ function loadResumeSession(sessionId){
 
 openSession(
     session["Session ID"],
-    teams
+    teams,
+    false,
+    requestId
 );
 
     })
@@ -1650,6 +1948,12 @@ function makeEvaluationReadOnly(){
 
             btn.disabled = true;
 
+        });
+
+    document
+        .querySelectorAll(".reward-select")
+        .forEach(function(select){
+            select.disabled = true;
         });
 
     document.getElementById("finishSessionContainer").style.display = "none";
@@ -1694,10 +1998,14 @@ document.addEventListener("click", function(e){
     }
 
 });
-function loadDashboard(){
+function loadDashboard(requestId){
 
     google.script.run
         .withSuccessHandler(function(data){
+
+            if(!isCurrentPage("Dashboard", requestId)){
+                return;
+            }
 
             // Active Players
             document.getElementById("dashboardPlayers").innerText =
@@ -1756,18 +2064,56 @@ if(document.getElementById("dashboardTrends")){
         .getDashboardData();
 
 }
-function loadLeaderboard(){
+function loadLeaderboard(requestId){
 
   google.script.run
-    .withSuccessHandler(showLeaderboard)
+    .withSuccessHandler(function(players){
+      if(isCurrentPage("Leaderboard", requestId)){
+        window.leaderboardPlayers = players || [];
+        populateLeaderboardTeams(players || []);
+        filterLeaderboard();
+      }
+    })
     .getLeaderboard();
 
+}
+
+function populateLeaderboardTeams(players){
+  const select = document.getElementById("leaderboardTeam");
+  if(!select){ return; }
+  const selected = select.value;
+  const teams = Array.from(new Set(players.map(function(player){
+    return player.team;
+  }).filter(Boolean))).sort();
+  select.innerHTML = '<option value="">All Teams</option>' +
+    teams.map(function(team){
+      return '<option value="' + team + '">' + team + '</option>';
+    }).join("");
+  select.value = selected;
+}
+
+function filterLeaderboard(){
+  const searchElement = document.getElementById("leaderboardSearch");
+  const teamElement = document.getElementById("leaderboardTeam");
+  const search = searchElement ? searchElement.value.trim().toLowerCase() : "";
+  const team = teamElement ? teamElement.value : "";
+  const players = (window.leaderboardPlayers || []).filter(function(player){
+    const fullName = (player.firstName + " " + player.lastName).toLowerCase();
+    return (!search || fullName.includes(search)) &&
+      (!team || player.team === team);
+  });
+  showLeaderboard(players);
 }
 function showLeaderboard(players){
 
   const container = document.getElementById("leaderboardContent");
 
   let html = "";
+
+  if(!players || players.length === 0){
+    container.innerHTML = '<div class="leaderboard-empty">No players match these filters.</div>';
+    return;
+  }
 
   players.forEach(function(player){
 
@@ -1870,6 +2216,33 @@ Panther Points
   container.innerHTML = html;
 
 }
+
+function downloadLeaderboardPdf(button){
+  const originalText = button.textContent;
+  const options = {
+    search: document.getElementById("leaderboardSearch").value.trim(),
+    team: document.getElementById("leaderboardTeam").value
+  };
+  button.disabled = true;
+  button.textContent = "Building PDF…";
+  google.script.run
+    .withSuccessHandler(function(report){
+      const link = document.createElement("a");
+      link.href = "data:application/pdf;base64," + report.base64;
+      link.download = report.fileName;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      button.disabled = false;
+      button.textContent = originalText;
+    })
+    .withFailureHandler(function(error){
+      button.disabled = false;
+      button.textContent = originalText;
+      showToast(error.message || "Unable to build leaderboard PDF.");
+    })
+    .getLeaderboardPdf(options);
+}
 function savePointRewards(){
 
   const rewards = [];
@@ -1891,7 +2264,7 @@ function savePointRewards(){
 
     rewards.push({
 
-      id: "R" + String(index + 1).padStart(3,"0"),
+      id: row.dataset.rewardId || "",
 
       name: name,
 
@@ -1910,8 +2283,15 @@ function savePointRewards(){
 
       showToast("Point Rewards Saved!");
 
-      loadSettings();
+      loadSettings(PageNavigation.requestId);
 
+    })
+    .withFailureHandler(function(error){
+      console.error(error);
+      const message = error && error.message
+        ? error.message
+        : String(error || "Unknown error");
+      showToast("Unable to save rewards: " + message);
     })
     .savePointRewards(rewards);
 
@@ -1936,7 +2316,7 @@ console.log(rewards);
 
                 const option = document.createElement("option");
 
-              option.value = reward["Reward Name"];
+              option.value = reward["Reward ID"];
 
 option.textContent =
     reward["Reward Name"] + " (+" + reward.Points + ")";
@@ -1954,19 +2334,32 @@ function initializeRewardDropdowns(){
         .querySelectorAll(".reward-select")
         .forEach(function(select){
 
+            select.dataset.savedValue = select.value || "";
+
             select.addEventListener("change", function(){
 
                 const playerId = select.dataset.player;
+                const previousValue = select.dataset.savedValue || "";
+
+                select.disabled = true;
+                retryEvaluationSave();
 
                 google.script.run
                 .withSuccessHandler(function(){
 
-                    showToast("Reward saved!");
+                    select.dataset.savedValue = select.value;
+                    select.disabled = false;
+                    endEvaluationSave(true);
+                    showToast(select.value ? "Reward saved!" : "Reward cleared!");
 
                 })
                 .withFailureHandler(function(error){
 
                     console.error(error);
+                    select.value = previousValue;
+                    select.disabled = false;
+                    endEvaluationSave(false);
+                    showToast("Unable to save reward.");
 
                 })
                 .updateReward(
