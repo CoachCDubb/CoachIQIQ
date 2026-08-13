@@ -15,9 +15,8 @@ function getAllSessions() {
     return sessionCache;
   }
 
-  const sheet = SpreadsheetApp
-    .getActive()
-    .getSheetByName("Sessions");
+  const ss = SpreadsheetApp.getActive();
+  const sheet = ss.getSheetByName("Sessions");
 
   const data = sheet.getDataRange().getValues();
 
@@ -27,6 +26,38 @@ function getAllSessions() {
   }
 
   const headers = data.shift();
+  const playerSheet = ss.getSheetByName("Players");
+  const evaluationSheet = ss.getSheetByName("Practice Evaluations");
+  const playerData = playerSheet.getDataRange().getValues();
+  const evaluationData = evaluationSheet.getDataRange().getValues();
+  const playerHeaders = playerData.shift() || [];
+  const evaluationHeaders = evaluationData.shift() || [];
+  const playerTeamIndex = playerHeaders.indexOf("Team");
+  const playerStatusIndex = playerHeaders.indexOf("Status");
+  const evaluationAttendanceIndex = evaluationHeaders.indexOf("Attendance");
+  const activePlayersByTeam = {};
+  const evaluationRowsBySession = {};
+
+  playerData.forEach(function(row){
+    if(row[playerStatusIndex] !== "Active"){
+      return;
+    }
+
+    const team = String(row[playerTeamIndex] || "").trim();
+    activePlayersByTeam[team] = (activePlayersByTeam[team] || 0) + 1;
+  });
+
+  evaluationData.forEach(function(row){
+    const sessionId = row[0];
+    const playerId = row[1];
+
+    if(!evaluationRowsBySession[sessionId]){
+      evaluationRowsBySession[sessionId] = {};
+    }
+
+    // Match getEvaluationScores(): the last row for a player wins.
+    evaluationRowsBySession[sessionId][playerId] = row;
+  });
 
 sessionCache = data.map(function(row){
 
@@ -46,11 +77,32 @@ sessionCache = data.map(function(row){
 
   });
 
-  // ADD THIS HERE (inside the map)
-  obj["Players"] = getPlayerCountForSession(obj["Session ID"]);
+  const teams = String(obj["Teams"] || "")
+    .split(",")
+    .map(function(team){ return team.trim(); })
+    .filter(Boolean);
 
-  obj["Completed Evaluations"] =
-    getEvaluationCountForSession(obj["Session ID"]);
+  obj["Players"] = teams.reduce(function(total, team){
+    return total + (activePlayersByTeam[team] || 0);
+  }, 0);
+
+  const sessionEvaluations =
+    evaluationRowsBySession[obj["Session ID"]] || {};
+
+  obj["Completed Evaluations"] = Object.keys(sessionEvaluations)
+    .reduce(function(total, playerId){
+      const row = sessionEvaluations[playerId];
+      let populated = evaluationAttendanceIndex >= 0 &&
+        row[evaluationAttendanceIndex] !== "" ? 1 : 0;
+
+      for(let c = 6; c < evaluationHeaders.length - 2; c++){
+        if(row[c] !== ""){
+          populated++;
+        }
+      }
+
+      return total + populated;
+    }, 0);
 
   return obj;
 
