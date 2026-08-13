@@ -37,3 +37,13 @@ function getPage(pageName) {
     .createHtmlOutputFromFile(pageName)
     .getContent();
 }
+function testHtml() {
+
+  const html = HtmlService
+    .createTemplateFromFile("Index")
+    .evaluate()
+    .getContent();
+
+  Logger.log(html);
+
+}

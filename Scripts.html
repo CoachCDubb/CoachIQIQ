@@ -32,7 +32,11 @@ case "Dashboard":
     break;
 
 case "Evaluations":
-    loadEvaluations();
+
+    if (!window.viewMode) {
+        loadEvaluations();
+    }
+
     break;
 
     case "Sessions":
@@ -609,10 +613,24 @@ function deleteSettingItem(button){
   button.parentElement.remove();
 
 }
-function loadEvaluations(){
+function loadEvaluations(callback){
 
-  google.script.run
-    .withSuccessHandler(showEvaluationPage)
+    google.script.run
+    .withSuccessHandler(function(settings){
+
+        showEvaluationPage(settings);
+
+        if(typeof callback === "function"){
+            callback();
+        }
+
+    })
+    .withFailureHandler(function(error){
+
+        console.error(error);
+        showToast("Unable to load evaluation page.","error");
+
+    })
     .getDropdownSettings();
 
 }
@@ -685,21 +703,7 @@ if(window.resumeSessionId && !window.viewMode){
   loadResumeSession(window.resumeSessionId);
 
 }
-if(window.pendingViewSession){
 
-    const pending = window.pendingViewSession;
-
-    window.pendingViewSession = null;
-
-    openSession(
-        pending.sessionId,
-        pending.teams,
-        true
-    );
-
-    window.viewMode = false;
-
-}
 }
 function showSessionsPage(sessions){
 
@@ -1303,54 +1307,68 @@ function viewSession(sessionId){
 
     loadPage("Evaluations");
 
-    google.script.run
-    .withSuccessHandler(function(data){
+    loadEvaluations(function(){
 
-        console.log("SESSION VIEW DATA");
-        console.log(data);
+        console.log("Calling getSessionViewData...");
 
-        if (!data) {
-            console.error("getSessionViewData() returned:", data);
-            showToast("Unable to load session.", "error");
-            return;
-        }
+const runner = google.script.run;
 
-        if (!data.session) {
-            console.error("Missing session object:", data);
-            showToast("Session data is incomplete.", "error");
-            return;
-        }
+console.log("Runner:", runner);
 
-            const waitForPage = setInterval(function(){
+runner
+        .withSuccessHandler(function(data){
 
-                if(
-                    document.getElementById("evaluationContainer") &&
-                    window.evaluationSettings
-                ){
+    console.log("SUCCESS HANDLER FIRED");
+    console.log("Type:", typeof data);
+    console.log("Value:", data);
 
-                    clearInterval(waitForPage);
+    alert("SUCCESS");
 
-                    window.currentPracticeSession = sessionId;
+    alert(JSON.stringify(data));
 
-                    populateSessionSummary(data.session);
+    console.log(data);
 
-                    window.pointRewards = data.rewards;
+            console.log("SESSION VIEW DATA");
+            console.log(data);
 
-                    showEvaluationTable(data.players);
+            if(!data || !data.session){
+                showToast("Unable to load session.","error");
+                return;
+            }
 
-                    restoreEvaluationScores(data.scores);
+            window.currentPracticeSession = sessionId;
 
-                    makeEvaluationReadOnly();
+            window.evaluationSettings = data.settings;
+            window.pointRewards = data.rewards;
 
-                    document.getElementById("sessionSetupCard").style.display = "none";
-                    document.getElementById("sessionSummaryCard").style.display = "block";
+            populateSessionSummary(data.session);
 
-                }
+            showEvaluationPage(data.settings);
 
-            }, 50);
+            showEvaluationTable(data.players);
+
+            restoreEvaluationScores(data.scores);
+
+            makeEvaluationReadOnly();
+
+            document.getElementById("sessionSetupCard").style.display = "none";
+            document.getElementById("sessionSummaryCard").style.display = "block";
 
         })
-        .getSessionViewData(sessionId);
+.withFailureHandler(function(err){
+
+    console.error(err);
+
+    alert(JSON.stringify(err, null, 2));
+
+    alert(err.message);
+
+    showToast("Unable to load session.","error");
+
+})
+.getSessionViewData(sessionId);
+
+    });
 
 }
 
