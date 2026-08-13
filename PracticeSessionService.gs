@@ -31,7 +31,9 @@ function createPracticeSession(data){
   data.sessionNotes,
   ""
 
-]);
+  ]);
+
+  sessionCache = null;
 
   return sessionId;
 
@@ -82,6 +84,8 @@ sheet.getRange(i + 1, 7).setValue("Completed");
 
 // Completed Time (Column I)
 sheet.getRange(i + 1, 9).setValue(new Date());
+
+      sessionCache = null;
 
       return;
 
