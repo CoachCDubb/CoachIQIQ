@@ -28,29 +28,75 @@ function getAllSessions() {
 
   const headers = data.shift();
 
-  sessionCache = data.map(function(row){
+sessionCache = data.map(function(row){
 
-    const obj = rowToObject(headers, row);
+  const obj = rowToObject(headers, row);
 
-    Object.keys(obj).forEach(function(key){
+  Object.keys(obj).forEach(function(key){
 
-      if(obj[key] instanceof Date){
+    if(obj[key] instanceof Date){
 
-        obj[key] = Utilities.formatDate(
-          obj[key],
-          Session.getScriptTimeZone(),
-          "MM/dd/yyyy HH:mm"
-        );
+      obj[key] = Utilities.formatDate(
+        obj[key],
+        Session.getScriptTimeZone(),
+        "MM/dd/yyyy HH:mm"
+      );
 
+    }
+
+  });
+
+  // ADD THIS HERE (inside the map)
+  obj["Players"] = getPlayerCountForSession(obj["Session ID"]);
+
+  obj["Completed Evaluations"] =
+    getEvaluationCountForSession(obj["Session ID"]);
+
+  return obj;
+
+});
+
+return sessionCache;
+
+}
+function getPlayerCountForSession(sessionId){
+
+  const session = getPracticeSession(sessionId);
+
+  if(!session){
+    return 0;
+  }
+
+  const teams = session["Teams"]
+    .split(",")
+    .map(t => t.trim());
+
+  return getPlayersByTeams(teams).length;
+
+}
+function getEvaluationCountForSession(sessionId){
+
+  const scores = getEvaluationScores(sessionId);
+
+  if(!scores){
+    return 0;
+  }
+
+  let total = 0;
+
+  Object.keys(scores).forEach(function(playerId){
+
+    Object.keys(scores[playerId]).forEach(function(category){
+
+      if(scores[playerId][category] !== ""){
+        total++;
       }
 
     });
 
-    return obj;
-
   });
 
-  return sessionCache;
+  return total;
 
 }
 

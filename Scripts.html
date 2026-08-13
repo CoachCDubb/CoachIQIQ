@@ -1,6 +1,6 @@
 <script>
 
-function loadPage(page) {
+function loadPage(page, callback) {
 
   google.script.run
     .withSuccessHandler(function(html) {
@@ -50,6 +50,10 @@ case "Evaluations":
     case "PlayerProfile":
     loadPlayerProfile();
     break;
+}
+// Run callback after page has been inserted
+if (typeof callback === "function") {
+    callback();
 }
 
     })
@@ -1305,68 +1309,45 @@ function viewSession(sessionId){
     window.resumeSessionId = null;
     window.viewMode = true;
 
-    loadPage("Evaluations");
+    loadPage("Evaluations", function(){
 
-    loadEvaluations(function(){
+        loadEvaluations(function(){
 
-        console.log("Calling getSessionViewData...");
+            google.script.run
+                .withSuccessHandler(function(data){
 
-const runner = google.script.run;
+                    if(!data || !data.session){
+                        showToast("Unable to load session.","error");
+                        return;
+                    }
 
-console.log("Runner:", runner);
+                    window.currentPracticeSession = sessionId;
+                    window.evaluationSettings = data.settings;
+                    window.pointRewards = data.rewards;
 
-runner
-        .withSuccessHandler(function(data){
+                    populateSessionSummary(data.session);
 
-    console.log("SUCCESS HANDLER FIRED");
-    console.log("Type:", typeof data);
-    console.log("Value:", data);
+                    showEvaluationPage(data.settings);
 
-    alert("SUCCESS");
+                    showEvaluationTable(data.players);
 
-    alert(JSON.stringify(data));
+                    restoreEvaluationScores(data.scores);
 
-    console.log(data);
+                    makeEvaluationReadOnly();
 
-            console.log("SESSION VIEW DATA");
-            console.log(data);
+                    document.getElementById("sessionSetupCard").style.display = "none";
+                    document.getElementById("sessionSummaryCard").style.display = "block";
 
-            if(!data || !data.session){
-                showToast("Unable to load session.","error");
-                return;
-            }
+                })
+                .withFailureHandler(function(err){
 
-            window.currentPracticeSession = sessionId;
+                    console.error(err);
+                    showToast("Unable to load session.","error");
 
-            window.evaluationSettings = data.settings;
-            window.pointRewards = data.rewards;
+                })
+                .getSessionViewData(sessionId);
 
-            populateSessionSummary(data.session);
-
-            showEvaluationPage(data.settings);
-
-            showEvaluationTable(data.players);
-
-            restoreEvaluationScores(data.scores);
-
-            makeEvaluationReadOnly();
-
-            document.getElementById("sessionSetupCard").style.display = "none";
-            document.getElementById("sessionSummaryCard").style.display = "block";
-
-        })
-.withFailureHandler(function(err){
-
-    console.error(err);
-
-    alert(JSON.stringify(err, null, 2));
-
-    alert(err.message);
-
-    showToast("Unable to load session.","error");
-
-})
-.getSessionViewData(sessionId);
+        });
 
     });
 

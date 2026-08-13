@@ -130,24 +130,30 @@ function getPlayersByTeams(selectedTeams){
     .getActive()
     .getSheetByName(PLAYER_SHEET);
 
-    const cols = getColumnMap("Players");
+  const headers = sheet
+    .getRange(1,1,1,sheet.getLastColumn())
+    .getValues()[0];
+
+  const cols = getColumnMap("Players");
 
   const data = sheet
-    .getDataRange()
+    .getRange(2,1,sheet.getLastRow()-1,sheet.getLastColumn())
     .getValues();
 
-  data.shift(); // Remove header row
+  return data
+    .filter(function(row){
 
-  const filtered = data.filter(function(player){
+      return selectedTeams.includes(
+               row[cols["Team"] - 1]
+             ) &&
+             row[cols["Status"] - 1] === "Active";
 
-    return selectedTeams.includes(
-           player[cols["Team"] - 1]
-       ) &&
-       player[cols["Status"] - 1] === "Active";
+    })
+    .map(function(row){
 
-  });
+      return rowToObject(headers,row);
 
-  return filtered;
+    });
 
 }
 /**
