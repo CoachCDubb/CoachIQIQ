@@ -1,9 +1,33 @@
 <script>
 
+const PageNavigation = {
+    currentPage: null,
+    requestId: 0,
+    loadingPage: null,
+    evaluationMode: "new",
+    evaluationSessionId: null
+};
+
+function isCurrentPage(page, requestId){
+    return PageNavigation.currentPage === page &&
+        (requestId == null || PageNavigation.requestId === requestId);
+}
+
 function loadPage(page, callback){
+
+    if(PageNavigation.loadingPage === page){
+        return;
+    }
+
+    const requestId = ++PageNavigation.requestId;
+    PageNavigation.loadingPage = page;
 
     google.script.run
     .withSuccessHandler(function(html){
+
+        if(requestId !== PageNavigation.requestId){
+            return;
+        }
 
         const container = document.getElementById("page-content");
 
@@ -13,6 +37,8 @@ function loadPage(page, callback){
         }
 
         container.innerHTML = html;
+        PageNavigation.currentPage = page;
+        PageNavigation.loadingPage = null;
 
         // Update Navigation
         document.querySelectorAll(".nav-item").forEach(function(item){
@@ -28,34 +54,34 @@ function loadPage(page, callback){
         // Wait until browser finishes rendering
         requestAnimationFrame(function(){
 
+            if(!isCurrentPage(page, requestId)){
+                return;
+            }
+
             switch(page){
 
                 case "Dashboard":
-                    loadDashboard();
+                    loadDashboard(requestId);
                     break;
 
                 case "Players":
-                    loadPlayers();
+                    loadPlayers(requestId);
                     break;
 
                 case "Sessions":
-                    loadSessions();
+                    loadSessions(requestId);
                     break;
 
                 case "Evaluations":
-
-                    if(!window.viewMode){
-                        loadEvaluations();
-                    }
-
+                    initializeEvaluationsPage(requestId);
                     break;
 
                 case "Leaderboard":
-                    loadLeaderboard();
+                    loadLeaderboard(requestId);
                     break;
 
                 case "Settings":
-                    loadSettings();
+                    loadSettings(requestId);
                     break;
 
                 case "PlayerProfile":
@@ -73,6 +99,12 @@ function loadPage(page, callback){
     })
     .withFailureHandler(function(error){
 
+        if(requestId !== PageNavigation.requestId){
+            return;
+        }
+
+        PageNavigation.loadingPage = null;
+
         console.error(error);
 
         showToast(
@@ -85,10 +117,14 @@ function loadPage(page, callback){
 
 }
 
-function loadPlayers(){
+function loadPlayers(requestId){
 
   google.script.run
-    .withSuccessHandler(showPlayers)
+    .withSuccessHandler(function(players){
+      if(isCurrentPage("Players", requestId)){
+        showPlayers(players, requestId);
+      }
+    })
     .getPlayersForUI();
 
 }
@@ -101,11 +137,15 @@ const CoachIQ = {
 
 };
 
-function showPlayers(players){
+function showPlayers(players, requestId){
 
   CoachIQ.players = players;
 
   loadDropdownSettings(function(settings){
+
+    if(!isCurrentPage("Players", requestId)){
+      return;
+    }
 
     CoachIQ.settings = settings;
 
@@ -364,10 +404,14 @@ function loadDropdownSettings(callback){
     .getDropdownSettings();
 
 }
-function loadSettings(){
+function loadSettings(requestId){
 
   google.script.run
-    .withSuccessHandler(showSettings)
+    .withSuccessHandler(function(settings){
+      if(isCurrentPage("Settings", requestId)){
+        showSettings(settings);
+      }
+    })
     .getCoachIQSettings();
 
 }
@@ -641,10 +685,14 @@ function deleteSettingItem(button){
   button.parentElement.remove();
 
 }
-function loadEvaluations(callback){
+function loadEvaluations(callback, requestId){
 
     google.script.run
     .withSuccessHandler(function(settings){
+
+        if(!isCurrentPage("Evaluations", requestId)){
+            return;
+        }
 
         showEvaluationPage(settings);
 
@@ -655,6 +703,10 @@ function loadEvaluations(callback){
     })
     .withFailureHandler(function(error){
 
+        if(!isCurrentPage("Evaluations", requestId)){
+            return;
+        }
+
         console.error(error);
         showToast("Unable to load evaluation page.","error");
 
@@ -662,10 +714,14 @@ function loadEvaluations(callback){
     .getDropdownSettings();
 
 }
-function loadSessions(){
+function loadSessions(requestId){
 
   google.script.run
     .withSuccessHandler(function(result){
+
+      if(!isCurrentPage("Sessions", requestId)){
+        return;
+      }
 
       console.log("Result from Apps Script:", result);
 
@@ -725,13 +781,32 @@ function showEvaluationPage(settings){
   window.evaluationSettings = settings;
   window.pointRewards = settings.rewards || [];
 
-  // Check if we're resuming a session
-if(window.resumeSessionId && !window.viewMode){
+}
 
-  loadResumeSession(window.resumeSessionId);
+function initializeEvaluationsPage(requestId){
+
+    if(PageNavigation.evaluationMode === "view"){
+        loadSessionView(PageNavigation.evaluationSessionId, requestId);
+        return;
+    }
+
+    loadEvaluations(function(){
+
+        if(PageNavigation.evaluationMode === "resume"){
+            loadResumeSession(PageNavigation.evaluationSessionId, requestId);
+        }
+
+    }, requestId);
 
 }
 
+function startNewSession(){
+    PageNavigation.evaluationMode = "new";
+    PageNavigation.evaluationSessionId = null;
+    window.viewMode = false;
+    window.resumeSessionId = null;
+    window.currentPracticeSession = null;
+    loadPage("Evaluations");
 }
 function showSessionsPage(sessions){
 
@@ -904,6 +979,8 @@ if(session.created){
 }
 function startSession(){
 
+  const requestId = PageNavigation.requestId;
+
   const selectedTeams = [];
 
   document
@@ -947,16 +1024,28 @@ const session = {
  google.script.run
   .withSuccessHandler(function(sessionId){
 
+      if(!isCurrentPage("Evaluations", requestId)){
+          return;
+      }
+
       window.currentPracticeSession = sessionId;
 
    google.script.run
   .withSuccessHandler(function(players){
+
+      if(!isCurrentPage("Evaluations", requestId)){
+          return;
+      }
 
       const evaluator =
           document.getElementById("evaluatorSelect").value;
 
       google.script.run
       .withSuccessHandler(function(){
+
+    if(!isCurrentPage("Evaluations", requestId)){
+        return;
+    }
 
     document.getElementById("sessionSetupCard").style.display = "none";
     document.getElementById("sessionSummaryCard").style.display = "block";
@@ -994,7 +1083,9 @@ const session = {
 
     openSession(
         sessionId,
-        selectedTeams
+        selectedTeams,
+        false,
+        requestId
     );
 
 })
@@ -1302,6 +1393,9 @@ function finishCurrentSession(){
 
             window.resumeSessionId = null;
             window.currentPracticeSession = null;
+            PageNavigation.evaluationMode = "new";
+            PageNavigation.evaluationSessionId = null;
+            window.viewMode = false;
 
             loadPage("Sessions");
 
@@ -1311,7 +1405,9 @@ function finishCurrentSession(){
 }
 function resumeSession(sessionId){
 
-  // Save the session we're resuming
+  PageNavigation.evaluationMode = "resume";
+  PageNavigation.evaluationSessionId = sessionId;
+  window.viewMode = false;
   window.resumeSessionId = sessionId;
 
   // Open the Evaluation page
@@ -1332,13 +1428,23 @@ function viewSession(sessionId){
 
     window.resumeSessionId = null;
     window.viewMode = true;
+    PageNavigation.evaluationMode = "view";
+    PageNavigation.evaluationSessionId = sessionId;
 
-    loadPage("Evaluations", function(){
+    loadPage("Evaluations");
 
-        loadEvaluations(function(){
+}
+
+function loadSessionView(sessionId, requestId){
 
             google.script.run
                 .withSuccessHandler(function(data){
+
+                    if(!isCurrentPage("Evaluations", requestId) ||
+                        PageNavigation.evaluationMode !== "view" ||
+                        PageNavigation.evaluationSessionId !== sessionId){
+                        return;
+                    }
 
                     if(!data || !data.session){
                         showToast("Unable to load session.","error");
@@ -1365,15 +1471,15 @@ function viewSession(sessionId){
                 })
                 .withFailureHandler(function(err){
 
+                    if(!isCurrentPage("Evaluations", requestId)){
+                        return;
+                    }
+
                     console.error(err);
                     showToast("Unable to load session.","error");
 
                 })
                 .getSessionViewData(sessionId);
-
-        });
-
-    });
 
 }
 
@@ -1428,22 +1534,34 @@ function deleteSession(sessionId){
     );
 
 }
-function openSession(sessionId, selectedTeams, readOnly = false){
+function openSession(sessionId, selectedTeams, readOnly = false, requestId){
 
   window.currentPracticeSession = sessionId;
 
 google.script.run
 .withSuccessHandler(function(players){
 
+    if(requestId != null && !isCurrentPage("Evaluations", requestId)){
+        return;
+    }
+
     showEvaluationTable(players);
 
     google.script.run
     .withSuccessHandler(function(rewards){
 
+        if(requestId != null && !isCurrentPage("Evaluations", requestId)){
+            return;
+        }
+
         populateRewardDropdowns(rewards);
 
         google.script.run
         .withSuccessHandler(function(scores){
+
+            if(requestId != null && !isCurrentPage("Evaluations", requestId)){
+                return;
+            }
 
             restoreEvaluationScores(scores);
 
@@ -1588,10 +1706,16 @@ function saveEvaluationNotes(){
         );
 
 }
-function loadResumeSession(sessionId){
+function loadResumeSession(sessionId, requestId){
 
   google.script.run
     .withSuccessHandler(function(session){
+
+      if(!isCurrentPage("Evaluations", requestId) ||
+          PageNavigation.evaluationMode !== "resume" ||
+          PageNavigation.evaluationSessionId !== sessionId){
+        return;
+      }
 
       const teams = session["Teams"]
         .split(",")
@@ -1614,7 +1738,9 @@ function loadResumeSession(sessionId){
 
 openSession(
     session["Session ID"],
-    teams
+    teams,
+    false,
+    requestId
 );
 
     })
@@ -1694,10 +1820,14 @@ document.addEventListener("click", function(e){
     }
 
 });
-function loadDashboard(){
+function loadDashboard(requestId){
 
     google.script.run
         .withSuccessHandler(function(data){
+
+            if(!isCurrentPage("Dashboard", requestId)){
+                return;
+            }
 
             // Active Players
             document.getElementById("dashboardPlayers").innerText =
@@ -1756,10 +1886,14 @@ if(document.getElementById("dashboardTrends")){
         .getDashboardData();
 
 }
-function loadLeaderboard(){
+function loadLeaderboard(requestId){
 
   google.script.run
-    .withSuccessHandler(showLeaderboard)
+    .withSuccessHandler(function(players){
+      if(isCurrentPage("Leaderboard", requestId)){
+        showLeaderboard(players);
+      }
+    })
     .getLeaderboard();
 
 }
