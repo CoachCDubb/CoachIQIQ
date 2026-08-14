@@ -1,0 +1,132 @@
+%PDF-1.4
+%
+1 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>
+endobj
+2 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold >>
+endobj
+3 0 obj
+<< /Type /Pages /Kids [5 0 R 7 0 R] /Count 2 >>
+endobj
+4 0 obj
+<< /Length 4261 >>
+stream
+BT /F2 22 Tf 0.12 0.23 0.37 rg 54 736 Td (CoachIQ New Program Launch Guide) Tj ET
+BT /F1 10 Tf 0.38 0.43 0.51 rg 54 705 Td (Prepared for program owners and coaching staff) Tj ET
+BT /F2 16 Tf 0.12 0.23 0.37 rg 54 668 Td (Morning launch checklist) Tj ET
+BT /F1 9.5 Tf 0.12 0.16 0.23 rg 54 639 Td (Use one private CoachIQ spreadsheet copy per program. Complete the first launch with the) Tj ET
+BT /F1 9.5 Tf 0.12 0.16 0.23 rg 64 626 Td (program owner before inviting the full staff.) Tj ET
+BT /F2 12 Tf 0.75 0.42 0.04 rg 54 603 Td (Before the meeting) Tj ET
+BT /F1 9.5 Tf 0.12 0.16 0.23 rg 62 579 Td (- Create a clean copy named CoachIQ - School - Sport - Season.) Tj ET
+BT /F1 9.5 Tf 0.12 0.16 0.23 rg 62 566 Td (- Confirm these sheets exist and retain their header rows: Players, Sessions, Practice) Tj ET
+BT /F1 9.5 Tf 0.12 0.16 0.23 rg 72 553 Td (Evaluations, Culture Points, Point Awards, Player Timeline, Player Season Stats, and) Tj ET
+BT /F1 9.5 Tf 0.12 0.16 0.23 rg 72 540 Td (Settings.) Tj ET
+BT /F1 9.5 Tf 0.12 0.16 0.23 rg 62 527 Td (- Confirm Culture Points row 1 is: Point ID, Player ID, Category ID, Category Name,) Tj ET
+BT /F1 9.5 Tf 0.12 0.16 0.23 rg 72 514 Td (Points, Coach, Date, Notes, Session ID.) Tj ET
+BT /F1 9.5 Tf 0.12 0.16 0.23 rg 62 501 Td (- Clear test records from row 2 downward only. Never clear header rows.) Tj ET
+BT /F1 9.5 Tf 0.12 0.16 0.23 rg 62 488 Td (- In Settings, set Setup Complete to FALSE for a true first-run test.) Tj ET
+BT /F1 9.5 Tf 0.12 0.16 0.23 rg 62 475 Td (- Make a backup copy before entering real athlete information.) Tj ET
+BT /F1 9.5 Tf 0.12 0.16 0.23 rg 62 462 Td (- Prepare the school name, program name, mascot, season, teams, positions, statuses,) Tj ET
+BT /F1 9.5 Tf 0.12 0.16 0.23 rg 72 449 Td (staff names, colors, logo URL, evaluation categories, and rewards.) Tj ET
+BT /F1 9.5 Tf 0.12 0.16 0.23 rg 62 436 Td (- Prepare the roster as a CSV using the CoachIQ template.) Tj ET
+BT /F2 12 Tf 0.75 0.42 0.04 rg 54 413 Td (Launch and onboarding) Tj ET
+BT /F1 9.5 Tf 0.12 0.16 0.23 rg 54 389 Td (1. Open the program spreadsheet as its owner.) Tj ET
+BT /F1 9.5 Tf 0.12 0.16 0.23 rg 54 376 Td (2. Wait for the CoachIQ menu, then select CoachIQ > Launch CoachIQ.) Tj ET
+BT /F1 9.5 Tf 0.12 0.16 0.23 rg 54 363 Td (3. Complete Program Name, School / Organization, Mascot / Team Name, Current Season, and) Tj ET
+BT /F1 9.5 Tf 0.12 0.16 0.23 rg 64 350 Td (Sport.) Tj ET
+BT /F1 9.5 Tf 0.12 0.16 0.23 rg 54 337 Td (4. Select primary and secondary colors. Use a public HTTPS logo URL or leave it blank.) Tj ET
+BT /F1 9.5 Tf 0.12 0.16 0.23 rg 54 324 Td (5. Enter teams, positions, statuses, evaluation categories, and coaching staff.) Tj ET
+BT /F1 9.5 Tf 0.12 0.16 0.23 rg 54 311 Td (6. Review starter rewards and point values.) Tj ET
+BT /F1 9.5 Tf 0.12 0.16 0.23 rg 54 298 Td (7. Select Finish Setup.) Tj ET
+BT /F1 9.5 Tf 0.12 0.16 0.23 rg 54 285 Td (8. CoachIQ should open Getting Started. Run the guided tour.) Tj ET
+BT /F2 12 Tf 0.75 0.42 0.04 rg 54 262 Td (Add the roster) Tj ET
+BT /F1 9.5 Tf 0.12 0.16 0.23 rg 54 238 Td (1. Open Players.) Tj ET
+BT /F1 9.5 Tf 0.12 0.16 0.23 rg 54 225 Td (2. Select Upload Roster CSV.) Tj ET
+BT /F1 9.5 Tf 0.12 0.16 0.23 rg 54 212 Td (3. Download the CSV template.) Tj ET
+BT /F1 9.5 Tf 0.12 0.16 0.23 rg 54 199 Td (4. Keep the headers: First Name, Last Name, Jersey Number, Grade, Team, Position, Status.) Tj ET
+BT /F1 9.5 Tf 0.12 0.16 0.23 rg 54 186 Td (5. Ensure Team, Position, and Status values exactly match CoachIQ Settings.) Tj ET
+BT /F1 9.5 Tf 0.12 0.16 0.23 rg 54 173 Td (6. Upload the completed CSV and review the preview.) Tj ET
+BT /F1 9.5 Tf 0.12 0.16 0.23 rg 54 160 Td (7. Select Import Players.) Tj ET
+BT /F1 9.5 Tf 0.12 0.16 0.23 rg 54 147 Td (8. Open one newly imported profile. It should say Not Yet Evaluated and must not show an) Tj ET
+BT /F1 9.5 Tf 0.12 0.16 0.23 rg 64 134 Td (error.) Tj ET
+BT /F1 9.5 Tf 0.12 0.16 0.23 rg 54 121 Td (9. Edit one test player and confirm the change persists.) Tj ET
+BT /F2 12 Tf 0.75 0.42 0.04 rg 54 98 Td (Create the first session) Tj ET
+BT /F1 9.5 Tf 0.12 0.16 0.23 rg 54 74 Td (1. Open Sessions and select New Session.) Tj ET
+BT /F1 8 Tf 0.45 0.49 0.56 rg 54 28 Td (CoachIQ New Program Launch Guide  |  Page 1 of 2) Tj ET
+endstream
+endobj
+5 0 obj
+<< /Type /Page /Parent 3 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 1 0 R /F2 2 0 R >> >> /Contents 4 0 R >>
+endobj
+6 0 obj
+<< /Length 4643 >>
+stream
+BT /F1 9.5 Tf 0.12 0.16 0.23 rg 54 736 Td (2. Choose session type, date, evaluator, and one or more teams.) Tj ET
+BT /F1 9.5 Tf 0.12 0.16 0.23 rg 54 723 Td (3. Enter optional session notes and select Start Session.) Tj ET
+BT /F1 9.5 Tf 0.12 0.16 0.23 rg 54 710 Td (4. Confirm each active selected athlete appears once.) Tj ET
+BT /F1 9.5 Tf 0.12 0.16 0.23 rg 54 697 Td (5. Enter attendance and several pillar ratings.) Tj ET
+BT /F1 9.5 Tf 0.12 0.16 0.23 rg 54 684 Td (6. Add a note and reward to at least one player.) Tj ET
+BT /F1 9.5 Tf 0.12 0.16 0.23 rg 54 671 Td (7. Wait until CoachIQ displays All changes saved.) Tj ET
+BT /F1 9.5 Tf 0.12 0.16 0.23 rg 54 658 Td (8. Navigate away, resume the session, and confirm values remain.) Tj ET
+BT /F1 9.5 Tf 0.12 0.16 0.23 rg 54 645 Td (9. Finish the session only when there are no pending or failed saves.) Tj ET
+BT /F1 9.5 Tf 0.12 0.16 0.23 rg 54 632 Td (10. View the completed session, reopen it, make a correction, save, and finish again.) Tj ET
+BT /F2 12 Tf 0.75 0.42 0.04 rg 54 609 Td (Verify reports and totals) Tj ET
+BT /F1 9.5 Tf 0.12 0.16 0.23 rg 62 585 Td (- Dashboard player count, sessions, attendance, culture score, and point leader load.) Tj ET
+BT /F1 9.5 Tf 0.12 0.16 0.23 rg 62 572 Td (- Leaderboard search and team filter work.) Tj ET
+BT /F1 9.5 Tf 0.12 0.16 0.23 rg 62 559 Td (- A player PDF downloads and opens.) Tj ET
+BT /F1 9.5 Tf 0.12 0.16 0.23 rg 62 546 Td (- The leaderboard PDF downloads and opens.) Tj ET
+BT /F1 9.5 Tf 0.12 0.16 0.23 rg 62 533 Td (- Changing a reward creates only one Culture Points row for that player/session.) Tj ET
+BT /F1 9.5 Tf 0.12 0.16 0.23 rg 62 520 Td (- Removing a reward removes its session reward row.) Tj ET
+BT /F2 12 Tf 0.75 0.42 0.04 rg 54 497 Td (Add staff) Tj ET
+BT /F1 9.5 Tf 0.12 0.16 0.23 rg 54 473 Td (1. Share the spreadsheet only with trusted staff Google accounts as Editors.) Tj ET
+BT /F1 9.5 Tf 0.12 0.16 0.23 rg 54 460 Td (2. Do not use Anyone with the link.) Tj ET
+BT /F1 9.5 Tf 0.12 0.16 0.23 rg 54 447 Td (3. Have one second staff member open the spreadsheet in a separate browser profile.) Tj ET
+BT /F1 9.5 Tf 0.12 0.16 0.23 rg 54 434 Td (4. Let that account authorize and launch CoachIQ.) Tj ET
+BT /F1 9.5 Tf 0.12 0.16 0.23 rg 54 421 Td (5. It should open the configured Dashboard, not onboarding.) Tj ET
+BT /F1 9.5 Tf 0.12 0.16 0.23 rg 54 408 Td (6. Have the second coach update a fictional evaluation and verify the owner sees the) Tj ET
+BT /F1 9.5 Tf 0.12 0.16 0.23 rg 64 395 Td (change.) Tj ET
+BT /F1 9.5 Tf 0.12 0.16 0.23 rg 54 382 Td (7. Send PDFs, not spreadsheet access, to players or parents.) Tj ET
+BT /F2 12 Tf 0.75 0.42 0.04 rg 54 359 Td (Go-live decision) Tj ET
+BT /F1 9.5 Tf 0.12 0.16 0.23 rg 54 335 Td (Go live only if onboarding, roster import, player profiles, player editing, session) Tj ET
+BT /F1 9.5 Tf 0.12 0.16 0.23 rg 64 322 Td (save/resume/finish/reopen, rewards, Dashboard, leaderboard, PDFs, and second-user access) Tj ET
+BT /F1 9.5 Tf 0.12 0.16 0.23 rg 64 309 Td (all pass without red CoachIQ console errors.) Tj ET
+BT /F2 16 Tf 0.12 0.23 0.37 rg 54 283 Td (Troubleshooting) Tj ET
+BT /F1 9.5 Tf 0.12 0.16 0.23 rg 62 254 Td (- Old page after code update: close CoachIQ, refresh the spreadsheet, and relaunch.) Tj ET
+BT /F1 9.5 Tf 0.12 0.16 0.23 rg 62 241 Td (- Upload button missing: update Players.html.) Tj ET
+BT /F1 9.5 Tf 0.12 0.16 0.23 rg 62 228 Td (- Profile fails for new athlete: update InsightService.gs, PlayerService.gs, and) Tj ET
+BT /F1 9.5 Tf 0.12 0.16 0.23 rg 72 215 Td (PlayerModule.html.) Tj ET
+BT /F1 9.5 Tf 0.12 0.16 0.23 rg 62 202 Td (- Onboarding appears again: confirm Settings has Setup Complete = TRUE.) Tj ET
+BT /F1 9.5 Tf 0.12 0.16 0.23 rg 62 189 Td (- Import rejects Team/Position/Status: make CSV spelling match Settings exactly.) Tj ET
+BT /F1 9.5 Tf 0.12 0.16 0.23 rg 62 176 Td (- Save failed: do not finish; retry the field and wait for All changes saved.) Tj ET
+BT /F2 16 Tf 0.12 0.23 0.37 rg 54 150 Td (Safe operating rules) Tj ET
+BT /F1 9.5 Tf 0.12 0.16 0.23 rg 62 121 Td (- Back up before every code update or schema change.) Tj ET
+BT /F1 9.5 Tf 0.12 0.16 0.23 rg 62 108 Td (- Replace code files only; never replace a live data sheet with a blank template.) Tj ET
+BT /F1 9.5 Tf 0.12 0.16 0.23 rg 62 95 Td (- Never rename required headers without a documented migration.) Tj ET
+BT /F1 9.5 Tf 0.12 0.16 0.23 rg 62 82 Td (- Keep each program in its own spreadsheet.) Tj ET
+BT /F1 9.5 Tf 0.12 0.16 0.23 rg 62 69 Td (- Restrict spreadsheet access to trusted staff.) Tj ET
+BT /F1 8 Tf 0.45 0.49 0.56 rg 54 28 Td (CoachIQ New Program Launch Guide  |  Page 2 of 2) Tj ET
+endstream
+endobj
+7 0 obj
+<< /Type /Page /Parent 3 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 1 0 R /F2 2 0 R >> >> /Contents 6 0 R >>
+endobj
+8 0 obj
+<< /Type /Catalog /Pages 3 0 R >>
+endobj
+xref
+0 9
+0000000000 65535 f 
+0000000015 00000 n 
+0000000085 00000 n 
+0000000160 00000 n 
+0000000223 00000 n 
+0000004536 00000 n 
+0000004672 00000 n 
+0000009367 00000 n 
+0000009503 00000 n 
+trailer
+<< /Size 9 /Root 8 0 R >>
+startxref
+9552
+%%EOF
