@@ -17,7 +17,9 @@
 
 <body>
 
-  <div id="app">
+  <?!= include('Onboarding'); ?>
+
+  <div id="app" hidden>
 
     <?!= include('Sidebar'); ?>
 
@@ -67,6 +69,18 @@
   </div>
 
   <div id="toast" class="toast"></div>
+
+  <div id="tutorialOverlay" class="tutorial-overlay" hidden aria-live="polite">
+    <div class="tutorial-popover">
+      <div class="tutorial-progress" id="tutorialProgress"></div>
+      <h2 id="tutorialTitle">Welcome to CoachIQ</h2>
+      <p id="tutorialBody"></p>
+      <div class="tutorial-actions">
+        <button class="btn" onclick="closeCoachIQTutorial()">Exit Tour</button>
+        <button id="tutorialNextButton" class="btn btn-primary" onclick="advanceCoachIQTutorial()">Next</button>
+      </div>
+    </div>
+  </div>
 
  <?!= include('Scripts'); ?>
 <?!= include('PlayerModule'); ?>
