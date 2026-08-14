@@ -174,11 +174,13 @@ const categories = settings.cultureCategories;
 
   result[category] = {
 
-    average: "-",
+    average: null,
 
-    trend: "Stable",
+    trend: "Not Yet Rated",
 
     icon: "➖",
+
+    color: "#6B7280",
 
     history: []
 
