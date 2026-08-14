@@ -21,11 +21,17 @@ function getPlayerReportData(playerId){
 
     overallGrade: profile.overallGrade,
 
+    overallLabel: profile.overallLabel,
+
     summary: profile.summary,
 
     trend: profile.trend,
 
     timeline: profile.timeline,
+
+    history: profile.history,
+
+    evaluations: getPlayerReportEvaluations_(playerId),
 
     strengths: profile.strengths,
 
@@ -33,6 +39,46 @@ function getPlayerReportData(playerId){
 
   };
 
+}
+
+function getPlayerReportEvaluations_(playerId){
+  const evaluations = getPracticeEvaluations().filter(function(evaluation){
+    return evaluation["Player ID"] == playerId && evaluation.Complete === true;
+  });
+  const sessions = getAllSessions();
+  const sessionsById = {};
+  const rewardsById = {};
+  const settings = getCoachIQSettings();
+
+  sessions.forEach(function(session){
+    sessionsById[String(session["Session ID"])] = session;
+  });
+  getPointAwards().forEach(function(reward){
+    rewardsById[String(reward["Reward ID"])] = reward["Reward Name"];
+    rewardsById[String(reward["Reward Name"])] = reward["Reward Name"];
+  });
+
+  return evaluations.map(function(evaluation){
+    const session = sessionsById[String(evaluation["Session ID"])] || {};
+    const scores = {};
+    (settings.cultureCategories || []).forEach(function(category){
+      const score = Number(evaluation[category]);
+      scores[category] = isFinite(score) && score > 0 ? score : null;
+    });
+    return {
+      sessionId: evaluation["Session ID"],
+      date: session.Date || evaluation.Created || "",
+      sessionType: session["Session Type"] || "Session",
+      teams: session.Teams || "",
+      evaluator: evaluation.Evaluator || "",
+      attendance: evaluation.Attendance === true,
+      scores: scores,
+      notes: evaluation.Notes || "",
+      reward: rewardsById[String(evaluation.Reward || "")] || evaluation.Reward || ""
+    };
+  }).sort(function(a, b){
+    return new Date(b.date).getTime() - new Date(a.date).getTime();
+  });
 }
 function testPlayerReportData(){
 

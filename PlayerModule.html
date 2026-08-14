@@ -9,8 +9,18 @@ let currentPlayerProfile = null;
 function renderPlayers(players){
 
   const tbody = document.querySelector("#playersTable tbody");
+  const table = document.getElementById("playersTable");
+  const emptyState = document.getElementById("playersEmptyState");
 
   tbody.innerHTML = "";
+
+  const hasPlayers = Array.isArray(players) && players.length > 0;
+  if(table){ table.hidden = !hasPlayers; }
+  if(emptyState){ emptyState.hidden = hasPlayers; }
+
+  if(!hasPlayers){
+    return;
+  }
 
   players.forEach(function(player){
 
@@ -131,18 +141,20 @@ function openPlayerModal(playerId, editMode){
 
   google.script.run
 
-    .withSuccessHandler(function(profile){
+    .withSuccessHandler(function(result){
 
       try{
 
-        renderPlayerProfile(profile);
+        if(!result || result.ok !== true || !result.profile){
+          throw new Error("The server returned an empty player profile response.");
+        }
 
-        loadPlayerCulturePoints(playerId);
+        renderPlayerProfile(result.profile);
 
       }catch(err){
 
         console.error(err);
-        alert(err.stack);
+        showPlayerProfileError(err.message || "Unable to render player profile.");
 
       }
 
@@ -151,16 +163,36 @@ function openPlayerModal(playerId, editMode){
     .withFailureHandler(function(error){
 
       console.error(error);
-
-      document.getElementById("playerProfileContent").innerHTML = `
-        <div style="padding:30px;">
-          Unable to load player profile.
-        </div>
-      `;
+      const message = error && error.message
+        ? error.message
+        : "Unknown error";
+      showPlayerProfileError(message);
 
     })
 
-    .getPlayerProfile(playerId);
+    .getPlayerProfileForUI(playerId);
+
+}
+
+function showPlayerProfileError(message){
+
+  const content = document.getElementById("playerProfileContent");
+  content.innerHTML = "";
+
+  const errorContainer = document.createElement("div");
+  errorContainer.style.padding = "30px";
+
+  const title = document.createElement("strong");
+  title.textContent = "Unable to load player profile.";
+
+  const details = document.createElement("div");
+  details.style.marginTop = "10px";
+  details.style.color = "#b42318";
+  details.textContent = message;
+
+  errorContainer.appendChild(title);
+  errorContainer.appendChild(details);
+  content.appendChild(errorContainer);
 
 }
 
@@ -186,6 +218,12 @@ function getStars(score){
   return stars;
 
 }
+
+function normalizePlayerScore(value){
+  const score = Number(value);
+  return Number.isFinite(score) && score > 0 ? score : null;
+}
+
 function renderPlayerProfile(profile){
 
     currentPlayerProfile = profile;
@@ -201,6 +239,10 @@ function renderPlayerProfile(profile){
     }
 
   const attendancePercent = profile.attendance.seasonPercentage;
+  const playerPoints = profile.points || {};
+  const totalPoints = Number(playerPoints.total || 0);
+  const positivePoints = Number(playerPoints.positive || 0);
+  const negativePoints = Number(playerPoints.negative || 0);
 
   let attendanceBar = `
     <div style="
@@ -226,12 +268,15 @@ function renderPlayerProfile(profile){
 // Overall Player Grade
 // =============================
 
-const overallGrade = profile.overallGrade;
-const overallStars = getStars(profile.overallGrade);
+const overallGrade = normalizePlayerScore(profile.overallGrade);
+const overallStars = getStars(overallGrade || 0);
 const overallLabel = profile.overallLabel;
   let pillarsHTML = "";
 
   Object.entries(profile.trend).forEach(([pillar,data])=>{
+
+    data = data || {};
+    const pillarAverage = normalizePlayerScore(data.average);
 
     pillarsHTML += `
 
@@ -256,25 +301,25 @@ const overallLabel = profile.overallLabel;
   margin-bottom:10px;
 ">
 
-  ${getStars(data.average)}
+  ${getStars(pillarAverage || 0)}
 
   <div style="
       margin-top:8px;
       font-weight:bold;
       font-size:20px;
   ">
-      ${data.average.toFixed(1)} / 5.0
+      ${pillarAverage === null ? "—" : pillarAverage.toFixed(1)} / 5.0
   </div>
 
 </div>
 
         <div style="
-          color:${data.color};
+          color:${data.color || "#6B7280"};
           font-weight:bold;
           margin-top:10px;
         ">
 
-         ${data.icon} ${data.trend}
+         ${data.icon || "➖"} ${data.trend || "Not Yet Rated"}
 
         </div>
 
@@ -284,7 +329,7 @@ const overallLabel = profile.overallLabel;
 
   });
 
-  const pointHistoryHTML = renderPantherPointHistory(profile.points.history);
+  const pointHistoryHTML = renderPantherPointHistory(playerPoints.history || []);
 
 let practiceHistoryHTML = "";
 
@@ -392,7 +437,7 @@ margin-bottom:30px;
 box-shadow:0 10px 25px rgba(0,0,0,.25);
 ">
 
-    <div style="
+    <div class="player-profile-hero-header" style="
     display:flex;
     justify-content:space-between;
     align-items:center;
@@ -428,7 +473,7 @@ color:white;
     Overall Player Grade
 
     <strong>
-        ${overallGrade.toFixed(1)} / 5.0
+        ${overallGrade === null ? "—" : overallGrade.toFixed(1)} / 5.0
     </strong>
 
     • ${overallLabel}
@@ -451,12 +496,17 @@ color:white;
 
         </div>
 
-        <div style="
-        font-size:90px;
-        opacity:.08;
-        font-weight:900;
-        ">
-            #${profile.player.jersey}
+        <div class="player-profile-hero-actions">
+          <button
+            class="profile-pdf-btn"
+            onclick="downloadPlayerReport('${profile.player.id}', this)">
+            <span aria-hidden="true">⬇</span>
+            <span>Download PDF</span>
+          </button>
+
+          <div class="player-profile-jersey-mark">
+              #${profile.player.jersey}
+          </div>
         </div>
 
     </div>
@@ -521,7 +571,7 @@ color:white;
         <div>
 
             <div style="font-size:13px;color:#9CA3AF;">
-                Panther Points
+                <span data-point-label>${getCoachIQPointLabels().points}</span>
             </div>
 
             <div
@@ -530,7 +580,7 @@ color:white;
             font-size:34px;
             font-weight:700;
             ">
-                --
+                ${totalPoints}
             </div>
 
             <div style="
@@ -539,11 +589,11 @@ color:white;
             color:#D1D5DB;
             ">
 
-                🟢 <span id="playerPositivePoints">--</span>
+                🟢 <span id="playerPositivePoints">${positivePoints}</span>
 
                 &nbsp;&nbsp;
 
-                🔴 <span id="playerNegativePoints">--</span>
+                🔴 <span id="playerNegativePoints">${negativePoints}</span>
 
             </div>
 
@@ -653,7 +703,7 @@ box-shadow:0 4px 12px rgba(0,0,0,.08);
 margin-bottom:30px;
 ">
 
-<h2>🐾 Panther Point History</h2>
+<h2>🐾 <span data-point-label>${getCoachIQPointLabels().points}</span> History</h2>
 
 <div style="margin-top:20px;">
 
@@ -715,36 +765,13 @@ ${timelineHTML}
 
 }
 
-function loadPlayerCulturePoints(playerId){
-
-  console.log("Loading Panther Points for:", playerId);
-
-  google.script.run
-
-.withSuccessHandler(function(points){
-
-    document.getElementById("playerPointTotal").textContent =
-        points.total;
-
-    document.getElementById("playerPositivePoints").textContent =
-        points.positive;
-
-    document.getElementById("playerNegativePoints").textContent =
-        points.negative;
-
-})
-
-    .getPlayerCulturePoints(playerId);
-
-}
-
 function renderPantherPointHistory(history){
 
     if(!history || history.length === 0){
 
         return `
             <div style="text-align:center;padding:25px;color:#777;">
-                No Panther Point history.
+                No ${getCoachIQPointLabels().points} history.
             </div>
         `;
 
@@ -816,12 +843,8 @@ function renderPantherPointHistory(history){
 }
 function openPracticeHistory(){
 
-    alert("Function started");
-
-alert(JSON.stringify(currentPlayerProfile));
-
 if(!currentPlayerProfile){
-    alert("No current player profile");
+    showToast("Player profile is not loaded yet.");
     return;
 }
 
@@ -869,30 +892,72 @@ if(!currentPlayerProfile){
 
     });
 
-  alert("Built HTML");
-
 const content = document.getElementById("practiceHistoryContent");
-alert("Content Div: " + content);
-
 const modal = document.getElementById("practiceHistoryModal");
-alert("Modal Div: " + modal);
 
-content.innerHTML = html;
+if(!content || !modal){
+    showToast("Unable to open practice history.");
+    return;
+}
 
-alert("Inserted HTML");
+content.innerHTML = html || `
+  <div style="padding:20px;text-align:center;">
+    No practice history is available.
+  </div>`;
 
 modal.style.display = "block";
 modal.style.position = "fixed";
 modal.style.zIndex = "999999";
 modal.style.background = "rgba(0,0,0,.65)";
 
-alert("Opened Modal");
-
 }
 
 function closePracticeHistory(){
 
     document.getElementById("practiceHistoryModal").style.display = "none";
+
+}
+
+function downloadPlayerReport(playerId, button){
+
+    const originalHtml = button.innerHTML;
+    button.disabled = true;
+    button.innerHTML = "<span aria-hidden=\"true\">⏳</span><span>Building PDF…</span>";
+
+    google.script.run
+      .withSuccessHandler(function(report){
+        try{
+          if(!report || !report.base64){
+            throw new Error("The player report was empty. Please try again.");
+          }
+          const binary = atob(report.base64);
+          const bytes = new Uint8Array(binary.length);
+          for(let index = 0; index < binary.length; index++){
+            bytes[index] = binary.charCodeAt(index);
+          }
+          const pdfUrl = URL.createObjectURL(new Blob([bytes], { type: "application/pdf" }));
+          const link = document.createElement("a");
+          link.href = pdfUrl;
+          link.download = report.fileName || "CoachIQ_Player_Report.pdf";
+          document.body.appendChild(link);
+          link.click();
+          link.remove();
+          window.setTimeout(function(){
+            URL.revokeObjectURL(pdfUrl);
+          }, 1000);
+        }catch(error){
+          showToast(error.message || "Unable to download the player report.");
+        }finally{
+          button.disabled = false;
+          button.innerHTML = originalHtml;
+        }
+      })
+      .withFailureHandler(function(error){
+        button.disabled = false;
+        button.innerHTML = originalHtml;
+        showToast(error.message || "Unable to build player report.");
+      })
+      .getPlayerReportPdf(playerId);
 
 }
 function getTimelineIcon(category){
