@@ -131,18 +131,20 @@ function openPlayerModal(playerId, editMode){
 
   google.script.run
 
-    .withSuccessHandler(function(profile){
+    .withSuccessHandler(function(result){
 
       try{
 
-        renderPlayerProfile(profile);
+        if(!result || result.ok !== true || !result.profile){
+          throw new Error("The server returned an empty player profile response.");
+        }
 
-        loadPlayerCulturePoints(playerId);
+        renderPlayerProfile(result.profile);
 
       }catch(err){
 
         console.error(err);
-        alert(err.stack);
+        showPlayerProfileError(err.message || "Unable to render player profile.");
 
       }
 
@@ -151,16 +153,36 @@ function openPlayerModal(playerId, editMode){
     .withFailureHandler(function(error){
 
       console.error(error);
-
-      document.getElementById("playerProfileContent").innerHTML = `
-        <div style="padding:30px;">
-          Unable to load player profile.
-        </div>
-      `;
+      const message = error && error.message
+        ? error.message
+        : "Unknown error";
+      showPlayerProfileError(message);
 
     })
 
-    .getPlayerProfile(playerId);
+    .getPlayerProfileForUI(playerId);
+
+}
+
+function showPlayerProfileError(message){
+
+  const content = document.getElementById("playerProfileContent");
+  content.innerHTML = "";
+
+  const errorContainer = document.createElement("div");
+  errorContainer.style.padding = "30px";
+
+  const title = document.createElement("strong");
+  title.textContent = "Unable to load player profile.";
+
+  const details = document.createElement("div");
+  details.style.marginTop = "10px";
+  details.style.color = "#b42318";
+  details.textContent = message;
+
+  errorContainer.appendChild(title);
+  errorContainer.appendChild(details);
+  content.appendChild(errorContainer);
 
 }
 
@@ -450,6 +472,13 @@ color:white;
             </div>
 
         </div>
+
+        <button
+          class="secondary-btn"
+          style="margin-left:20px;"
+          onclick="downloadPlayerReport('${profile.player.id}', this)">
+          Download PDF Report
+        </button>
 
         <div style="
         font-size:90px;
@@ -816,12 +845,8 @@ function renderPantherPointHistory(history){
 }
 function openPracticeHistory(){
 
-    alert("Function started");
-
-alert(JSON.stringify(currentPlayerProfile));
-
 if(!currentPlayerProfile){
-    alert("No current player profile");
+    showToast("Player profile is not loaded yet.");
     return;
 }
 
@@ -869,30 +894,55 @@ if(!currentPlayerProfile){
 
     });
 
-  alert("Built HTML");
-
 const content = document.getElementById("practiceHistoryContent");
-alert("Content Div: " + content);
-
 const modal = document.getElementById("practiceHistoryModal");
-alert("Modal Div: " + modal);
 
-content.innerHTML = html;
+if(!content || !modal){
+    showToast("Unable to open practice history.");
+    return;
+}
 
-alert("Inserted HTML");
+content.innerHTML = html || `
+  <div style="padding:20px;text-align:center;">
+    No practice history is available.
+  </div>`;
 
 modal.style.display = "block";
 modal.style.position = "fixed";
 modal.style.zIndex = "999999";
 modal.style.background = "rgba(0,0,0,.65)";
 
-alert("Opened Modal");
-
 }
 
 function closePracticeHistory(){
 
     document.getElementById("practiceHistoryModal").style.display = "none";
+
+}
+
+function downloadPlayerReport(playerId, button){
+
+    const originalText = button.textContent;
+    button.disabled = true;
+    button.textContent = "Building Report…";
+
+    google.script.run
+      .withSuccessHandler(function(report){
+        const link = document.createElement("a");
+        link.href = "data:application/pdf;base64," + report.base64;
+        link.download = report.fileName;
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        button.disabled = false;
+        button.textContent = originalText;
+      })
+      .withFailureHandler(function(error){
+        button.disabled = false;
+        button.textContent = originalText;
+        showToast(error.message || "Unable to build player report.");
+      })
+      .getPlayerReportPdf(playerId);
 
 }
 function getTimelineIcon(category){

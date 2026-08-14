@@ -9,11 +9,17 @@ function getDashboardDataCore(){
   // Active Players
   // -----------------------------
   const playerSheet = ss.getSheetByName("Players");
-  const playerData = playerSheet.getDataRange().getValues();
+const playerData = playerSheet.getDataRange().getValues();
+const activePlayerRows = playerData
+  .slice(1)
+  .filter(row => row[7] === "Active");
+const activePlayerIds = {};
 
-  const activePlayers = playerData
-    .slice(1)
-    .filter(row => row[7] === "Active").length;
+activePlayerRows.forEach(function(row){
+  activePlayerIds[String(row[0])] = true;
+});
+
+  const activePlayers = activePlayerRows.length;
 
   // -----------------------------
   // Latest Session
@@ -29,40 +35,65 @@ function getDashboardDataCore(){
 // -----------------------------
 // Season Stats
 // -----------------------------
-const players = getPlayersForUI();
-
 let totalPresent = 0;
 let totalAbsent = 0;
-
 let cultureTotal = 0;
 let cultureCount = 0;
+const evaluationSheet = ss.getSheetByName("Practice Evaluations");
+const evaluationData = evaluationSheet.getDataRange().getValues();
+const evaluationHeaders = evaluationData[0] || [];
+const evaluationPlayerIndex = evaluationHeaders.indexOf("Player ID");
+const attendanceIndex = evaluationHeaders.indexOf("Attendance");
 
-players.forEach(function(player){
-
-  const playerId = player[0];
-
-  const stats = getPlayerSeasonStatsByPlayer(playerId);
-
-    const culture =
-Number(stats["Culture Score"] || 0);
-
-const attendance = getPlayerAttendance(playerId);
-
-if ((attendance.present + attendance.absent) > 0) {
-
-  totalPresent += attendance.present;
-  totalAbsent += attendance.absent;
-
-}
-
-  // Only include players with a real culture score
-  if(culture > 0){
-
-    cultureTotal += culture;
-    cultureCount++;
-
+evaluationData.slice(1).forEach(function(row){
+  if(evaluationPlayerIndex < 0 || attendanceIndex < 0){
+    return;
+  }
+  if(!activePlayerIds[String(row[evaluationPlayerIndex])]){
+    return;
   }
 
+  if(row[attendanceIndex] === true){
+    totalPresent++;
+  }else if(row[attendanceIndex] === false){
+    totalAbsent++;
+  }
+});
+
+getPlayerSeasonStats().forEach(function(stat){
+  if(activePlayerIds[String(stat["Player ID"])] &&
+     stat["Stat"] === "Culture Score"){
+    const culture = Number(stat["Value"] || 0);
+
+    if(culture > 0){
+      cultureTotal += culture;
+      cultureCount++;
+    }
+  }
+});
+
+const pointTotals = {};
+const culturePointSheet = ss.getSheetByName("Culture Points");
+const culturePointData = culturePointSheet.getDataRange().getValues();
+const cultureHeaders = culturePointData[0] || [];
+const culturePlayerIndex = cultureHeaders.indexOf("Player ID");
+const pointsIndex = cultureHeaders.indexOf("Points");
+
+culturePointData.slice(1).forEach(function(row){
+  if(culturePlayerIndex < 0 || pointsIndex < 0){
+    return;
+  }
+  const playerId = String(row[culturePlayerIndex]);
+  pointTotals[playerId] = (pointTotals[playerId] || 0) + Number(row[pointsIndex] || 0);
+});
+
+let leader = null;
+activePlayerRows.forEach(function(row){
+  const points = pointTotals[String(row[0])] || 0;
+
+  if(!leader || points > leader.points){
+    leader = {name: row[1] + " " + row[2], points: points};
+  }
 });
 
   return {
@@ -84,7 +115,9 @@ if ((attendance.present + attendance.absent) > 0) {
       : 0,
 
     totalSessions:
-      Math.max(sessionData.length - 1, 0)
+      Math.max(sessionData.length - 1, 0),
+
+    leader: leader
 
   };
 
@@ -103,6 +136,7 @@ const latest = stats.latest;
 const attendance = stats.attendance;
 
 const cultureScore = stats.cultureScore;
+const leader = stats.leader;
 
   return {
 
@@ -118,8 +152,6 @@ const cultureScore = stats.cultureScore;
 
     pointLeader: (function(){
 
-  const leader = getPantherPointLeader();
-
   if(!leader){
     return "No Panther Points yet.";
   }
@@ -131,13 +163,13 @@ const cultureScore = stats.cultureScore;
 
 })(),
 
-    recentActivity: getRecentActivity(),
+    recentActivity: getRecentActivity(latest, leader),
 
-insight: getDashboardInsight(),
+insight: getDashboardInsight(stats, leader),
 
-trends: getDashboardTrends(),
+trends: getDashboardTrends(stats),
 
-focus: getDashboardFocus()
+focus: getDashboardFocus(stats, leader)
 
   };
 
@@ -145,33 +177,20 @@ focus: getDashboardFocus()
 /**
  * Returns recent dashboard activity.
  */
-function getRecentActivity(){
+function getRecentActivity(latest, leader){
 
   const activity = [];
 
-  const sessionSheet = SpreadsheetApp.getActive().getSheetByName("Sessions");
-
-  if(sessionSheet.getLastRow() > 1){
-
-    const last = sessionSheet
-      .getRange(
-        sessionSheet.getLastRow(),
-        1,
-        1,
-        sessionSheet.getLastColumn()
-      )
-      .getValues()[0];
+  if(latest){
 
     activity.push(`
       <div style="margin-bottom:12px;">
-        🏀 <strong>${last[1]}</strong><br>
-        <span style="color:#777;">${last[6]}</span>
+        🏀 <strong>${latest[1]}</strong><br>
+        <span style="color:#777;">${latest[6]}</span>
       </div>
     `);
 
   }
-
-  const leader = getPantherPointLeader();
 
   if(leader){
 
@@ -189,14 +208,14 @@ function getRecentActivity(){
 /**
  * Returns a dashboard insight.
  */
-function getDashboardInsight(){
+function getDashboardInsight(stats, leader){
 
-  const stats = getDashboardDataCore();
+  stats = stats || getDashboardDataCore();
 
   const attendance = stats.attendance;
   const culture = stats.cultureScore;
 
-  const leader = getPantherPointLeader();
+  leader = leader || stats.leader;
 
   let insight = "";
 
@@ -247,9 +266,9 @@ function getDashboardInsight(){
 /**
  * Returns dashboard trend data.
  */
-function getDashboardTrends(){
+function getDashboardTrends(stats){
 
-  const stats = getDashboardDataCore();
+  stats = stats || getDashboardDataCore();
 
   return `
   
@@ -311,11 +330,10 @@ function getDashboardTrends(){
 /**
  * Returns today's coaching focus.
  */
-function getDashboardFocus(){
+function getDashboardFocus(stats, leader){
 
-  const stats = getDashboardDataCore();
-
-  const leader = getPantherPointLeader();
+  stats = stats || getDashboardDataCore();
+  leader = leader || stats.leader;
 
   // Attendance is priority
   if(stats.attendance < 75){
