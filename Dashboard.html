@@ -1,4 +1,4 @@
-<div class="dashboard-header">
+<div class="dashboard-header page-header-block">
 
    <h2>🏠 Dashboard</h2>
 
@@ -6,24 +6,15 @@
     Welcome back, Coach. Here's what's happening across your program today.
 </p>
 
-<div class="card" style="
-    background:linear-gradient(135deg,#1E3A5F,#2F6FDB);
-    color:white;
-    margin-bottom:24px;
-">
+<div class="card dashboard-focus-card">
 
-    <div style="font-size:13px;opacity:.8;text-transform:uppercase;">
+    <div class="dashboard-focus-label">
         Today's Focus
     </div>
 
     <div
         id="dashboardFocus"
-        style="
-            margin-top:12px;
-            font-size:26px;
-            font-weight:700;
-            line-height:1.4;
-        "
+        class="dashboard-focus-value"
     >
         Loading...
     </div>
@@ -54,12 +45,7 @@
 
     <div
         id="dashboardLatestSession"
-        style="
-            margin-top:18px;
-            font-size:22px;
-            font-weight:700;
-            color:#111827;
-        ">
+        class="dashboard-latest-session">
 
         Loading...
 
@@ -101,9 +87,9 @@
 
 </div>
 
-<br>
+<div class="dashboard-detail-grid">
 
-<div class="card">
+<div class="card dashboard-detail-card">
 
     <h3>📈 Program Trends</h3>
 
@@ -115,9 +101,7 @@
 
 </div>
 
-<br>
-
-<div class="card">
+<div class="card dashboard-detail-card">
 
     <h3>🏆 Panther Point Leader</h3>
 
@@ -129,9 +113,7 @@
 
 </div>
 
-<br>
-
-<div class="card">
+<div class="card dashboard-detail-card">
 
     <h3>🔥 Recent Activity</h3>
 
@@ -143,9 +125,7 @@
 
 </div>
 
-<br>
-
-<div class="card">
+<div class="card dashboard-detail-card">
 
     <h3>🤖 CoachIQ Insight</h3>
 
@@ -154,5 +134,7 @@
         Loading...
 
     </div>
+
+</div>
 
 </div>
