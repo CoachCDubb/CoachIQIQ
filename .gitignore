@@ -1,0 +1,4 @@
+# Generated binary documentation; keep the source and generator in Git.
+docs/*.pdf
+__pycache__/
+*.pyc
