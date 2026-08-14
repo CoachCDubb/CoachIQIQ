@@ -49,14 +49,48 @@ function getSettingList(settingName) {
  */
 function getDropdownSettings() {
 
+const settings = getSettingsMap_();
+
 return {
-teams: getSettingList("Teams"),
-positions: getSettingList("Positions"),
-statuses: getSettingList("Player Statuses"),
-cultureCategories: getSettingList("Culture Categories"),
-staff: getSettingList("Staff"),
+teams: splitSettingList_(settings["Teams"]),
+positions: splitSettingList_(settings["Positions"]),
+statuses: splitSettingList_(settings["Player Statuses"]),
+cultureCategories: splitSettingList_(settings["Culture Categories"]),
+staff: splitSettingList_(settings["Staff"]),
 rewards: getActiveRewards()
 };
+
+}
+
+function getSettingsMap_() {
+
+  const sheet = SpreadsheetApp
+    .getActive()
+    .getSheetByName(SETTINGS_SHEET);
+  const data = sheet.getDataRange().getValues();
+  const settings = {};
+
+  data.forEach(function(row){
+    const name = row[0];
+
+    if(name !== "" && !Object.prototype.hasOwnProperty.call(settings, name)){
+      settings[name] = row[1];
+    }
+  });
+
+  return settings;
+
+}
+
+function splitSettingList_(value) {
+
+  if (!value) {
+    return [];
+  }
+
+  return String(value).split(",").map(function(item){
+    return item.trim();
+  });
 
 }
 
@@ -65,31 +99,41 @@ rewards: getActiveRewards()
  */
 function getCoachIQSettings() {
 
+const settings = getSettingsMap_();
+
 return {
 
-    programName: getSetting("Program Name"),
+    programName: settings["Program Name"] || "",
 
-    schoolName: getSetting("School Name"),
+    schoolName: settings["School Name"] || "",
 
-    currentSeason: getSetting("Current Season"),
+    currentSeason: settings["Current Season"] || "",
 
-    teams: getSettingList("Teams"),
+    sport: settings["Sport"] || "Football",
 
-    positions: getSettingList("Positions"),
+    primaryColor: normalizeThemeColor_(settings["Primary Color"], "#1E3A5F"),
 
-    statuses: getSettingList("Player Statuses"),
+    secondaryColor: normalizeThemeColor_(settings["Secondary Color"], "#F59E0B"),
 
-    cultureCategories: getSettingList("Culture Categories"),
+    logoUrl: settings["Logo URL"] || "",
 
-   staff: getSettingList("Staff"),
+    teams: splitSettingList_(settings["Teams"]),
 
-rewards: getActiveRewards(),
+    positions: splitSettingList_(settings["Positions"]),
 
-playerRequiredFields: getSettingList("Player Required Fields"),
+    statuses: splitSettingList_(settings["Player Statuses"]),
 
-playerIdPrefix: getSetting("Player ID Prefix"),
+    cultureCategories: splitSettingList_(settings["Culture Categories"]),
 
-version: getSetting("CoachIQ Version")
+   staff: splitSettingList_(settings["Staff"]),
+
+rewards: getPointAwards(),
+
+playerRequiredFields: splitSettingList_(settings["Player Required Fields"]),
+
+playerIdPrefix: settings["Player ID Prefix"] || "",
+
+version: settings["CoachIQ Version"] || ""
 
 };
 
@@ -98,33 +142,49 @@ version: getSetting("CoachIQ Version")
  * Saves Program Information settings.
  */
 function saveProgramInformation(data) {
+  setSettingValues_({
+    "Program Name": String(data.programName || "").trim(),
+    "School Name": String(data.schoolName || "").trim(),
+    "Current Season": String(data.currentSeason || "").trim(),
+    "Sport": String(data.sport || "Football").trim(),
+    "Primary Color": normalizeThemeColor_(data.primaryColor, "#1E3A5F"),
+    "Secondary Color": normalizeThemeColor_(data.secondaryColor, "#F59E0B"),
+    "Logo URL": /^https:\/\//i.test(String(data.logoUrl || "").trim())
+      ? String(data.logoUrl).trim() : ""
+  });
 
-  const sheet = SpreadsheetApp
-    .getActive()
-    .getSheetByName(SETTINGS_SHEET);
+  return getCoachIQSettings();
 
-  const settings = sheet.getDataRange().getValues();
+}
 
-  for (let i = 0; i < settings.length; i++) {
-
-    switch (settings[i][0]) {
-
-      case "Program Name":
-        sheet.getRange(i + 1, 2).setValue(data.programName);
-        break;
-
-      case "School Name":
-        sheet.getRange(i + 1, 2).setValue(data.schoolName);
-        break;
-
-      case "Current Season":
-        sheet.getRange(i + 1, 2).setValue(data.currentSeason);
-        break;
-
-    }
-
+function setSettingValues_(updates) {
+  const sheet = SpreadsheetApp.getActive().getSheetByName(SETTINGS_SHEET);
+  if (!sheet) {
+    throw new Error("The Settings sheet was not found.");
   }
 
+  const values = sheet.getDataRange().getValues();
+  const rows = {};
+  values.forEach(function(row, index) {
+    const name = String(row[0] || "").trim();
+    if (name && !rows[name]) {
+      rows[name] = index + 1;
+    }
+  });
+
+  Object.keys(updates).forEach(function(name) {
+    const value = safeSettingValue_(updates[name]);
+    if (rows[name]) {
+      sheet.getRange(rows[name], 2).setValue(value);
+    } else {
+      sheet.appendRow([name, value]);
+    }
+  });
+}
+
+function safeSettingValue_(value) {
+  const text = String(value == null ? "" : value);
+  return /^[=+\-@]/.test(text) ? "'" + text : text;
 }
 /**
  * Saves the Teams setting.
