@@ -1,0 +1,43 @@
+<section class="getting-started-page">
+  <div class="getting-started-hero">
+    <div>
+      <span class="eyebrow">COACHIQ QUICK START</span>
+      <h2>Welcome to your new program</h2>
+      <p>Take a two-minute guided tour, then add your roster and run your first session.</p>
+    </div>
+    <button class="btn-v2 btn-primary-v2 btn-lg-v2" onclick="startCoachIQTutorial()">
+      Start Guided Tour
+    </button>
+  </div>
+
+  <div class="getting-started-grid">
+    <article class="getting-started-step">
+      <span class="step-number">01</span>
+      <h3>Add your players</h3>
+      <p>Upload the roster CSV or add an athlete individually. Team, position, and status must match Settings.</p>
+      <button class="btn" onclick="tutorialOpenRoster()">Open Players</button>
+    </article>
+    <article class="getting-started-step">
+      <span class="step-number">02</span>
+      <h3>Start a session</h3>
+      <p>Select the session date, evaluator, and teams. CoachIQ creates one evaluation for every active player selected.</p>
+      <button class="btn" onclick="startNewSession()">Create Session</button>
+    </article>
+    <article class="getting-started-step">
+      <span class="step-number">03</span>
+      <h3>Save evaluations</h3>
+      <p>Record attendance, pillar scores, rewards, and notes. Wait for “All changes saved” before finishing.</p>
+      <button class="btn" onclick="loadPage('Sessions')">View Sessions</button>
+    </article>
+    <article class="getting-started-step">
+      <span class="step-number">04</span>
+      <h3>Review and report</h3>
+      <p>Use player profiles, the Dashboard, and your program leaderboard to recognize progress and download PDFs.</p>
+      <button class="btn" onclick="loadPage('Dashboard')">Open Dashboard</button>
+    </article>
+  </div>
+
+  <div class="getting-started-note">
+    <strong>Safe first-session rule:</strong> Do not finish a session while CoachIQ shows pending or failed saves.
+  </div>
+</section>
