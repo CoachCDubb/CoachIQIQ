@@ -11,6 +11,19 @@ const SESSION_SHEET = "Sessions";
  */
 function createPracticeSession(data){
 
+  const lock = LockService.getScriptLock();
+  lock.waitLock(10000);
+
+  try {
+    return createPracticeSession_(data);
+  } finally {
+    lock.releaseLock();
+  }
+
+}
+
+function createPracticeSession_(data){
+
   const sheet = SpreadsheetApp
     .getActive()
     .getSheetByName(SESSION_SHEET);
@@ -31,9 +44,42 @@ function createPracticeSession(data){
   data.sessionNotes,
   ""
 
-]);
+  ]);
+
+  sessionCache = null;
 
   return sessionId;
+
+}
+
+function createPracticeSessionWithEvaluations(data){
+
+  const lock = LockService.getScriptLock();
+  lock.waitLock(10000);
+
+  try {
+    const players = getPlayersByTeams(data.teams || []);
+
+    if(!players.length){
+      throw new Error("No active players were found for the selected team(s).");
+    }
+
+    const sessionId = createPracticeSession_(data);
+
+    try {
+      createEvaluationRows(sessionId, players, (data.evaluators || [""])[0]);
+    } catch(error){
+      deleteSession(sessionId);
+      throw error;
+    }
+
+    return JSON.parse(JSON.stringify({
+      sessionId: sessionId,
+      players: players
+    }));
+  } finally {
+    lock.releaseLock();
+  }
 
 }
 /**
@@ -51,13 +97,11 @@ function generatePracticeSessionId(){
     return "PS0001";
   }
 
-  const lastId = sheet
-    .getRange(lastRow,1)
-    .getValue();
-
-  const number = parseInt(
-    lastId.replace("PS","")
-  ) + 1;
+  const ids = sheet.getRange(2, 1, lastRow - 1, 1).getValues();
+  const number = ids.reduce(function(highest, row){
+    const value = Number(String(row[0] || "").replace(/^PS/, ""));
+    return isNaN(value) ? highest : Math.max(highest, value);
+  }, 0) + 1;
 
   return "PS" + number.toString().padStart(4,"0");
 
@@ -83,10 +127,60 @@ sheet.getRange(i + 1, 7).setValue("Completed");
 // Completed Time (Column I)
 sheet.getRange(i + 1, 9).setValue(new Date());
 
+      sessionCache = null;
+
       return;
 
     }
 
+  }
+
+}
+
+function reopenSession(sessionId){
+
+  const lock = LockService.getScriptLock();
+  lock.waitLock(10000);
+
+  try {
+    const sessionSheet = SpreadsheetApp.getActive().getSheetByName("Sessions");
+    const sessionCols = getColumnMap("Sessions");
+    const sessionData = sessionSheet.getDataRange().getValues();
+    let found = false;
+
+    for(let i = 1; i < sessionData.length; i++){
+      if(sessionData[i][sessionCols["Session ID"] - 1] == sessionId){
+        sessionSheet.getRange(i + 1, sessionCols["Status"]).setValue("In Progress");
+        sessionSheet.getRange(i + 1, sessionCols["Completed Time"] || 9)
+          .clearContent();
+        found = true;
+        break;
+      }
+    }
+
+    if(!found){
+      throw new Error("Session not found: " + sessionId);
+    }
+
+    const evaluationSheet = SpreadsheetApp.getActive()
+      .getSheetByName("Practice Evaluations");
+    const evaluationCols = getColumnMap("Practice Evaluations");
+    const evaluationData = evaluationSheet.getDataRange().getValues();
+
+    for(let i = 1; i < evaluationData.length; i++){
+      if(evaluationData[i][evaluationCols["Session ID"] - 1] == sessionId){
+        evaluationSheet.getRange(i + 1, evaluationCols["Complete"])
+          .setValue(false);
+        evaluationSheet.getRange(i + 1, evaluationCols["Last Updated"])
+          .setValue(new Date());
+      }
+    }
+
+    sessionCache = null;
+    practiceEvaluationCache = null;
+    return sessionId;
+  } finally {
+    lock.releaseLock();
   }
 
 }
@@ -158,11 +252,30 @@ function testSessionEvaluations(){
 }
 function finishEntireSession(sessionId){
 
+  const lock = LockService.getScriptLock();
+  lock.waitLock(10000);
+
+  try {
+    const session = getPracticeSession(sessionId);
+
+    if(!session){
+      throw new Error("Session not found: " + sessionId);
+    }
+
+    if(session["Status"] === "Completed"){
+      return sessionId;
+    }
+
   finishSession(sessionId);
 
   completeEvaluations(sessionId);
 
   rebuildPlayerSeasonStats();
+
+    return sessionId;
+  } finally {
+    lock.releaseLock();
+  }
 
 }
 /**
