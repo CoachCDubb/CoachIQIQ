@@ -12,13 +12,19 @@
 
     </div>
 
-    <button
-        class="btn-v2 btn-primary-v2 btn-lg-v2"
-        onclick="openAddPlayerModal()">
+    <div class="player-page-actions">
+        <button
+            class="btn-v2 btn-secondary-v2 btn-lg-v2"
+            onclick="openRosterImportModal()">
+            Import Roster
+        </button>
 
-        + Add Player
-
-    </button>
+        <button
+            class="btn-v2 btn-primary-v2 btn-lg-v2"
+            onclick="openAddPlayerModal()">
+            + Add Player
+        </button>
+    </div>
 
 </div>
 
@@ -80,6 +86,38 @@
 </tbody>
 
 </table>
+
+<div id="rosterImportModal" class="modal" style="display:none;">
+    <div class="modal-content roster-import-modal">
+        <div class="roster-import-heading">
+            <div>
+                <h2>Import Roster</h2>
+                <p>Upload a CSV file to add multiple players at once.</p>
+            </div>
+            <button class="modal-close" onclick="closeRosterImportModal()">×</button>
+        </div>
+
+        <div class="roster-import-instructions">
+            Required columns: <strong>First Name</strong> and <strong>Last Name</strong>.<br>
+            Optional columns: Jersey Number, Grade, Team, Position, and Status.
+        </div>
+
+        <div class="roster-import-actions">
+            <input id="rosterCsvFile" type="file" accept=".csv,text/csv" onchange="previewRosterCsv(this)">
+            <button class="btn" onclick="downloadRosterTemplate()">Download CSV Template</button>
+        </div>
+
+        <div id="rosterImportMessage" class="roster-import-message"></div>
+        <div id="rosterImportPreview" class="roster-import-preview"></div>
+
+        <div class="form-actions">
+            <button class="btn" onclick="closeRosterImportModal()">Cancel</button>
+            <button id="confirmRosterImport" class="btn btn-primary" onclick="importRoster()" disabled>
+                Import Players
+            </button>
+        </div>
+    </div>
+</div>
 
 
 </section>

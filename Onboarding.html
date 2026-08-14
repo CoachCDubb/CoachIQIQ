@@ -1,0 +1,54 @@
+<div id="onboardingOverlay" class="onboarding-overlay" hidden>
+  <div class="onboarding-shell">
+    <div class="onboarding-brand">
+      <div class="onboarding-mark">CIQ</div>
+      <div>
+        <h1>Welcome to CoachIQ</h1>
+        <p>Set up your program in a few minutes.</p>
+      </div>
+    </div>
+
+    <form id="onboardingForm" onsubmit="submitCoachIQOnboarding(event)">
+      <div class="onboarding-grid">
+        <label>Program Name<input id="onboardingProgramName" required placeholder="Central Tigers Football"></label>
+        <label>School / Organization<input id="onboardingSchoolName" required placeholder="Central High School"></label>
+        <label>Current Season<input id="onboardingSeason" required placeholder="2026-2027"></label>
+        <label>Sport
+          <select id="onboardingSport">
+            <option>Football</option><option>Basketball</option><option>Baseball</option>
+            <option>Soccer</option><option>Volleyball</option><option>Other</option>
+          </select>
+        </label>
+      </div>
+
+      <h3>Program Theme</h3>
+      <div class="onboarding-grid onboarding-theme-controls">
+        <label>Primary Color<input id="onboardingPrimaryColor" type="color" value="#1E3A5F" oninput="previewOnboardingTheme()"></label>
+        <label>Secondary Color<input id="onboardingSecondaryColor" type="color" value="#F59E0B" oninput="previewOnboardingTheme()"></label>
+        <label class="onboarding-wide">Optional Logo URL<input id="onboardingLogoUrl" type="url" placeholder="https://..."></label>
+      </div>
+
+      <h3>Program Setup</h3>
+      <div class="onboarding-grid">
+        <label>Teams<textarea id="onboardingTeams" required>Varsity, JV, Freshman</textarea></label>
+        <label>Positions<textarea id="onboardingPositions">QB, RB, WR, TE, OL, DL, LB, DB, K, P, ATH</textarea></label>
+        <label>Player Statuses<textarea id="onboardingStatuses">Active, Inactive, Injured, Archived</textarea></label>
+        <label>Evaluation Categories<textarea id="onboardingCategories" required>Effort, Toughness, Leadership, Accountability</textarea></label>
+        <label class="onboarding-wide">Coaching Staff<textarea id="onboardingStaff" required placeholder="Head Coach, Assistant Coach"></textarea></label>
+      </div>
+
+      <h3>Starter Rewards <span class="onboarding-optional">(editable later)</span></h3>
+      <div class="onboarding-rewards">
+        <label><input class="onboarding-reward-name" value="Hustle Play"><input class="onboarding-reward-points" type="number" value="1"></label>
+        <label><input class="onboarding-reward-name" value="Leadership Moment"><input class="onboarding-reward-points" type="number" value="2"></label>
+        <label><input class="onboarding-reward-name" value="Coach Award"><input class="onboarding-reward-points" type="number" value="3"></label>
+      </div>
+
+      <div id="onboardingMessage" class="onboarding-message"></div>
+      <div class="onboarding-footer">
+        <span>Powered by CoachIQ</span>
+        <button id="completeOnboardingButton" class="btn btn-primary" type="submit">Finish Setup</button>
+      </div>
+    </form>
+  </div>
+</div>
