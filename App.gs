@@ -33,6 +33,9 @@ function include(filename) {
     .getContent();
 }
 function getPage(pageName) {
+  if (pageName === "Staff" || pageName === "Settings") {
+    requireStaffCapability_("manage_settings");
+  }
   return HtmlService
     .createHtmlOutputFromFile(pageName)
     .getContent();
