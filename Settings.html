@@ -1,266 +1,71 @@
-<section>
+<section class="settings-page">
+  <div class="page-header settings-page-header">
+    <div>
+      <span class="page-kicker">Team administration</span>
+      <h2>Program Settings</h2>
+      <p class="page-subtitle">Set the identity, roster structure, and standards used across CoachIQ.</p>
+    </div>
+    <span class="settings-status"><span></span> Program configuration</span>
+  </div>
 
-    <h2>⚙️ Program Settings</h2>
+  <div class="settings-section settings-identity">
+    <div class="settings-section-heading">
+      <span class="settings-section-number">01</span>
+      <div><h3>Program identity</h3><p>Brand CoachIQ for your school and season.</p></div>
+    </div>
+    <div class="settings-form-grid">
+      <label>Program Name<input id="programName" type="text" placeholder="Midlothian Boys Basketball"></label>
+      <label>School Name<input id="schoolName" type="text" placeholder="Midlothian High School"></label>
+      <label>Mascot / Team Name<input id="programMascotName" type="text" placeholder="Panthers"></label>
+      <label>Current Season<input id="currentSeason" type="text" placeholder="2026-2027"></label>
+      <label>Sport
+        <select id="programSport">
+          <option>Football</option><option>Basketball</option><option>Baseball</option>
+          <option>Soccer</option><option>Volleyball</option><option>Other</option>
+        </select>
+      </label>
+      <label>Logo URL <small>optional</small><input id="programLogoUrl" type="url" placeholder="https://..."></label>
+      <label class="settings-color-control">Primary Color<input id="programPrimaryColor" type="color" value="#1E3A5F"></label>
+      <label class="settings-color-control">Accent Color<input id="programSecondaryColor" type="color" value="#F59E0B"></label>
+    </div>
+    <button class="btn btn-primary" onclick="saveProgramInformation()">Save program identity</button>
+  </div>
 
-    <p class="page-subtitle">
-        Customize CoachIQ for your program.
-    </p>
-
-    <br>
-
-    <!-- Program Information -->
-
-    <div class="card">
-
-        <h3>Program Information</h3>
-
-        <div class="form-row">
-
-            <div class="form-field">
-
-                <label>Program Name</label>
-
-                <input
-                    id="programName"
-                    type="text">
-
-            </div>
-
-            <div class="form-field">
-
-                <label>School Name</label>
-
-                <input
-                    id="schoolName"
-                    type="text">
-
-            </div>
-
-        </div>
-
-        <div class="form-row">
-            <div class="form-field">
-                <label>Sport</label>
-                <select id="programSport">
-                    <option>Football</option><option>Basketball</option><option>Baseball</option>
-                    <option>Soccer</option><option>Volleyball</option><option>Other</option>
-                </select>
-            </div>
-            <div class="form-field">
-                <label>Logo URL (optional)</label>
-                <input id="programLogoUrl" type="url" placeholder="https://...">
-            </div>
-        </div>
-
-        <div class="form-row">
-            <div class="form-field">
-                <label>Primary Color</label>
-                <input id="programPrimaryColor" type="color" value="#1E3A5F">
-            </div>
-            <div class="form-field">
-                <label>Secondary Color</label>
-                <input id="programSecondaryColor" type="color" value="#F59E0B">
-            </div>
-        </div>
-
-        <br>
-
-        <div class="form-row">
-
-            <div class="form-field">
-
-                <label>Current Season</label>
-
-                <input
-                    id="currentSeason"
-                    type="text"
-                    placeholder="2026-2027">
-
-            </div>
-
-        </div>
-
-        <button
-    class="btn btn-primary"
-    onclick="saveProgramInformation()">
-
-    Save Program Information
-
-</button>
-<br>
-<hr style="margin:30px 0; border:none; border-top:1px solid #E5E7EB;">
-
-<h3>Coaching Staff</h3>
-
-<div id="staffContainer"></div>
-
-<br>
-
-<button
-    class="btn btn-primary"
-    onclick="addSettingField('staffContainer', 'New Staff Member')">
-
-    + Add Staff Member
-
-</button>
-
-<button
-    class="btn btn-primary"
-    onclick="saveSettingsList('staffContainer', 'Staff')">
-
-    Save Staff
-
-</button>
-
+  <div class="settings-grid">
+    <div class="settings-section">
+      <div class="settings-section-heading"><span class="settings-section-number">02</span><div><h3>Coaching Staff</h3><p>Names available in evaluator menus.</p></div></div>
+      <div id="staffContainer" class="settings-list"></div>
+      <div class="settings-actions"><button class="btn" onclick="addSettingField('staffContainer', 'New Staff Member')">+ Add staff</button><button class="btn btn-primary" onclick="saveSettingsList('staffContainer', 'Staff')">Save staff</button></div>
     </div>
 
-    <br>
-
-    <!-- Teams -->
-
-    <div class="card">
-
-        <h3>Teams</h3>
-
-        <div id="teamsContainer"></div>
-
-        <br>
-
-        <button
-    class="btn btn-primary"
-    onclick="addSettingField('teamsContainer', 'New Team')">
-
-    + Add Team
-
-</button>
-
-<button
-    class="btn btn-primary"
-    onclick="saveSettingsList('teamsContainer', 'Teams')">
-
-    Save Teams
-
-</button>
-
+    <div class="settings-section">
+      <div class="settings-section-heading"><span class="settings-section-number">03</span><div><h3>Teams</h3><p>Levels and squads within your program.</p></div></div>
+      <div id="teamsContainer" class="settings-list"></div>
+      <div class="settings-actions"><button class="btn" onclick="addSettingField('teamsContainer', 'New Team')">+ Add team</button><button class="btn btn-primary" onclick="saveSettingsList('teamsContainer', 'Teams')">Save teams</button></div>
     </div>
 
-    <br>
-
-    <!-- Positions -->
-
-    <div class="card">
-
-        <h3>Positions</h3>
-
-        <div id="positionsContainer"></div>
-
-        <br>
-
-        <button
-    class="btn btn-primary"
-    onclick="addSettingField('positionsContainer', 'New Position')">
-
-    + Add Position
-
-</button>
-<button
-    class="btn btn-primary"
-    onclick="saveSettingsList('positionsContainer', 'Positions')">
-
-    Save Positions
-
-</button>
-
+    <div class="settings-section">
+      <div class="settings-section-heading"><span class="settings-section-number">04</span><div><h3>Positions</h3><p>Sport-specific player assignments.</p></div></div>
+      <div id="positionsContainer" class="settings-list"></div>
+      <div class="settings-actions"><button class="btn" onclick="addSettingField('positionsContainer', 'New Position')">+ Add position</button><button class="btn btn-primary" onclick="saveSettingsList('positionsContainer', 'Positions')">Save positions</button></div>
     </div>
 
-    <br>
-
-    <!-- Player Statuses -->
-
-    <div class="card">
-
-        <h3>Player Statuses</h3>
-
-        <div id="statusesContainer"></div>
-
-<br>
-
-<button
-    class="btn btn-primary"
-    onclick="addSettingField('statusesContainer', 'New Status')">
-
-    + Add Status
-
-</button>
-
-<button
-    class="btn btn-primary"
-    onclick="saveSettingsList('statusesContainer', 'Player Statuses')">
-
-    Save Statuses
-
-</button>
-
+    <div class="settings-section">
+      <div class="settings-section-heading"><span class="settings-section-number">05</span><div><h3>Player Statuses</h3><p>Availability labels for your roster.</p></div></div>
+      <div id="statusesContainer" class="settings-list"></div>
+      <div class="settings-actions"><button class="btn" onclick="addSettingField('statusesContainer', 'New Status')">+ Add status</button><button class="btn btn-primary" onclick="saveSettingsList('statusesContainer', 'Player Statuses')">Save statuses</button></div>
     </div>
 
-    <br>
-
-    <!-- Culture Categories -->
-
-    <div class="card">
-
-        <h3>Culture Categories</h3>
-
-        <div id="cultureContainer"></div>
-
-<br>
-
-<button
-    class="btn btn-primary"
-    onclick="addSettingField('cultureContainer', 'New Category')">
-
-    + Add Category
-
-</button>
-
-<button
-    class="btn btn-primary"
-    onclick="saveSettingsList('cultureContainer', 'Culture Categories')">
-
-    Save Categories
-
-</button>
-
+    <div class="settings-section">
+      <div class="settings-section-heading"><span class="settings-section-number">06</span><div><h3>Culture Categories</h3><p>Standards your athletes are measured against.</p></div></div>
+      <div id="cultureContainer" class="settings-list"></div>
+      <div class="settings-actions"><button class="btn" onclick="addSettingField('cultureContainer', 'New Category')">+ Add category</button><button class="btn btn-primary" onclick="saveSettingsList('cultureContainer', 'Culture Categories')">Save categories</button></div>
     </div>
-    <br>
-<!-- Point Rewards -->
 
-<div class="card">
-
-    <h3>Point Rewards</h3>
-
-    <div id="pointRewardsContainer"></div>
-
-    <br>
-
-    <button
-        class="btn btn-primary"
-        onclick="addPointReward()">
-
-        + Add Reward
-
-    </button>
-
-    <button
-        class="btn btn-success"
-        onclick="savePointRewards()">
-
-        Save Rewards
-
-    </button>
-
-</div>
-
-<br>
-
+    <div class="settings-section">
+      <div class="settings-section-heading"><span class="settings-section-number">07</span><div><h3>Point Rewards</h3><p>Recognition athletes can earn.</p></div></div>
+      <div id="pointRewardsContainer" class="settings-list"></div>
+      <div class="settings-actions"><button class="btn" onclick="addPointReward()">+ Add reward</button><button class="btn btn-primary" onclick="savePointRewards()">Save rewards</button></div>
+    </div>
+  </div>
 </section>
