@@ -66,6 +66,7 @@ rows.push(row);
  * Updates a single evaluation score.
  */
 function updateEvaluationScore(sessionId, playerId, category, score){
+requirePlayerAccess_(playerId);
 
 const sheet = SpreadsheetApp
 .getActive()
@@ -114,6 +115,7 @@ practiceEvaluationCache = null;
  * Updates player evaluation notes.
  */
 function updateEvaluationNotes(sessionId, playerId, notes){
+  requirePlayerAccess_(playerId);
 
   const sheet = SpreadsheetApp
     .getActive()
@@ -167,6 +169,8 @@ function getEvaluationScores(sessionId){
   const headers = data[0];
 
   const scores = {};
+  const allowedPlayers = {};
+  filterPlayersForCurrentStaff_(getPlayers()).forEach(function(player){ allowedPlayers[String(player[0])] = true; });
 
   for(let i = 1; i < data.length; i++){
 
@@ -175,6 +179,7 @@ function getEvaluationScores(sessionId){
     }
 
     const playerId = data[i][1];
+    if(!allowedPlayers[String(playerId)]){ continue; }
 
     scores[playerId] = {
 
@@ -197,6 +202,7 @@ for(let c = 6; c < headers.length - 2; c++){
  * Updates player attendance.
  */
 function updateAttendance(sessionId, playerId, present){
+  requirePlayerAccess_(playerId);
 
   const sheet = SpreadsheetApp
     .getActive()
@@ -236,6 +242,7 @@ practiceEvaluationCache = null;
  * Returns notes for one player in one session.
  */
 function getEvaluationNotes(sessionId, playerId){
+  requirePlayerAccess_(playerId);
 
   const sheet = SpreadsheetApp
     .getActive()
@@ -348,10 +355,6 @@ practiceEvaluationCache = null;
 }
 function getPracticeEvaluations(){
 
-  if(practiceEvaluationCache){
-    return practiceEvaluationCache;
-  }
-
   const sheet = SpreadsheetApp
     .getActive()
     .getSheetByName("Practice Evaluations");
@@ -374,7 +377,11 @@ function getPracticeEvaluations(){
     )
     .getValues();
 
-  practiceEvaluationCache = data.map(function(row){
+  const allowedPlayers = {};
+  filterPlayersForCurrentStaff_(getPlayers()).forEach(function(player){ allowedPlayers[String(player[0])] = true; });
+  practiceEvaluationCache = data.filter(function(row){
+    return allowedPlayers[String(row[1])];
+  }).map(function(row){
     return rowToObject(headers,row);
   });
 
