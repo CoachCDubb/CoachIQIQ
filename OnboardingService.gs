@@ -11,7 +11,8 @@ function getCoachIQBootstrap() {
 
   return {
     setupRequired: !configured,
-    settings: getCoachIQSettings()
+    settings: getCoachIQSettings(),
+    access: getCurrentStaffAccess_()
   };
 }
 

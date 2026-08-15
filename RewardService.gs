@@ -75,12 +75,31 @@ null,
  * Saves all Point Rewards.
  */
 function savePointRewards(rewards){
+  requireStaffCapability_("manage_settings");
 
   const lock = LockService.getScriptLock();
   lock.waitLock(10000);
 
   try {
-    return savePointRewards_(rewards);
+    const previousRewards = getPointAwards();
+    const savedRewards = savePointRewards_(rewards);
+
+    try {
+      logCoachIQAudit({
+        action: "UPDATE_POINT_REWARDS",
+        entityType: "Program Settings",
+        entityId: "POINT_REWARDS",
+        team: "",
+        beforeValue: previousRewards,
+        afterValue: savedRewards,
+        success: true,
+        error: ""
+      });
+    } catch (auditError) {
+      console.error("Point rewards saved, but audit logging failed: " + auditError.message);
+    }
+
+    return savedRewards;
   } finally {
     lock.releaseLock();
   }
