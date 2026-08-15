@@ -1,7 +1,44 @@
-<section>
+<section class="staff-page">
+  <div class="page-header staff-page-header">
+    <div>
+      <span class="page-kicker">Program personnel</span>
+      <h2>Staff</h2>
+      <p class="page-subtitle">Keep your coaching staff current across sessions and evaluations.</p>
+    </div>
+    <button class="btn btn-primary" type="button" onclick="addStaffMember()">Add staff member</button>
+  </div>
 
-<h2>Staff</h2>
+  <div class="staff-summary" aria-live="polite">
+    <div class="staff-summary-copy">
+      <span class="staff-summary-label">Active staff</span>
+      <strong id="staffCount">--</strong>
+      <p>Available as evaluators throughout CoachIQ.</p>
+    </div>
+    <div class="staff-summary-mark" aria-hidden="true">CIQ</div>
+  </div>
 
-<p>Coach management coming soon.</p>
+  <div class="staff-workspace">
+    <div>
+      <div class="section-heading">
+        <div>
+          <span class="page-kicker">Directory</span>
+          <h3>Coaching team</h3>
+        </div>
+        <span id="staffSaveState" class="staff-save-state">All changes saved</span>
+      </div>
+      <div id="staffDirectory" class="staff-directory">
+        <div class="staff-loading">Loading staff...</div>
+      </div>
+    </div>
 
+    <aside class="staff-editor card">
+      <span class="page-kicker">Quick edit</span>
+      <h3>Manage staff</h3>
+      <p>Add each coach or staff member exactly as their name should appear in evaluator lists.</p>
+      <p class="staff-access-note">Assign teams and position groups to control which athletes each coach can see and evaluate. Head Coaches retain program-wide access.</p>
+      <div id="staffEditorList" class="staff-editor-list"></div>
+      <button class="btn staff-add-button" type="button" onclick="addStaffMember()">+ Add another</button>
+      <button id="saveStaffButton" class="btn btn-primary staff-save-button" type="button" onclick="saveStaffDirectory()">Save staff</button>
+    </aside>
+  </div>
 </section>
