@@ -30,6 +30,41 @@ function getRecentSessions(limit){
   return sessions.slice(0, limit);
 
 }
+
+function getProgramIntelligence() {
+  requireStaffCapability_("view_intelligence");
+  const settings = getCoachIQSettings();
+  const players = filterPlayersForCurrentStaff_(getPlayers()).filter(function(player) { return player[7] === "Active"; });
+  const playerMap = {};
+  players.forEach(function(player) { playerMap[String(player[0])] = {id:String(player[0]),name:String(player[1])+" "+String(player[2]),team:String(player[5]||""),position:String(player[6]||"Unassigned")}; });
+  const recentIds = getRecentSessionIds(8);
+  const sheet = SpreadsheetApp.getActive().getSheetByName("Practice Evaluations");
+  const data = sheet.getDataRange().getValues();
+  const headers = data[0] || [];
+  const columns = {}; headers.forEach(function(header,index){columns[header]=index;});
+  const categories = settings.cultureCategories || [];
+  const summaries = {}, categoryTotals = {};
+  categories.forEach(function(category){categoryTotals[category]={sum:0,count:0};});
+  let present=0,absent=0;
+  data.slice(1).forEach(function(row){
+    const player=playerMap[String(row[columns["Player ID"]])];
+    if(!player || recentIds.indexOf(row[columns["Session ID"]])<0 || row[columns["Complete"]]!==true)return;
+    const summary=summaries[player.id]||(summaries[player.id]={player:player,sum:0,count:0,sessions:0}); summary.sessions++;
+    if(row[columns["Attendance"]]===true)present++; else if(row[columns["Attendance"]]===false)absent++;
+    categories.forEach(function(category){const value=Number(row[columns[category]]);if(isFinite(value)&&value>0){summary.sum+=value;summary.count++;categoryTotals[category].sum+=value;categoryTotals[category].count++;}});
+  });
+  const ranked=Object.keys(summaries).map(function(id){const item=summaries[id];return {name:item.player.name,position:item.player.position,team:item.player.team,average:item.count?Math.round(item.sum/item.count*10)/10:0,sessions:item.sessions};}).filter(function(item){return item.sessions>0;}).sort(function(a,b){return b.average-a.average;});
+  const positionMap={}; ranked.forEach(function(item){const group=positionMap[item.position]||(positionMap[item.position]={position:item.position,sum:0,count:0});group.sum+=item.average;group.count++;});
+  const positions=Object.keys(positionMap).map(function(key){const group=positionMap[key];return {position:key,average:Math.round(group.sum/group.count*10)/10,players:group.count};}).sort(function(a,b){return b.average-a.average;});
+  const pillars=categories.map(function(category){const total=categoryTotals[category];return {name:category,average:total.count?Math.round(total.sum/total.count*10)/10:0};}).sort(function(a,b){return a.average-b.average;});
+  const attendance=(present+absent)?Math.round(present/(present+absent)*100):0;
+  const actions=[];
+  if(attendance<90)actions.push("Attendance is "+attendance+"%. Identify repeat absences before the next practice block.");
+  if(pillars.length&&pillars[0].average)actions.push("Make "+pillars[0].name+" a coaching emphasis; it is the lowest-scoring program pillar at "+pillars[0].average+".");
+  if(positions.length>1)actions.push("Review the "+positions[positions.length-1].position+" group; its recent average trails other position groups.");
+  if(!actions.length)actions.push("Data is stable. Continue the current plan and watch for changes over the next three sessions.");
+  return {scope:getCurrentStaffAccess_(),sampleSessions:recentIds.length,activePlayers:players.length,attendance:attendance,pillars:pillars,positions:positions,topPerformers:ranked.slice(0,5),needsAttention:ranked.slice().reverse().slice(0,5),actions:actions};
+}
 /**
  * Returns the Session IDs for the most
  * recent completed sessions.
