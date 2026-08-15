@@ -107,6 +107,8 @@ return {
 
     schoolName: settings["School Name"] || "",
 
+    mascotName: settings["Mascot Name"] || "",
+
     currentSeason: settings["Current Season"] || "",
 
     sport: settings["Sport"] || "Football",
@@ -145,6 +147,7 @@ function saveProgramInformation(data) {
   setSettingValues_({
     "Program Name": String(data.programName || "").trim(),
     "School Name": String(data.schoolName || "").trim(),
+    "Mascot Name": String(data.mascotName || "").trim(),
     "Current Season": String(data.currentSeason || "").trim(),
     "Sport": String(data.sport || "Football").trim(),
     "Primary Color": normalizeThemeColor_(data.primaryColor, "#1E3A5F"),
@@ -216,25 +219,15 @@ function saveTeams(teams) {
  * Saves any comma-separated setting list.
  */
 function saveSettingList(settingName, items) {
-
-  const sheet = SpreadsheetApp
-    .getActive()
-    .getSheetByName(SETTINGS_SHEET);
-
-  const data = sheet.getDataRange().getValues();
-
-  for (let i = 0; i < data.length; i++) {
-
-    if (data[i][0] === settingName) {
-
-      sheet
-        .getRange(i + 1, 2)
-        .setValue(items.join(", "));
-
-      return;
-
-    }
-
-  }
-
+  const cleanedItems = (Array.isArray(items) ? items : []).map(function(item) {
+    return String(item || "").trim();
+  }).filter(function(item) {
+    return item !== "";
+  });
+  setSettingValues_((function() {
+    const update = {};
+    update[settingName] = cleanedItems.join(", ");
+    return update;
+  })());
+  return getCoachIQSettings();
 }
