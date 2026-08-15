@@ -27,7 +27,7 @@ function getPlayers() {
  */
 function getPlayersForUI() {
 
-  return getPlayers().filter(player => player[7] !== "Archived");
+  return filterPlayersForCurrentStaff_(getPlayers()).filter(player => player[7] !== "Archived");
 
 }
 /**
@@ -101,6 +101,7 @@ function getNextPlayerId() {
  * Adds a new player.
  */
 function addPlayer(player) {
+  requireStaffCapability_("manage_roster");
 
   const sheet = SpreadsheetApp
     .getActive()
@@ -116,6 +117,29 @@ function addPlayer(player) {
     player.position,
     player.status
   ]);
+
+  try {
+    logCoachIQAudit({
+      action: "ADD_PLAYER",
+      entityType: "Player",
+      entityId: player.id,
+      team: player.team || "",
+      beforeValue: "Player did not exist",
+      afterValue: {
+        firstName: player.firstName,
+        lastName: player.lastName,
+        jersey: player.jersey,
+        grade: player.grade,
+        team: player.team,
+        position: player.position,
+        status: player.status
+      },
+      success: true,
+      error: ""
+    });
+  } catch (auditError) {
+    console.error("Player added, but audit logging failed: " + auditError.message);
+  }
 
 }
 
@@ -179,6 +203,7 @@ function importPlayers(roster) {
     const validPositions = settings.positions || [];
     const validStatuses = settings.statuses || [];
     const importNames = {};
+    const skipped = [];
     const errors = [];
     const normalized = [];
 
@@ -192,7 +217,19 @@ function importPlayers(roster) {
 
       if (!firstName || !lastName) {
         errors.push("Row " + rowNumber + ": First Name and Last Name are required.");
+        return;
       }
+
+      const key = buildPlayerImportKey_(firstName, lastName, team);
+      if (existingNames[key] || importNames[key]) {
+        skipped.push({
+          rowNumber: rowNumber,
+          name: firstName + " " + lastName,
+          team: team
+        });
+        return;
+      }
+
       if (team && validTeams.length && validTeams.indexOf(team) === -1) {
         errors.push("Row " + rowNumber + ": Team '" + team + "' is not in CoachIQ Settings.");
       }
@@ -203,14 +240,7 @@ function importPlayers(roster) {
         errors.push("Row " + rowNumber + ": Status '" + status + "' is not in CoachIQ Settings.");
       }
 
-      const key = buildPlayerImportKey_(firstName, lastName, team);
-      if (key && (existingNames[key] || importNames[key])) {
-        errors.push("Row " + rowNumber + ": " + firstName + " " + lastName +
-          " already exists for " + (team || "this roster") + ".");
-      }
-      if (key) {
-        importNames[key] = true;
-      }
+      importNames[key] = true;
 
       normalized.push({
         firstName: firstName,
@@ -242,13 +272,16 @@ function importPlayers(roster) {
       return row;
     });
 
-    sheet.getRange(sheet.getLastRow() + 1, 1, rows.length, lastColumn)
-      .setValues(rows);
+    if (rows.length) {
+      sheet.getRange(sheet.getLastRow() + 1, 1, rows.length, lastColumn)
+        .setValues(rows);
+    }
 
     return {
       imported: rows.length,
-      firstPlayerId: rows[0][cols["Player ID"] - 1],
-      lastPlayerId: rows[rows.length - 1][cols["Player ID"] - 1]
+      skipped: skipped.length,
+      firstPlayerId: rows.length ? rows[0][cols["Player ID"] - 1] : "",
+      lastPlayerId: rows.length ? rows[rows.length - 1][cols["Player ID"] - 1] : ""
     };
   } finally {
     lock.releaseLock();
@@ -311,7 +344,7 @@ function getPlayersByTeams(selectedTeams){
     .getRange(2,1,sheet.getLastRow()-1,sheet.getLastColumn())
     .getValues();
 
-  return data
+  return filterPlayersForCurrentStaff_(data)
     .filter(function(row){
 
       return selectedTeams.includes(
