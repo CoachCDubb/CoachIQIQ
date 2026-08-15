@@ -33,6 +33,10 @@ function include(filename) {
     .getContent();
 }
 function getPage(pageName) {
+  if (pageName === "Staff" || pageName === "Settings") {
+    requireStaffCapability_("manage_settings");
+  }
+  if (pageName === "AI") requireStaffCapability_("view_intelligence");
   return HtmlService
     .createHtmlOutputFromFile(pageName)
     .getContent();
