@@ -119,6 +119,10 @@ function loadPage(page, callback){
                     loadSessions(requestId);
                     break;
 
+                case "Game":
+                    loadLiveGameSetup(requestId);
+                    break;
+
                 case "Evaluations":
                     initializeEvaluationsPage(requestId);
                     break;
@@ -129,6 +133,14 @@ function loadPage(page, callback){
 
                 case "Settings":
                     loadSettings(requestId);
+                    break;
+
+                case "Staff":
+                    loadStaff(requestId);
+                    break;
+
+                case "AI":
+                    loadIntelligence(requestId);
                     break;
 
                 case "PlayerProfile":
@@ -182,9 +194,132 @@ const CoachIQ = {
 
   players: [],
 
-  rosterImport: []
+  rosterImport: [],
+
+  liveGame: {setup:null}
 
 };
+
+function loadLiveGameSetup(requestId){
+  google.script.run
+    .withSuccessHandler(function(setup){
+      if(!isCurrentPage("Game", requestId)){ return; }
+      CoachIQ.liveGame.setup = setup;
+      populateLiveGameSetup(setup);
+    })
+    .withFailureHandler(function(error){
+      const loading = document.getElementById("liveGameSetupLoading");
+      if(loading){ loading.textContent = error.message || "Unable to load Live Game setup."; }
+      showToast("Unable to load Live Game setup.", "error");
+    })
+    .getLiveGameSetupData();
+}
+
+function populateLiveGameSetup(setup){
+  const loading = document.getElementById("liveGameSetupLoading");
+  const form = document.getElementById("liveGameSetupForm");
+  const teamSelect = document.getElementById("liveGameTeam");
+  if(!form || !teamSelect){ return; }
+
+  const teams = setup.teams || [];
+  teamSelect.innerHTML = teams.length
+    ? teams.map(function(team){ return `<option value="${escapeHtmlValue(team)}">${escapeHtmlValue(team)}</option>`; }).join("")
+    : '<option value="">Add a team in Settings first</option>';
+  teamSelect.disabled = !teams.length;
+  document.getElementById("liveGameDate").value = new Date().toISOString().split("T")[0];
+  document.getElementById("liveGameLocation").value = setup.defaults.location || "Home";
+  document.getElementById("liveGameFormat").value = setup.defaults.format || "Quarters";
+  document.getElementById("liveGamePeriodLength").value = setup.defaults.periodLength || 8;
+  renderLiveGameRoster();
+  renderLiveGameStats(setup.stats || []);
+  if(loading){ loading.hidden = true; }
+  form.hidden = false;
+}
+
+function renderLiveGameRoster(){
+  const container = document.getElementById("liveGameRoster");
+  const team = document.getElementById("liveGameTeam");
+  const setup = CoachIQ.liveGame.setup || {};
+  if(!container || !team){ return; }
+  const players = (setup.players || []).filter(function(player){
+    return player.team === team.value && player.status !== "Archived";
+  });
+  if(!players.length){
+    container.innerHTML = '<div class="live-game-empty">No available players were found for this team.</div>';
+    return;
+  }
+  container.innerHTML = players.map(function(player){
+    const name = (player.firstName + " " + player.lastName).trim();
+    return `<label class="live-game-player"><input class="live-game-player-check" type="checkbox" value="${escapeHtmlValue(player.id)}" checked>` +
+      `<span class="live-game-jersey">${escapeHtmlValue(player.jersey || "—")}</span><span><strong>${escapeHtmlValue(name)}</strong>` +
+      `<small>${escapeHtmlValue(player.position || "Unassigned")}</small></span></label>`;
+  }).join("");
+}
+
+function setLiveGameRosterSelection(selected){
+  document.querySelectorAll(".live-game-player-check").forEach(function(input){ input.checked = selected; });
+}
+
+function renderLiveGameStats(stats){
+  const container = document.getElementById("liveGameStats");
+  if(!container){ return; }
+  const groups = {};
+  stats.forEach(function(stat){
+    if(!groups[stat.group]){ groups[stat.group] = []; }
+    groups[stat.group].push(stat);
+  });
+  container.innerHTML = Object.keys(groups).map(function(group){
+    return `<div class="live-game-stat-group"><h4>${escapeHtmlValue(group)}</h4>` + groups[group].map(function(stat){
+      return `<label class="live-game-stat"><input class="live-game-stat-check" type="checkbox" value="${escapeHtmlValue(stat.id)}" ${stat.selected ? "checked" : ""}>` +
+        `<span><strong>${escapeHtmlValue(stat.label)}</strong><small>${escapeHtmlValue(stat.description)}</small></span></label>`;
+    }).join("") + "</div>";
+  }).join("");
+}
+
+function updateLiveGameFormat(){
+  const format = document.getElementById("liveGameFormat");
+  const length = document.getElementById("liveGamePeriodLength");
+  if(format && length){ length.value = format.value === "Halves" ? 20 : 8; }
+}
+
+function submitLiveGameSetup(event){
+  event.preventDefault();
+  const button = document.getElementById("saveLiveGameSetupButton");
+  const playerIds = Array.from(document.querySelectorAll(".live-game-player-check:checked")).map(function(input){ return input.value; });
+  const selectedStats = Array.from(document.querySelectorAll(".live-game-stat-check:checked")).map(function(input){ return input.value; });
+  const payload = {
+    gameDate:document.getElementById("liveGameDate").value,
+    team:document.getElementById("liveGameTeam").value,
+    opponent:document.getElementById("liveGameOpponent").value.trim(),
+    location:document.getElementById("liveGameLocation").value,
+    format:document.getElementById("liveGameFormat").value,
+    periodLength:Number(document.getElementById("liveGamePeriodLength").value),
+    playerIds:playerIds,
+    selectedStats:selectedStats
+  };
+  button.disabled = true;
+  button.textContent = "Saving Setup…";
+  google.script.run
+    .withSuccessHandler(function(result){
+      document.getElementById("liveGameSetupForm").hidden = true;
+      document.getElementById("liveGameSetupSuccess").hidden = false;
+      document.getElementById("liveGameSetupSuccessTitle").textContent = payload.team + " vs. " + payload.opponent;
+      button.disabled = false;
+      button.textContent = "Save Game Setup";
+      showToast(result.message || "Game setup saved.");
+    })
+    .withFailureHandler(function(error){
+      button.disabled = false;
+      button.textContent = "Save Game Setup";
+      showToast(error.message || "Unable to save game setup.", "error");
+    })
+    .createLiveGameSetup(payload);
+}
+
+function resetLiveGameSetup(){
+  CoachIQ.liveGame.setup = null;
+  loadPage("Game");
+}
 
 function showPlayers(players, requestId){
 
@@ -402,7 +537,11 @@ function importRoster(){
   google.script.run
     .withSuccessHandler(function(result){
       button.textContent = "Import Players";
-      showToast(result.imported + " players imported successfully.");
+      const imported = Number(result.imported || 0);
+      const skipped = Number(result.skipped || 0);
+      const summary = imported + " new player" + (imported === 1 ? "" : "s") + " imported" +
+        (skipped ? "; " + skipped + " duplicate" + (skipped === 1 ? "" : "s") + " skipped" : "") + ".";
+      showToast(summary);
       closeRosterImportModal();
       loadPlayers(PageNavigation.requestId);
     })
@@ -699,22 +838,27 @@ function addPlayer(playerId){
 function archivePlayer(playerId){
 
     const player = CoachIQ.players.find(p => p[0] === playerId);
-
-    const confirmArchive = confirm(
-        `Archive ${player[1]} ${player[2]}?\n\nThis player will be removed from the active roster but all history will be preserved.`
-    );
-
-    if (!confirmArchive){
+    if(!player){
+        showToast("Player not found.");
         return;
     }
 
-    google.script.run
-        .withSuccessHandler(function(){
-
-            loadPlayers();
-
-        })
-        .archivePlayer(playerId);
+    showConfirmModal(
+        `Archive ${player[1]} ${player[2]}?`,
+        "This player will be removed from the active roster, but all history will be preserved.",
+        "Archive Player",
+        function(){
+            google.script.run
+                .withSuccessHandler(function(){
+                    showToast("Player archived.");
+                    loadPlayers();
+                })
+                .withFailureHandler(function(error){
+                    showToast(error.message || "Unable to archive player.");
+                })
+                .archivePlayer(playerId);
+        }
+    );
 
 }
 function loadDropdownSettings(callback){
@@ -742,6 +886,200 @@ function loadSettings(requestId){
 
 }
 
+function loadStaff(requestId){
+  google.script.run
+    .withSuccessHandler(function(settings){
+      if(!isCurrentPage("Staff", requestId)){ return; }
+      renderStaffDirectory(settings);
+    })
+    .withFailureHandler(function(error){
+      if(!isCurrentPage("Staff", requestId)){ return; }
+      console.error(error);
+      showToast("Unable to load staff.");
+    })
+    .getStaffDirectoryData();
+}
+
+function renderStaffDirectory(data){
+  const staff = data.profiles || [];
+  CoachIQ.staffTeams = data.teams || [];
+  CoachIQ.staffPositions = data.positions || [];
+  const directory = document.getElementById("staffDirectory");
+  const editor = document.getElementById("staffEditorList");
+  const count = document.getElementById("staffCount");
+  if(!directory || !editor){ return; }
+
+  directory.innerHTML = "";
+  editor.innerHTML = "";
+  if(count){ count.textContent = staff.length; }
+
+  if(!staff.length){
+    const empty = document.createElement("div");
+    empty.className = "staff-empty";
+    empty.innerHTML = "<strong>Build your staff directory</strong><p>Add your first coach to make them available in evaluator lists.</p>";
+    directory.appendChild(empty);
+  }
+
+  staff.forEach(function(profile){
+    directory.appendChild(createStaffCard(profile));
+    editor.appendChild(createStaffEditorRow(profile));
+  });
+}
+
+function staffInitials(name){
+  return String(name || "")
+    .trim()
+    .split(/\s+/)
+    .slice(0, 2)
+    .map(function(part){ return part.charAt(0).toUpperCase(); })
+    .join("") || "--";
+}
+
+function createStaffCard(profile){
+  const card = document.createElement("article");
+  card.className = "staff-card";
+
+  const avatar = document.createElement("span");
+  avatar.className = "staff-avatar";
+  avatar.textContent = staffInitials(profile.name);
+
+  const copy = document.createElement("div");
+  const heading = document.createElement("h4");
+  heading.textContent = profile.name;
+  const label = document.createElement("p");
+  label.textContent = profile.role + (profile.teams && profile.teams.length ? " • " + profile.teams.join(", ") : " • All teams") + (profile.positions && profile.positions.length ? " • " + profile.positions.join(", ") : "");
+  copy.appendChild(heading);
+  copy.appendChild(label);
+
+  const status = document.createElement("span");
+  status.className = "staff-active-badge";
+  status.textContent = "Active";
+
+  card.appendChild(avatar);
+  card.appendChild(copy);
+  card.appendChild(status);
+  return card;
+}
+
+function createStaffEditorRow(profile){
+  profile = typeof profile === "string" ? {name:profile} : (profile || {});
+  const row = document.createElement("div");
+  row.className = "staff-editor-row";
+
+  const input = document.createElement("input");
+  input.type = "text";
+  input.className = "staff-name-input";
+  input.placeholder = "Coach or staff name";
+  input.value = profile.name || "";
+  input.addEventListener("input", markStaffUnsaved);
+
+  const remove = document.createElement("button");
+  remove.type = "button";
+  remove.className = "staff-remove-button";
+  remove.setAttribute("aria-label", "Remove staff member");
+  remove.textContent = "\u00d7";
+  remove.addEventListener("click", function(){
+    row.remove();
+    markStaffUnsaved();
+  });
+
+  const role = document.createElement("select");
+  role.className = "staff-role-input";
+  ["Head Coach","Assistant Coach","Position Coach","Analyst","Support Staff"].forEach(function(value){ role.add(new Option(value,value)); });
+  role.value = profile.role || "Assistant Coach";
+  const email = document.createElement("input"); email.type="email"; email.className="staff-email-input"; email.placeholder="Google account email"; email.value=profile.email || "";
+  const access = document.createElement("div"); access.className="staff-access-options";
+  access.innerHTML = "<strong>Team access</strong>" + (CoachIQ.staffTeams || []).map(function(team){ return '<label><input type="checkbox" class="staff-team-input" value="'+escapeHtmlValue(team)+'" '+((profile.teams||[]).indexOf(team)>=0?'checked':'')+'> '+escapeHtmlValue(team)+'</label>'; }).join("") +
+    "<strong>Position groups</strong>" + (CoachIQ.staffPositions || []).map(function(position){ return '<label><input type="checkbox" class="staff-position-input" value="'+escapeHtmlValue(position)+'" '+((profile.positions||[]).indexOf(position)>=0?'checked':'')+'> '+escapeHtmlValue(position)+'</label>'; }).join("") +
+    "<strong>Capabilities</strong>" + [["manage_roster","Manage roster"],["run_sessions","Run sessions"],["evaluate_players","Evaluate players"],["view_intelligence","View intelligence"],["manage_settings","Manage settings"]].map(function(item){ return '<label><input type="checkbox" class="staff-capability-input" value="'+item[0]+'" '+((profile.capabilities||[]).indexOf(item[0])>=0?'checked':'')+'> '+item[1]+'</label>'; }).join("");
+  [role,email].forEach(function(element){ element.addEventListener("change",markStaffUnsaved); });
+  access.addEventListener("change",markStaffUnsaved);
+  row.dataset.staffId = profile.id || "";
+  row.appendChild(input); row.appendChild(role); row.appendChild(email); row.appendChild(access);
+  row.appendChild(remove);
+  return row;
+}
+
+function addStaffMember(){
+  const editor = document.getElementById("staffEditorList");
+  if(!editor){ return; }
+  const row = createStaffEditorRow({name:"",role:"Assistant Coach",teams:[],capabilities:["run_sessions","evaluate_players","view_intelligence"]});
+  editor.appendChild(row);
+  row.querySelector("input").focus();
+  markStaffUnsaved();
+}
+
+function markStaffUnsaved(){
+  const state = document.getElementById("staffSaveState");
+  if(state){
+    state.textContent = "Unsaved changes";
+    state.classList.add("is-unsaved");
+  }
+}
+
+function saveStaffDirectory(){
+  const button = document.getElementById("saveStaffButton");
+  const profiles = Array.from(document.querySelectorAll("#staffEditorList .staff-editor-row")).map(function(row){
+    return {id:row.dataset.staffId,name:row.querySelector(".staff-name-input").value.trim(),email:row.querySelector(".staff-email-input").value.trim(),role:row.querySelector(".staff-role-input").value,
+      teams:Array.from(row.querySelectorAll(".staff-team-input:checked")).map(function(input){return input.value;}),positions:Array.from(row.querySelectorAll(".staff-position-input:checked")).map(function(input){return input.value;}),capabilities:Array.from(row.querySelectorAll(".staff-capability-input:checked")).map(function(input){return input.value;})};
+  }).filter(function(profile){return profile.name;});
+
+  if(button){
+    button.disabled = true;
+    button.textContent = "Saving...";
+  }
+
+  google.script.run
+    .withSuccessHandler(function(result){
+      if(button){
+        button.disabled = false;
+        button.textContent = "Save staff";
+      }
+      renderStaffDirectory(result);
+      const state = document.getElementById("staffSaveState");
+      if(state){
+        state.textContent = "All changes saved";
+        state.classList.remove("is-unsaved");
+      }
+      showToast("Staff saved!");
+    })
+    .withFailureHandler(function(error){
+      if(button){
+        button.disabled = false;
+        button.textContent = "Save staff";
+      }
+      console.error(error);
+      showToast("Unable to save staff.");
+    })
+    .saveStaffProfiles(profiles);
+}
+
+function escapeHtmlValue(value){ return String(value || "").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;"); }
+
+function previewProgramLogo(input){
+  const file=input.files&&input.files[0], preview=document.getElementById("programLogoPreview");
+  if(!file||["image/png","image/jpeg"].indexOf(file.type)<0||file.size>2*1024*1024){ showToast("Choose a PNG or JPEG smaller than 2 MB."); input.value=""; return; }
+  preview.src=URL.createObjectURL(file); preview.hidden=false;
+}
+function uploadProgramLogo(){
+  const input=document.getElementById("programLogoFile"), file=input.files&&input.files[0], button=document.getElementById("uploadLogoButton");
+  if(!file){showToast("Choose a logo file first.");return;} button.disabled=true; button.textContent="Uploading...";
+  const reader=new FileReader(); reader.onload=function(){ google.script.run.withSuccessHandler(function(result){document.getElementById("programLogoUrl").value=result.url; CoachIQ.programSettings.logoUrl=result.url; applyCoachIQTheme(CoachIQ.programSettings); button.disabled=false;button.textContent="Replace logo";showToast("Program logo uploaded!");}).withFailureHandler(function(error){button.disabled=false;button.textContent="Upload logo";showToast(error.message||"Logo upload failed.");}).uploadCoachIQLogo({name:file.name,mimeType:file.type,base64:String(reader.result).split(",")[1]});}; reader.readAsDataURL(file);
+}
+
+function loadIntelligence(requestId){
+  google.script.run.withSuccessHandler(function(data){if(!isCurrentPage("AI",requestId))return;
+    document.getElementById("intelligenceScope").textContent=data.scope.role==="Head Coach"?"Program-wide analysis":"Scoped to "+(data.scope.positions.length?data.scope.positions.join(", "):"all assigned positions")+" • "+(data.scope.teams.length?data.scope.teams.join(", "):"all assigned teams");
+    document.getElementById("intelligencePlayers").textContent=data.activePlayers; document.getElementById("intelligenceAttendance").textContent=data.attendance+"%"; document.getElementById("intelligenceSessions").textContent=data.sampleSessions; document.getElementById("intelligencePositionCount").textContent=data.positions.length;
+    renderIntelligenceList("intelligenceActions",data.actions,function(item){return item;});
+    renderIntelligenceList("intelligencePositions",data.positions,function(item){return item.position+" — "+item.average+" ("+item.players+" athletes)";});
+    renderIntelligenceList("intelligencePillars",data.pillars,function(item){return item.name+" — "+(item.average||"No scores");});
+    renderIntelligenceList("intelligenceTop",data.topPerformers,function(item){return item.name+" • "+item.position+" — "+item.average;});
+    renderIntelligenceList("intelligenceNeeds",data.needsAttention,function(item){return item.name+" • "+item.position+" — "+item.average;});
+  }).withFailureHandler(function(error){showToast(error.message||"Unable to build intelligence report.");}).getProgramIntelligence();
+}
+function renderIntelligenceList(id,items,format){const container=document.getElementById(id);container.innerHTML="";(items&&items.length?items:["Not enough completed evaluation data yet."]).forEach(function(item,index){const row=document.createElement("div");row.className="intelligence-list-row";const number=document.createElement("span");number.textContent=String(index+1).padStart(2,"0");const copy=document.createElement("p");copy.textContent=typeof item==="string"?item:format(item);row.appendChild(number);row.appendChild(copy);container.appendChild(row);});}
+
 function showSettings(settings){
 
   document.getElementById("programName").value =
@@ -759,6 +1097,8 @@ function showSettings(settings){
   document.getElementById("programPrimaryColor").value = settings.primaryColor || "#1E3A5F";
   document.getElementById("programSecondaryColor").value = settings.secondaryColor || "#F59E0B";
   document.getElementById("programLogoUrl").value = settings.logoUrl || "";
+  const logoPreview = document.getElementById("programLogoPreview");
+  if(logoPreview && settings.logoUrl){ logoPreview.src = settings.logoUrl; logoPreview.hidden = false; }
 
   renderSettingsList("teamsContainer", settings.teams);
 
@@ -855,6 +1195,7 @@ function initializeCoachIQ(){
   google.script.run
     .withSuccessHandler(function(bootstrap){
       applyCoachIQTheme(bootstrap.settings || {});
+      applyStaffAccess(bootstrap.access || {});
       if(bootstrap.setupRequired){
         document.getElementById("app").hidden = true;
         document.getElementById("onboardingOverlay").hidden = false;
@@ -874,6 +1215,14 @@ function initializeCoachIQ(){
       loadPage("Dashboard");
     })
     .getCoachIQBootstrap();
+}
+
+function applyStaffAccess(access){
+  CoachIQ.access = access || {};
+  document.querySelectorAll("[data-capability]").forEach(function(item){
+    const allowed = (access.capabilities || []).indexOf(item.dataset.capability) >= 0;
+    item.hidden = !allowed;
+  });
 }
 
 function getCoachGreeting(hour){
@@ -911,6 +1260,8 @@ function applyCoachIQTheme(settings){
       : "";
     logo.hidden = !logoUrl;
     if(logoUrl){ logo.src = logoUrl; }
+    const logoCard = logo.closest(".logo");
+    if(logoCard){ logoCard.classList.toggle("has-program-logo", Boolean(logoUrl)); }
   }
   updatePointTerminology();
 }
@@ -1052,7 +1403,9 @@ function renderSettingsList(containerId, items){
 
   container.innerHTML = "";
 
-  items.forEach(function(item){
+  const listItems = items && items.length ? items : [""];
+
+  listItems.forEach(function(item){
 
     container.innerHTML += `
 
@@ -1263,7 +1616,9 @@ function loadSessions(requestId){
 
       console.log("Result from Apps Script:", result);
 
-      showSessionsPage(result);
+      CoachIQ.sessions = Array.isArray(result) ? result : [];
+      CoachIQ.showAllSessions = false;
+      showSessionsPage(CoachIQ.sessions, false);
 
     })
     .withFailureHandler(function(error){
@@ -1441,7 +1796,12 @@ function closeCoachIQTutorial(){
   CoachIQTutorial.index = -1;
   document.getElementById("tutorialOverlay").hidden = true;
 }
-function showSessionsPage(sessions){
+function toggleAllSessions(){
+  CoachIQ.showAllSessions = !CoachIQ.showAllSessions;
+  showSessionsPage(CoachIQ.sessions || [], CoachIQ.showAllSessions);
+}
+
+function showSessionsPage(sessions, showAll){
 
   console.log("Sessions:", sessions);
 
@@ -1453,13 +1813,21 @@ function showSessionsPage(sessions){
   }
 
   container.innerHTML = "";
+  const toggleButton = document.getElementById("toggleSessionsButton");
+  if(toggleButton){
+    toggleButton.textContent = showAll ? "Show Open Sessions" : "View All Sessions";
+  }
 
-  if(!sessions || sessions.length === 0){
+  const visibleSessions = showAll
+    ? (sessions || [])
+    : (sessions || []).filter(function(session){ return session["Status"] !== "Completed"; });
+
+  if(visibleSessions.length === 0){
 
     container.innerHTML = `
       <div class="card">
-        <h3>No Sessions Found</h3>
-        <p>Create your first session to get started.</p>
+        <h3>${showAll ? "No Sessions Found" : "No Open Sessions"}</h3>
+        <p>${showAll ? "Create your first session to get started." : "All sessions are complete. Select View All Sessions to review history."}</p>
       </div>
     `;
 
@@ -1467,7 +1835,7 @@ function showSessionsPage(sessions){
 
   }
 
-  sessions.reverse().forEach(function(session){
+  visibleSessions.slice().reverse().forEach(function(session){
 
    container.innerHTML += `
 
@@ -2075,15 +2443,15 @@ function finishCurrentSession(){
     google.script.run
         .withSuccessHandler(function(){
 
-            alert("Session Completed!");
-
             window.resumeSessionId = null;
             window.currentPracticeSession = null;
             PageNavigation.evaluationMode = "new";
             PageNavigation.evaluationSessionId = null;
             window.viewMode = false;
 
-            loadPage("Sessions");
+            loadPage("Sessions", function(){
+                showToast("Session completed.");
+            });
 
         })
         .withFailureHandler(function(error){
@@ -2579,7 +2947,7 @@ function showConfirmModal(title, message, buttonText, callback){
 
     document.getElementById("confirmTitle").innerText = title;
 
-    document.getElementById("confirmMessage").innerHTML = message;
+    document.getElementById("confirmMessage").textContent = message;
 
     const button = document.getElementById("confirmButton");
 
