@@ -1,0 +1,51 @@
+<section class="live-game-page">
+  <div class="page-header live-game-page-header">
+    <div>
+      <span class="page-kicker">Game command center</span>
+      <h2>Live Game</h2>
+      <p class="page-subtitle">Choose tonight's roster and the numbers that matter before the opening tip.</p>
+    </div>
+    <span class="live-game-phase"><span>1</span> Game setup</span>
+  </div>
+
+  <div id="liveGameSetupLoading" class="card live-game-loading">Loading teams, roster, and stat packages…</div>
+
+  <form id="liveGameSetupForm" class="live-game-setup" hidden onsubmit="submitLiveGameSetup(event)">
+    <div class="live-game-setup-grid">
+      <article class="card live-game-panel">
+        <div class="live-game-panel-heading"><span>01</span><div><h3>Matchup</h3><p>Set the basic game details.</p></div></div>
+        <div class="live-game-fields">
+          <label>Game Date<input id="liveGameDate" type="date" required></label>
+          <label>Team<select id="liveGameTeam" required onchange="renderLiveGameRoster()"></select></label>
+          <label>Opponent<input id="liveGameOpponent" type="text" maxlength="80" placeholder="Opponent name" required></label>
+          <label>Location<select id="liveGameLocation"><option>Home</option><option>Away</option><option>Neutral</option></select></label>
+          <label>Game Format<select id="liveGameFormat" onchange="updateLiveGameFormat()"><option>Quarters</option><option>Halves</option></select></label>
+          <label>Minutes per Period<input id="liveGamePeriodLength" type="number" min="1" max="60" value="8" required></label>
+        </div>
+      </article>
+
+      <article class="card live-game-panel">
+        <div class="live-game-panel-heading"><span>02</span><div><h3>Available Roster</h3><p>Select every athlete dressed for this game.</p></div></div>
+        <div class="live-game-select-actions"><button class="btn" type="button" onclick="setLiveGameRosterSelection(true)">Select all</button><button class="btn" type="button" onclick="setLiveGameRosterSelection(false)">Clear</button></div>
+        <div id="liveGameRoster" class="live-game-roster"></div>
+      </article>
+    </div>
+
+    <article class="card live-game-panel live-game-stats-panel">
+      <div class="live-game-panel-heading"><span>03</span><div><h3>What Are We Tracking?</h3><p>Start with the essentials. Advanced stats can be turned on only when your staff can capture them reliably.</p></div></div>
+      <div id="liveGameStats" class="live-game-stat-grid"></div>
+    </article>
+
+    <div class="live-game-launch-bar">
+      <div><strong>Setup only</strong><p>This first step saves the game plan. Live tracking comes next.</p></div>
+      <button id="saveLiveGameSetupButton" class="btn btn-primary" type="submit">Save Game Setup</button>
+    </div>
+  </form>
+
+  <div id="liveGameSetupSuccess" class="card live-game-success" hidden>
+    <span>Setup saved</span>
+    <h3 id="liveGameSetupSuccessTitle">Game ready</h3>
+    <p>Your roster and stat package are stored. The live tracking screen is the next build step.</p>
+    <button class="btn" type="button" onclick="resetLiveGameSetup()">Set Up Another Game</button>
+  </div>
+</section>
