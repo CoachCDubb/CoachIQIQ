@@ -1,0 +1,61 @@
+<section class="live-game-page">
+  <div class="page-header live-game-page-header">
+    <div><span class="page-kicker">Game command center</span><h2>Live Game Plan</h2><p class="page-subtitle">Track only the winning details your staff chose for this game.</p></div>
+    <span class="live-game-phase"><span>1</span> Build the plan</span>
+  </div>
+  <div id="liveGameSetupLoading" class="card live-game-loading">Loading teams and roster…</div>
+  <div id="liveGameResumePanel" class="live-game-resume" hidden></div>
+
+  <form id="liveGameSetupForm" class="live-game-setup" hidden onsubmit="submitLiveGameSetup(event)">
+    <div class="live-game-setup-grid">
+      <article class="card live-game-panel">
+        <div class="live-game-panel-heading"><span>01</span><div><h3>Matchup</h3><p>Set the game or practice scrimmage details.</p></div></div>
+        <div class="live-game-fields">
+          <label>Session Type<select id="liveGameType" onchange="updateLiveGameType()"><option>Official Game</option><option>Practice Scrimmage</option></select></label>
+          <label>Game Date<input id="liveGameDate" type="date" required></label>
+          <label>Team<select id="liveGameTeam" required onchange="renderLiveGameRoster()"></select></label>
+          <label><span id="liveGameOpponentLabel">Opponent</span><input id="liveGameOpponent" type="text" maxlength="80" placeholder="Opponent name"></label>
+          <label>Location<select id="liveGameLocation"><option>Home</option><option>Away</option><option>Neutral</option></select></label>
+          <label>Game Format<select id="liveGameFormat" onchange="updateLiveGameFormat()"><option>Quarters</option><option>Halves</option></select></label>
+          <label>Minutes per Period<input id="liveGamePeriodLength" type="number" min="1" max="60" value="8" required></label>
+        </div>
+      </article>
+      <article class="card live-game-panel">
+        <div class="live-game-panel-heading"><span>02</span><div><h3>Available Roster</h3><p>Select the athletes available tonight. Players are only attached to player-specific objectives.</p></div></div>
+        <div class="live-game-select-actions"><button class="btn" type="button" onclick="setLiveGameRosterSelection(true)">Select all</button><button class="btn" type="button" onclick="setLiveGameRosterSelection(false)">Clear</button></div>
+        <div id="liveGameRoster" class="live-game-roster"></div>
+      </article>
+    </div>
+
+    <article class="card live-game-panel live-objective-builder">
+      <div class="live-game-panel-heading"><span>03</span><div><h3>Winning Objectives</h3><p>Build the few items you want visible during the game. No scorebook and no extra noise.</p></div></div>
+      <div class="objective-builder-grid">
+        <label>What to Track<select id="objectiveMetric" onchange="updateObjectiveBuilderFields()"><option>Transition Points</option><option>Offensive Rebounds</option><option>Turnovers</option><option>Paint Touches</option><option>Deflections</option><option>Fouls</option><option>Points</option><option value="Custom">Custom Category</option></select></label>
+        <label id="objectiveCustomLabelWrap" hidden>Category Name<input id="objectiveCustomLabel" maxlength="60" placeholder="e.g. Rim Decisions"></label>
+        <label>Game-Plan Goal<select id="objectiveGoal" onchange="updateObjectiveBuilderFields()"><option value="comparison">Win the battle</option><option value="minimum">Reach at least</option><option value="maximum">Stay under</option><option value="track">Just track it</option></select></label>
+        <label id="objectiveSubjectWrap">Who<select id="objectiveSubject" onchange="updateObjectiveBuilderFields()"><option value="our_team">Our team</option><option value="opponent_team">Opponent team</option><option value="our_player">Our player</option><option value="opponent_player">Opponent player</option></select></label>
+        <label id="objectivePlayerWrap" hidden>Player<span id="objectivePlayerControl"></span></label>
+        <label id="objectiveTargetWrap">Target / Margin<input id="objectiveTarget" type="number" min="0" max="9999" value="1"></label>
+        <label id="objectiveDirectionWrap">Winning Means<select id="objectiveDirection"><option value="higher">More is better</option><option value="lower">Fewer is better</option></select></label>
+        <label>Unit<select id="objectiveUnit"><option value="count">Count</option><option value="points">Points</option></select></label>
+        <button class="btn btn-primary objective-add-button" type="button" onclick="addLiveGameObjective()">+ Add Objective</button>
+      </div>
+      <div id="liveGameObjectives" class="objective-plan-list"></div>
+    </article>
+
+    <div class="live-game-launch-bar"><div><strong>Game-plan tracking</strong><p>The live screen will show only the objectives above.</p></div><button id="saveLiveGameSetupButton" class="btn btn-primary" type="submit">Save Game Plan</button></div>
+  </form>
+
+  <div id="liveGameSetupSuccess" class="card live-game-success" hidden><span>Game plan saved</span><h3 id="liveGameSetupSuccessTitle">Game ready</h3><p>Open the focused tracker whenever your staff is ready.</p><div class="live-game-success-actions"><button id="openSavedLiveGameButton" class="btn btn-primary" type="button">Start Focused Tracker</button><button class="btn" type="button" onclick="resetLiveGameSetup()">Build Another Plan</button></div></div>
+
+  <section id="liveGameTracker" class="live-game-tracker" hidden>
+    <header class="objective-tracker-header">
+      <div><span class="objective-live-badge">LIVE PLAN</span><h2><span id="liveTrackerTeam">Our Team</span> <small>vs.</small> <span id="liveTrackerOpponent">Opponent</span></h2><p id="liveTrackerPeriodLabel">Quarter 1</p></div>
+      <div class="objective-tracker-actions"><button type="button" onclick="createLiveCheckpoint('Timeout')">Timeout Report</button><button type="button" onclick="createLiveCheckpoint('End Quarter')">End Quarter</button><button type="button" onclick="undoLatestLiveTrackerEvent()">Undo</button><button class="exit" type="button" onclick="exitLiveGameTracker()">Exit</button></div>
+    </header>
+    <div id="liveTrackerSaveState" class="live-tracker-save-state">Ready</div>
+    <div id="liveTrackerObjectives" class="objective-tracker-grid"></div>
+    <article class="objective-recent"><div><strong>Recent taps</strong><small>Every tap saves immediately</small></div><div id="liveTrackerEvents" class="live-tracker-events"></div></article>
+    <div id="liveGameCheckpointReport" class="checkpoint-overlay" hidden><article class="checkpoint-report"><button class="checkpoint-close" type="button" onclick="closeLiveCheckpointReport()">×</button><span>CoachIQ Game Intelligence</span><h2 id="checkpointHeadline">Timeout Report</h2><div id="checkpointObjectiveRows"></div><h3>Next Huddle Priorities</h3><ol id="checkpointRecommendations"></ol><button class="btn btn-primary" type="button" onclick="closeLiveCheckpointReport()">Back to Tracker</button></article></div>
+  </section>
+</section>
