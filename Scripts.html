@@ -131,6 +131,10 @@ function loadPage(page, callback){
                     loadSettings(requestId);
                     break;
 
+                case "Staff":
+                    loadStaff(requestId);
+                    break;
+
                 case "PlayerProfile":
                     loadPlayerProfile();
                     break;
@@ -740,6 +744,159 @@ function loadSettings(requestId){
     })
     .getCoachIQSettings();
 
+}
+
+function loadStaff(requestId){
+  google.script.run
+    .withSuccessHandler(function(settings){
+      if(!isCurrentPage("Staff", requestId)){ return; }
+      renderStaffDirectory(settings.staff || []);
+    })
+    .withFailureHandler(function(error){
+      if(!isCurrentPage("Staff", requestId)){ return; }
+      console.error(error);
+      showToast("Unable to load staff.");
+    })
+    .getDropdownSettings();
+}
+
+function renderStaffDirectory(staff){
+  const directory = document.getElementById("staffDirectory");
+  const editor = document.getElementById("staffEditorList");
+  const count = document.getElementById("staffCount");
+  if(!directory || !editor){ return; }
+
+  directory.innerHTML = "";
+  editor.innerHTML = "";
+  if(count){ count.textContent = staff.length; }
+
+  if(!staff.length){
+    const empty = document.createElement("div");
+    empty.className = "staff-empty";
+    empty.innerHTML = "<strong>Build your staff directory</strong><p>Add your first coach to make them available in evaluator lists.</p>";
+    directory.appendChild(empty);
+  }
+
+  staff.forEach(function(name){
+    directory.appendChild(createStaffCard(name));
+    editor.appendChild(createStaffEditorRow(name));
+  });
+}
+
+function staffInitials(name){
+  return String(name || "")
+    .trim()
+    .split(/\s+/)
+    .slice(0, 2)
+    .map(function(part){ return part.charAt(0).toUpperCase(); })
+    .join("") || "--";
+}
+
+function createStaffCard(name){
+  const card = document.createElement("article");
+  card.className = "staff-card";
+
+  const avatar = document.createElement("span");
+  avatar.className = "staff-avatar";
+  avatar.textContent = staffInitials(name);
+
+  const copy = document.createElement("div");
+  const heading = document.createElement("h4");
+  heading.textContent = name;
+  const label = document.createElement("p");
+  label.textContent = "Coaching staff";
+  copy.appendChild(heading);
+  copy.appendChild(label);
+
+  const status = document.createElement("span");
+  status.className = "staff-active-badge";
+  status.textContent = "Active";
+
+  card.appendChild(avatar);
+  card.appendChild(copy);
+  card.appendChild(status);
+  return card;
+}
+
+function createStaffEditorRow(name){
+  const row = document.createElement("div");
+  row.className = "staff-editor-row";
+
+  const input = document.createElement("input");
+  input.type = "text";
+  input.className = "staff-name-input";
+  input.placeholder = "Coach or staff name";
+  input.value = name || "";
+  input.addEventListener("input", markStaffUnsaved);
+
+  const remove = document.createElement("button");
+  remove.type = "button";
+  remove.className = "staff-remove-button";
+  remove.setAttribute("aria-label", "Remove staff member");
+  remove.textContent = "\u00d7";
+  remove.addEventListener("click", function(){
+    row.remove();
+    markStaffUnsaved();
+  });
+
+  row.appendChild(input);
+  row.appendChild(remove);
+  return row;
+}
+
+function addStaffMember(){
+  const editor = document.getElementById("staffEditorList");
+  if(!editor){ return; }
+  const row = createStaffEditorRow("");
+  editor.appendChild(row);
+  row.querySelector("input").focus();
+  markStaffUnsaved();
+}
+
+function markStaffUnsaved(){
+  const state = document.getElementById("staffSaveState");
+  if(state){
+    state.textContent = "Unsaved changes";
+    state.classList.add("is-unsaved");
+  }
+}
+
+function saveStaffDirectory(){
+  const button = document.getElementById("saveStaffButton");
+  const names = Array.from(document.querySelectorAll("#staffEditorList .staff-name-input"))
+    .map(function(input){ return input.value.trim(); })
+    .filter(function(name, index, all){
+      return name && all.indexOf(name) === index;
+    });
+
+  if(button){
+    button.disabled = true;
+    button.textContent = "Saving...";
+  }
+
+  google.script.run
+    .withSuccessHandler(function(){
+      if(button){
+        button.disabled = false;
+        button.textContent = "Save staff";
+      }
+      renderStaffDirectory(names);
+      const state = document.getElementById("staffSaveState");
+      if(state){
+        state.textContent = "All changes saved";
+        state.classList.remove("is-unsaved");
+      }
+      showToast("Staff saved!");
+    })
+    .withFailureHandler(function(error){
+      if(button){
+        button.disabled = false;
+        button.textContent = "Save staff";
+      }
+      console.error(error);
+      showToast("Unable to save staff.");
+    })
+    .saveSettingList("Staff", names);
 }
 
 function showSettings(settings){
