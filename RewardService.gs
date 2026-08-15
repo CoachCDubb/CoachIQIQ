@@ -75,6 +75,7 @@ null,
  * Saves all Point Rewards.
  */
 function savePointRewards(rewards){
+  requireStaffCapability_("manage_settings");
 
   const lock = LockService.getScriptLock();
   lock.waitLock(10000);
