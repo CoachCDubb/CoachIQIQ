@@ -107,6 +107,8 @@ return {
 
     schoolName: settings["School Name"] || "",
 
+    mascotName: settings["Mascot Name"] || "",
+
     currentSeason: settings["Current Season"] || "",
 
     sport: settings["Sport"] || "Football",
@@ -145,6 +147,7 @@ function saveProgramInformation(data) {
   setSettingValues_({
     "Program Name": String(data.programName || "").trim(),
     "School Name": String(data.schoolName || "").trim(),
+    "Mascot Name": String(data.mascotName || "").trim(),
     "Current Season": String(data.currentSeason || "").trim(),
     "Sport": String(data.sport || "Football").trim(),
     "Primary Color": normalizeThemeColor_(data.primaryColor, "#1E3A5F"),
@@ -186,6 +189,57 @@ function safeSettingValue_(value) {
   const text = String(value == null ? "" : value);
   return /^[=+\-@]/.test(text) ? "'" + text : text;
 }
+
+function uploadCoachIQLogo(file) {
+  file = file || {};
+  const mimeType = String(file.mimeType || "");
+  if (["image/png", "image/jpeg"].indexOf(mimeType) === -1) {
+    throw new Error("Choose a PNG or JPEG logo.");
+  }
+  const bytes = Utilities.base64Decode(String(file.base64 || ""));
+  if (!bytes.length || bytes.length > 2 * 1024 * 1024) {
+    throw new Error("The logo must be smaller than 2 MB.");
+  }
+  const safeName = String(file.name || "coachiq-logo").replace(/[^a-z0-9._-]/gi, "-");
+  const previousFileId = getSetting("Logo File ID");
+  const driveFile = DriveApp.createFile(Utilities.newBlob(bytes, mimeType, safeName));
+  try { driveFile.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW); } catch (error) { /* Domain policy may require signed-in access. */ }
+  const url = "https://drive.google.com/thumbnail?id=" + driveFile.getId() + "&sz=w400";
+  setSettingValues_({"Logo URL": url, "Logo File ID": driveFile.getId()});
+  if (previousFileId && previousFileId !== driveFile.getId()) {
+    try { DriveApp.getFileById(previousFileId).setTrashed(true); } catch (error) { /* Keep inaccessible legacy files untouched. */ }
+  }
+  return {url: url, name: driveFile.getName()};
+}
+
+function getStaffDirectoryData() {
+  const settings = getCoachIQSettings();
+  let profiles = [];
+  try { profiles = JSON.parse(getSetting("Staff Profiles") || "[]"); } catch (error) { profiles = []; }
+  if (!Array.isArray(profiles) || !profiles.length) {
+    profiles = settings.staff.map(function(name, index) {
+      return {id: "staff-" + (index + 1), name: name, email: "", role: index ? "Assistant Coach" : "Head Coach", teams: [], capabilities: index ? ["run_sessions", "evaluate_players", "view_intelligence"] : ["manage_roster", "run_sessions", "evaluate_players", "view_intelligence", "manage_settings"]};
+    });
+  }
+  return {profiles: profiles, teams: settings.teams || []};
+}
+
+function saveStaffProfiles(profiles) {
+  if (!Array.isArray(profiles) || profiles.length > 100) throw new Error("Invalid staff directory.");
+  const allowedRoles = ["Head Coach", "Assistant Coach", "Position Coach", "Analyst", "Support Staff"];
+  const allowedCapabilities = ["manage_roster", "run_sessions", "evaluate_players", "view_intelligence", "manage_settings"];
+  const validTeams = getCoachIQSettings().teams || [];
+  const cleaned = profiles.map(function(profile, index) {
+    const name = String(profile.name || "").trim();
+    if (!name) throw new Error("Every staff member needs a name.");
+    const role = allowedRoles.indexOf(profile.role) >= 0 ? profile.role : "Assistant Coach";
+    return {id: String(profile.id || "staff-" + (index + 1)), name: name, email: String(profile.email || "").trim().toLowerCase(), role: role,
+      teams: (profile.teams || []).filter(function(team) { return validTeams.indexOf(team) >= 0; }),
+      capabilities: (profile.capabilities || []).filter(function(capability) { return allowedCapabilities.indexOf(capability) >= 0; })};
+  });
+  setSettingValues_({"Staff": cleaned.map(function(p) { return p.name; }).join(", "), "Staff Profiles": JSON.stringify(cleaned)});
+  return {profiles: cleaned, teams: validTeams};
+}
 /**
  * Saves the Teams setting.
  */
@@ -216,25 +270,15 @@ function saveTeams(teams) {
  * Saves any comma-separated setting list.
  */
 function saveSettingList(settingName, items) {
-
-  const sheet = SpreadsheetApp
-    .getActive()
-    .getSheetByName(SETTINGS_SHEET);
-
-  const data = sheet.getDataRange().getValues();
-
-  for (let i = 0; i < data.length; i++) {
-
-    if (data[i][0] === settingName) {
-
-      sheet
-        .getRange(i + 1, 2)
-        .setValue(items.join(", "));
-
-      return;
-
-    }
-
-  }
-
+  const cleanedItems = (Array.isArray(items) ? items : []).map(function(item) {
+    return String(item || "").trim();
+  }).filter(function(item) {
+    return item !== "";
+  });
+  setSettingValues_((function() {
+    const update = {};
+    update[settingName] = cleanedItems.join(", ");
+    return update;
+  })());
+  return getCoachIQSettings();
 }
