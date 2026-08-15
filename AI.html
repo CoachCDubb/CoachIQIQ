@@ -1,7 +1,7 @@
-<section>
-
-<h2>CoachIQ AI</h2>
-
-<p>AI Assistant coming soon.</p>
-
+<section class="intelligence-page">
+  <div class="page-header"><div><span class="page-kicker">Decision room</span><h2>CoachIQ Intelligence</h2><p class="page-subtitle" id="intelligenceScope">Analyzing your assigned athletes and position groups.</p></div><button class="btn" onclick="loadIntelligence(PageNavigation.requestId)">Refresh analysis</button></div>
+  <div class="intelligence-hero"><span>COACHING PRIORITIES</span><h3>What needs your attention next</h3><div id="intelligenceActions">Building recommendations...</div></div>
+  <div class="intelligence-metrics"><article><small>ATHLETES IN SCOPE</small><strong id="intelligencePlayers">--</strong></article><article><small>RECENT ATTENDANCE</small><strong id="intelligenceAttendance">--</strong></article><article><small>SESSIONS ANALYZED</small><strong id="intelligenceSessions">--</strong></article><article><small>POSITION GROUPS</small><strong id="intelligencePositionCount">--</strong></article></div>
+  <div class="intelligence-grid intelligence-deep-grid"><article class="card"><span class="page-kicker">Unit comparison</span><h3>Position group performance</h3><div id="intelligencePositions"></div></article><article class="card"><span class="page-kicker">Development priorities</span><h3>Program pillars</h3><div id="intelligencePillars"></div></article><article class="card"><span class="page-kicker">Positive momentum</span><h3>Top performers</h3><div id="intelligenceTop"></div></article><article class="card"><span class="page-kicker">Coach review</span><h3>Needs attention</h3><div id="intelligenceNeeds"></div></article></div>
+  <div class="intelligence-note"><strong>How to use this:</strong> Rankings use completed evaluations from the eight most recent completed sessions and honor the signed-in coach’s team and position-group assignments.</div>
 </section>
