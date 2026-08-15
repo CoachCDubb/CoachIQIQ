@@ -66,6 +66,7 @@ rows.push(row);
  * Updates a single evaluation score.
  */
 function updateEvaluationScore(sessionId, playerId, category, score){
+requirePlayerAccess_(playerId);
 
 const sheet = SpreadsheetApp
 .getActive()
@@ -90,6 +91,8 @@ if (!categoryColumn) {
       data[i][1] === playerId
     ){
 
+      const previousScore = data[i][categoryColumn - 1];
+
       // Update the score
       sheet
   .getRange(i + 1, categoryColumn)
@@ -101,6 +104,21 @@ if (!categoryColumn) {
     .setValue(new Date());
 
 practiceEvaluationCache = null;
+      try {
+        const player = getPlayer(playerId) || {};
+        logCoachIQAudit({
+          action: "UPDATE_EVALUATION_SCORE",
+          entityType: "Player Evaluation",
+          entityId: sessionId + ":" + playerId + ":" + category,
+          team: player.Team || "",
+          beforeValue: previousScore,
+          afterValue: score,
+          success: true,
+          error: ""
+        });
+      } catch (auditError) {
+        console.error("Evaluation saved, but audit logging failed: " + auditError.message);
+      }
       return score;
 
     }
@@ -114,6 +132,7 @@ practiceEvaluationCache = null;
  * Updates player evaluation notes.
  */
 function updateEvaluationNotes(sessionId, playerId, notes){
+  requirePlayerAccess_(playerId);
 
   const sheet = SpreadsheetApp
     .getActive()
@@ -130,6 +149,8 @@ function updateEvaluationNotes(sessionId, playerId, notes){
       data[i][1] === playerId
     ){
 
+      const previousNotes = String(data[i][cols["Notes"] - 1] || "");
+
       // Notes
       sheet
     .getRange(i + 1, cols["Notes"])
@@ -141,6 +162,21 @@ function updateEvaluationNotes(sessionId, playerId, notes){
     .setValue(new Date());
 
 practiceEvaluationCache = null;
+      try {
+        const player = getPlayer(playerId) || {};
+        logCoachIQAudit({
+          action: "UPDATE_EVALUATION_NOTES",
+          entityType: "Player Evaluation",
+          entityId: sessionId + ":" + playerId + ":Notes",
+          team: player.Team || "",
+          beforeValue: previousNotes ? "Note present (" + previousNotes.length + " characters)" : "No note",
+          afterValue: notes ? "Note present (" + String(notes).length + " characters)" : "No note",
+          success: true,
+          error: ""
+        });
+      } catch (auditError) {
+        console.error("Evaluation notes saved, but audit logging failed: " + auditError.message);
+      }
       return notes;
 
     }
@@ -167,6 +203,8 @@ function getEvaluationScores(sessionId){
   const headers = data[0];
 
   const scores = {};
+  const allowedPlayers = {};
+  filterPlayersForCurrentStaff_(getPlayers()).forEach(function(player){ allowedPlayers[String(player[0])] = true; });
 
   for(let i = 1; i < data.length; i++){
 
@@ -175,6 +213,7 @@ function getEvaluationScores(sessionId){
     }
 
     const playerId = data[i][1];
+    if(!allowedPlayers[String(playerId)]){ continue; }
 
     scores[playerId] = {
 
@@ -197,6 +236,7 @@ for(let c = 6; c < headers.length - 2; c++){
  * Updates player attendance.
  */
 function updateAttendance(sessionId, playerId, present){
+  requirePlayerAccess_(playerId);
 
   const sheet = SpreadsheetApp
     .getActive()
@@ -213,6 +253,8 @@ function updateAttendance(sessionId, playerId, present){
       data[i][cols["Player ID"] - 1] === playerId
     ){
 
+      const previousAttendance = data[i][cols["Attendance"] - 1];
+
       sheet
         .getRange(i + 1, cols["Attendance"])
         .setValue(present);
@@ -222,6 +264,21 @@ function updateAttendance(sessionId, playerId, present){
         .setValue(new Date());
 
 practiceEvaluationCache = null;
+      try {
+        const player = getPlayer(playerId) || {};
+        logCoachIQAudit({
+          action: "UPDATE_ATTENDANCE",
+          entityType: "Player Evaluation",
+          entityId: sessionId + ":" + playerId + ":Attendance",
+          team: player.Team || "",
+          beforeValue: previousAttendance,
+          afterValue: present,
+          success: true,
+          error: ""
+        });
+      } catch (auditError) {
+        console.error("Attendance saved, but audit logging failed: " + auditError.message);
+      }
       return present;
 
     }
@@ -236,6 +293,7 @@ practiceEvaluationCache = null;
  * Returns notes for one player in one session.
  */
 function getEvaluationNotes(sessionId, playerId){
+  requirePlayerAccess_(playerId);
 
   const sheet = SpreadsheetApp
     .getActive()
@@ -348,10 +406,6 @@ practiceEvaluationCache = null;
 }
 function getPracticeEvaluations(){
 
-  if(practiceEvaluationCache){
-    return practiceEvaluationCache;
-  }
-
   const sheet = SpreadsheetApp
     .getActive()
     .getSheetByName("Practice Evaluations");
@@ -374,7 +428,11 @@ function getPracticeEvaluations(){
     )
     .getValues();
 
-  practiceEvaluationCache = data.map(function(row){
+  const allowedPlayers = {};
+  filterPlayersForCurrentStaff_(getPlayers()).forEach(function(player){ allowedPlayers[String(player[0])] = true; });
+  practiceEvaluationCache = data.filter(function(row){
+    return allowedPlayers[String(row[1])];
+  }).map(function(row){
     return rowToObject(headers,row);
   });
 
