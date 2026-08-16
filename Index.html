@@ -7,12 +7,6 @@
 
   <?!= include('Styles'); ?>
 
-<?!= include('SharedJS'); ?>
-<?!= include('DashboardJS'); ?>
-<?!= include('PlayersJS'); ?>
-<?!= include('SessionsJS'); ?>
-<?!= include('SettingsJS'); ?>
-
 </head>
 
 <body>
@@ -69,6 +63,11 @@
   </div>
 
   <div id="toast" class="toast"></div>
+
+  <!-- Keep the Live Game shell in the initial app document. Apps Script can
+       occasionally return an empty fragment for a large HTML partial; this
+       local template lets the authorized page request render reliably. -->
+  <template id="liveGamePageTemplate"><?!= include('Game'); ?></template>
 
   <div id="tutorialOverlay" class="tutorial-overlay" hidden aria-live="polite">
     <div class="tutorial-popover">
