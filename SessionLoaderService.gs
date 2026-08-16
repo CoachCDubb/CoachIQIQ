@@ -21,6 +21,9 @@ function getSessionViewData(sessionId, useEvaluationPlayers) {
   const players = useEvaluationPlayers
     ? getPlayersByIdsForSession_(Object.keys(scores))
     : getPlayersByTeams(teams);
+  const allowedIds = {};
+  players.forEach(function(player) { allowedIds[String(player["Player ID"] || player[0])] = true; });
+  Object.keys(scores).forEach(function(playerId) { if (!allowedIds[String(playerId)]) delete scores[playerId]; });
   const rewards = getSessionRewards_(scores);
   const settings = getDropdownSettings();
   settings.rewards = rewards;
@@ -91,7 +94,7 @@ function getPlayersByIdsForSession_(playerIds) {
     wantedIds[String(playerId)] = true;
   });
 
-  return data
+  return filterPlayersForCurrentStaff_(data)
     .filter(function(row){
       return wantedIds[String(row[0])] === true;
     })
