@@ -9,6 +9,7 @@ let currentPlayerProfile = null;
 function renderPlayers(players){
 
   const tbody = document.querySelector("#playersTable tbody");
+  const canManageRoster = ((CoachIQ.access || {}).capabilities || []).indexOf("manage_roster") >= 0;
 
   tbody.innerHTML = "";
 
@@ -35,7 +36,7 @@ function renderPlayers(players){
             👁
           </button>
 
-          <button
+          ${canManageRoster ? `<button
             class="action-btn edit-btn"
             onclick="openPlayerModal('${player[0]}', true)">
             ✏️
@@ -45,7 +46,7 @@ function renderPlayers(players){
             class="action-btn delete-btn"
             onclick="archivePlayer('${player[0]}')">
             📦
-          </button>
+          </button>` : ""}
 
         </td>
 

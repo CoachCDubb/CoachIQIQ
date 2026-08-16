@@ -12,7 +12,7 @@
 
     </div>
 
-    <div class="player-page-actions">
+    <div class="player-page-actions" data-capability="manage_roster">
       <button class="btn-v2 btn-secondary-v2 btn-lg-v2" type="button" onclick="openRosterImportModal()">
         Upload Player Roster
       </button>
@@ -85,7 +85,7 @@
 
 </section>
 
-<div id="rosterImportModal" class="modal" style="display:none;">
+<div id="rosterImportModal" class="modal" data-capability="manage_roster" style="display:none;">
   <div class="modal-content roster-import-modal">
     <button class="modal-close" type="button" aria-label="Close roster upload" onclick="closeRosterImportModal()">&times;</button>
     <div class="roster-import-heading">

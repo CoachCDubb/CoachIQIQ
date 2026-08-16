@@ -24,6 +24,7 @@
           <option>Soccer</option><option>Volleyball</option><option>Other</option>
         </select>
       </label>
+      <label>Attendance Standard (%)<input id="programAttendanceStandard" type="number" min="1" max="100" step="1" value="75"><small>The minimum attendance rate your program expects.</small></label>
       <label class="settings-logo-control">Program Logo <small>PNG or JPEG, up to 2 MB</small>
         <span class="logo-upload-row"><img id="programLogoPreview" alt="Program logo preview" hidden><input id="programLogoFile" type="file" accept="image/png,image/jpeg" onchange="previewProgramLogo(this)"><button id="uploadLogoButton" class="btn" type="button" onclick="uploadProgramLogo()">Upload logo</button></span>
         <input id="programLogoUrl" type="hidden">
