@@ -27,13 +27,14 @@ function getPlayers() {
  */
 function getPlayersForUI() {
 
-  return getPlayers().filter(player => player[7] !== "Archived");
+  return filterPlayersForCurrentStaff_(getPlayers()).filter(player => player[7] !== "Archived");
 
 }
 /**
  * Updates an existing player.
  */
 function updatePlayer(player) {
+  requireStaffCapability_("manage_roster");
 
   if (!player || !String(player.id || "").trim()) {
     throw new Error("Player ID is required.");
@@ -42,6 +43,7 @@ function updatePlayer(player) {
       !String(player.lastName || "").trim()) {
     throw new Error("First Name and Last Name are required.");
   }
+  requirePlayerAccess_(player.id);
 
   const lock = LockService.getScriptLock();
   lock.waitLock(10000);
@@ -58,6 +60,16 @@ function updatePlayer(player) {
 
     if (data[i][0] == player.id) {
 
+      const previousPlayer = {
+        firstName: data[i][1],
+        lastName: data[i][2],
+        jersey: data[i][3],
+        grade: data[i][4],
+        team: data[i][5],
+        position: data[i][6],
+        status: data[i][7]
+      };
+
       sheet.getRange(i + 1, 2).setValue(player.firstName);
       sheet.getRange(i + 1, 3).setValue(player.lastName);
       sheet.getRange(i + 1, 4).setValue(player.jersey);
@@ -65,6 +77,29 @@ function updatePlayer(player) {
       sheet.getRange(i + 1, 6).setValue(player.team);
       sheet.getRange(i + 1, 7).setValue(player.position);
       sheet.getRange(i + 1, 8).setValue(player.status);
+
+      try {
+        logCoachIQAudit({
+          action: "UPDATE_PLAYER",
+          entityType: "Player",
+          entityId: player.id,
+          team: player.team || previousPlayer.team || "",
+          beforeValue: previousPlayer,
+          afterValue: {
+            firstName: player.firstName,
+            lastName: player.lastName,
+            jersey: player.jersey,
+            grade: player.grade,
+            team: player.team,
+            position: player.position,
+            status: player.status
+          },
+          success: true,
+          error: ""
+        });
+      } catch (auditError) {
+        console.error("Player updated, but audit logging failed: " + auditError.message);
+      }
 
       return player.id;
 
@@ -101,6 +136,7 @@ function getNextPlayerId() {
  * Adds a new player.
  */
 function addPlayer(player) {
+  requireStaffCapability_("manage_roster");
 
   const sheet = SpreadsheetApp
     .getActive()
@@ -117,12 +153,36 @@ function addPlayer(player) {
     player.status
   ]);
 
+  try {
+    logCoachIQAudit({
+      action: "ADD_PLAYER",
+      entityType: "Player",
+      entityId: player.id,
+      team: player.team || "",
+      beforeValue: "Player did not exist",
+      afterValue: {
+        firstName: player.firstName,
+        lastName: player.lastName,
+        jersey: player.jersey,
+        grade: player.grade,
+        team: player.team,
+        position: player.position,
+        status: player.status
+      },
+      success: true,
+      error: ""
+    });
+  } catch (auditError) {
+    console.error("Player added, but audit logging failed: " + auditError.message);
+  }
+
 }
 
 /**
  * Validates and imports a roster in one batch without overwriting players.
  */
 function importPlayers(roster) {
+  requireStaffCapability_("manage_roster");
 
   if (!Array.isArray(roster) || roster.length === 0) {
     throw new Error("No players were provided for import.");
@@ -179,6 +239,7 @@ function importPlayers(roster) {
     const validPositions = settings.positions || [];
     const validStatuses = settings.statuses || [];
     const importNames = {};
+    const skipped = [];
     const errors = [];
     const normalized = [];
 
@@ -192,7 +253,19 @@ function importPlayers(roster) {
 
       if (!firstName || !lastName) {
         errors.push("Row " + rowNumber + ": First Name and Last Name are required.");
+        return;
       }
+
+      const key = buildPlayerImportKey_(firstName, lastName, team);
+      if (existingNames[key] || importNames[key]) {
+        skipped.push({
+          rowNumber: rowNumber,
+          name: firstName + " " + lastName,
+          team: team
+        });
+        return;
+      }
+
       if (team && validTeams.length && validTeams.indexOf(team) === -1) {
         errors.push("Row " + rowNumber + ": Team '" + team + "' is not in CoachIQ Settings.");
       }
@@ -203,14 +276,7 @@ function importPlayers(roster) {
         errors.push("Row " + rowNumber + ": Status '" + status + "' is not in CoachIQ Settings.");
       }
 
-      const key = buildPlayerImportKey_(firstName, lastName, team);
-      if (key && (existingNames[key] || importNames[key])) {
-        errors.push("Row " + rowNumber + ": " + firstName + " " + lastName +
-          " already exists for " + (team || "this roster") + ".");
-      }
-      if (key) {
-        importNames[key] = true;
-      }
+      importNames[key] = true;
 
       normalized.push({
         firstName: firstName,
@@ -242,14 +308,50 @@ function importPlayers(roster) {
       return row;
     });
 
-    sheet.getRange(sheet.getLastRow() + 1, 1, rows.length, lastColumn)
-      .setValues(rows);
+    if (rows.length) {
+      sheet.getRange(sheet.getLastRow() + 1, 1, rows.length, lastColumn)
+        .setValues(rows);
+    }
 
-    return {
+    const result = {
       imported: rows.length,
-      firstPlayerId: rows[0][cols["Player ID"] - 1],
-      lastPlayerId: rows[rows.length - 1][cols["Player ID"] - 1]
+      skipped: skipped.length,
+      firstPlayerId: rows.length ? rows[0][cols["Player ID"] - 1] : "",
+      lastPlayerId: rows.length ? rows[rows.length - 1][cols["Player ID"] - 1] : ""
     };
+
+    try {
+      const importedTeams = normalized.map(function(player) {
+        return player.team;
+      }).filter(function(team, index, teams) {
+        return team && teams.indexOf(team) === index;
+      });
+
+      logCoachIQAudit({
+        action: "IMPORT_PLAYER_ROSTER",
+        entityType: "Roster Import",
+        entityId: result.firstPlayerId && result.lastPlayerId
+          ? result.firstPlayerId + ":" + result.lastPlayerId
+          : "NO_NEW_PLAYERS",
+        team: importedTeams.join(", "),
+        beforeValue: {
+          existingPlayers: existing.length
+        },
+        afterValue: {
+          submitted: roster.length,
+          imported: result.imported,
+          skippedDuplicates: result.skipped,
+          firstPlayerId: result.firstPlayerId,
+          lastPlayerId: result.lastPlayerId
+        },
+        success: true,
+        error: ""
+      });
+    } catch (auditError) {
+      console.error("Roster imported, but audit logging failed: " + auditError.message);
+    }
+
+    return result;
   } finally {
     lock.releaseLock();
   }
@@ -274,6 +376,8 @@ function buildPlayerImportKey_(firstName, lastName, team) {
  * Archives a player.
  */
 function archivePlayer(playerId) {
+  requireStaffCapability_("manage_roster");
+  requirePlayerAccess_(playerId);
 
   const sheet = SpreadsheetApp
     .getActive()
@@ -285,14 +389,35 @@ function archivePlayer(playerId) {
 
     if (data[i][0] == playerId) {
 
+      const previousStatus = data[i][7] || "Active";
+      const playerName = String(data[i][1] || "") + " " + String(data[i][2] || "");
+      const team = data[i][5] || "";
+
       // Column 8 = Status
       sheet.getRange(i + 1, 8).setValue("Archived");
 
-      return;
+      try {
+        logCoachIQAudit({
+          action: "ARCHIVE_PLAYER",
+          entityType: "Player",
+          entityId: playerId,
+          team: team,
+          beforeValue: {name: playerName.trim(), status: previousStatus},
+          afterValue: {name: playerName.trim(), status: "Archived"},
+          success: true,
+          error: ""
+        });
+      } catch (auditError) {
+        console.error("Player archived, but audit logging failed: " + auditError.message);
+      }
+
+      return playerId;
 
     }
 
   }
+
+  throw new Error("Player not found: " + playerId);
 
 }
 function getPlayersByTeams(selectedTeams){
@@ -311,7 +436,7 @@ function getPlayersByTeams(selectedTeams){
     .getRange(2,1,sheet.getLastRow()-1,sheet.getLastColumn())
     .getValues();
 
-  return data
+  return filterPlayersForCurrentStaff_(data)
     .filter(function(row){
 
       return selectedTeams.includes(
