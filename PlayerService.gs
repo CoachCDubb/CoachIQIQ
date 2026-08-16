@@ -556,6 +556,8 @@ return {
 
   attendance: insight.attendance,
 
+  attendanceStandard: settings.attendanceStandard,
+
   trend: insight.trend,
 
   history: insight.history,
