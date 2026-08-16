@@ -85,6 +85,7 @@ function loadPage(page, callback){
         container.innerHTML = html;
         PageNavigation.currentPage = page;
         PageNavigation.loadingPage = null;
+        applyStaffAccess(CoachIQ.access || {});
         updatePointTerminology();
 
         // Update Navigation
@@ -1423,6 +1424,7 @@ function showSettings(settings){
     settings.currentSeason;
 
   document.getElementById("programSport").value = settings.sport || "Football";
+  document.getElementById("programAttendanceStandard").value = settings.attendanceStandard || 75;
   document.getElementById("programPrimaryColor").value = settings.primaryColor || "#1E3A5F";
   document.getElementById("programSecondaryColor").value = settings.secondaryColor || "#F59E0B";
   document.getElementById("programLogoUrl").value = settings.logoUrl || "";
@@ -1454,6 +1456,7 @@ function saveProgramInformation(){
 
     currentSeason: document.getElementById("currentSeason").value,
     sport: document.getElementById("programSport").value,
+    attendanceStandard: Number(document.getElementById("programAttendanceStandard").value),
     primaryColor: document.getElementById("programPrimaryColor").value,
     secondaryColor: document.getElementById("programSecondaryColor").value,
     logoUrl: document.getElementById("programLogoUrl").value
@@ -1695,6 +1698,7 @@ function submitCoachIQOnboarding(event){
     mascotName: document.getElementById("onboardingMascotName").value,
     currentSeason: document.getElementById("onboardingSeason").value,
     sport: document.getElementById("onboardingSport").value,
+    attendanceStandard: Number(document.getElementById("onboardingAttendanceStandard").value),
     primaryColor: document.getElementById("onboardingPrimaryColor").value,
     secondaryColor: document.getElementById("onboardingSecondaryColor").value,
     logoUrl: document.getElementById("onboardingLogoUrl").value,
@@ -3457,13 +3461,28 @@ function filterLeaderboard(){
 function showLeaderboard(players){
 
   const container = document.getElementById("leaderboardContent");
+  const leaderName = document.getElementById("leaderboardLeaderName");
+  const leaderDetail = document.getElementById("leaderboardLeaderDetail");
+  const playerCount = document.getElementById("leaderboardPlayerCount");
+  const pointLabels = getCoachIQPointLabels();
+  const escapeLeaderboardValue = function(value){
+    return String(value == null ? "" : value).replace(/&/g,"&amp;").replace(/</g,"&lt;")
+      .replace(/>/g,"&gt;").replace(/"/g,"&quot;").replace(/'/g,"&#39;");
+  };
 
   let html = "";
 
+  if(playerCount){ playerCount.textContent = players ? players.length : 0; }
+
   if(!players || players.length === 0){
+    if(leaderName){ leaderName.textContent = "No leader yet"; }
+    if(leaderDetail){ leaderDetail.textContent = "Add player points to begin the standings"; }
     container.innerHTML = '<div class="leaderboard-empty">No players match these filters.</div>';
     return;
   }
+
+  if(leaderName){ leaderName.textContent = players[0].firstName + " " + players[0].lastName; }
+  if(leaderDetail){ leaderDetail.textContent = players[0].points + " " + pointLabels.points; }
 
   players.forEach(function(player){
 
@@ -3473,93 +3492,32 @@ function showLeaderboard(players){
     if(player.rank === 1){
 
       badgeClass = "gold";
-      badgeText = "🥇";
+      badgeText = "1";
 
     }else if(player.rank === 2){
 
       badgeClass = "silver";
-      badgeText = "🥈";
+      badgeText = "2";
 
     }else if(player.rank === 3){
 
       badgeClass = "bronze";
-      badgeText = "🥉";
+      badgeText = "3";
 
     }
 
-    html += `
-
-<div class="leaderboard-card"
-
-onclick="openPlayerModal('${player.playerId}',false)">
-
-<div style="display:flex;align-items:center;justify-content:space-between;">
-
-<div style="display:flex;align-items:center;gap:20px;">
-
-<div class="rank-badge ${badgeClass}">
-
-${badgeText}
-
-</div>
-
-<div>
-
-<div style="font-size:24px;font-weight:bold;">
-
-${player.firstName} ${player.lastName}
-
-</div>
-
-<div style="margin-top:8px;color:#666;">
-
-🏀 #${player.jersey}
-
-&nbsp;&nbsp;
-
-${player.team}
-
-&nbsp;&nbsp;
-
-Grade ${player.grade}
-
-</div>
-
-</div>
-
-</div>
-
-<div style="text-align:right;">
-
-<div class="points-total">
-
-${player.points}
-
-</div>
-
-<div class="points-label">
-
-<span data-point-label>${getCoachIQPointLabels().points}</span>
-
-</div>
-
-<div style="margin-top:12px;">
-
-🟢 ${player.positive}
-
-&nbsp;&nbsp;
-
-🔴 ${player.negative}
-
-</div>
-
-</div>
-
-</div>
-
-</div>
-
-`;
+    const playerId = escapeLeaderboardValue(player.playerId);
+    const name = escapeLeaderboardValue(player.firstName + " " + player.lastName);
+    const jersey = escapeLeaderboardValue(player.jersey || "—");
+    const team = escapeLeaderboardValue(player.team || "No team");
+    const grade = escapeLeaderboardValue(player.grade || "—");
+    html += `<button class="leaderboard-card rank-${Number(player.rank || 0)}" type="button" data-player-id="${playerId}" onclick="openPlayerModal(this.dataset.playerId,false)">
+      <span class="rank-badge ${badgeClass}">${badgeText}</span>
+      <span class="leaderboard-player-copy"><strong>${name}</strong><small><b>#${jersey}</b><span>${team}</span><span>Grade ${grade}</span></small></span>
+      <span class="leaderboard-point-breakdown"><small><i class="positive"></i>${Number(player.positive || 0)} earned</small><small><i class="negative"></i>${Number(player.negative || 0)} deducted</small></span>
+      <span class="leaderboard-points"><strong>${Number(player.points || 0)}</strong><small data-point-label>${escapeLeaderboardValue(pointLabels.points)}</small></span>
+      <span class="leaderboard-open" aria-hidden="true">›</span>
+    </button>`;
 
   });
 

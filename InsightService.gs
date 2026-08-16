@@ -38,7 +38,7 @@ function getProgramIntelligence() {
   const playerMap = {};
   players.forEach(function(player) { playerMap[String(player[0])] = {id:String(player[0]),name:String(player[1])+" "+String(player[2]),team:String(player[5]||""),position:String(player[6]||"Unassigned")}; });
   const recentIds = getRecentSessionIds(8);
-  const sheet = SpreadsheetApp.getActive().getSheetByName("Practice Evaluations");
+  const sheet = getCoachIQSpreadsheet_().getSheetByName("Practice Evaluations");
   const data = sheet.getDataRange().getValues();
   const headers = data[0] || [];
   const columns = {}; headers.forEach(function(header,index){columns[header]=index;});

@@ -196,7 +196,7 @@ function importPlayers(roster) {
   lock.waitLock(10000);
 
   try {
-    const sheet = SpreadsheetApp.getActive().getSheetByName(PLAYER_SHEET);
+    const sheet = getCoachIQSpreadsheet_().getSheetByName(PLAYER_SHEET);
 
     if (!sheet) {
       throw new Error("The Players sheet was not found.");
@@ -555,6 +555,8 @@ return {
   player: insight.player,
 
   attendance: insight.attendance,
+
+  attendanceStandard: settings.attendanceStandard,
 
   trend: insight.trend,
 

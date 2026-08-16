@@ -127,7 +127,7 @@ function createLiveGameSetup(data) {
   const gameId = "GAME-" + Utilities.formatDate(now, Session.getScriptTimeZone(), "yyyyMMdd-HHmmss") +
     "-" + Utilities.getUuid().slice(0, 6).toUpperCase();
   const userEmail = Session.getActiveUser().getEmail() || "";
-  const sheet = SpreadsheetApp.getActive().getSheetByName(LIVE_GAMES_SHEET);
+  const sheet = getCoachIQSpreadsheet_().getSheetByName(LIVE_GAMES_SHEET);
   const lock = LockService.getScriptLock();
   lock.waitLock(10000);
   try {
@@ -170,7 +170,7 @@ function initializeLiveGameSheets_() {
 }
 
 function ensureLiveGameSheet_(sheetName, headers) {
-  const spreadsheet = SpreadsheetApp.getActive();
+  const spreadsheet = getCoachIQSpreadsheet_();
   let sheet = spreadsheet.getSheetByName(sheetName);
   if (!sheet) {
     sheet = spreadsheet.insertSheet(sheetName);
@@ -264,7 +264,7 @@ function normalizeLiveGameCategoryKey_(value) {
 }
 
 function getLiveGamePlanTemplates_() {
-  const sheet = SpreadsheetApp.getActive().getSheetByName(LIVE_GAME_TEMPLATES_SHEET);
+  const sheet = getCoachIQSpreadsheet_().getSheetByName(LIVE_GAME_TEMPLATES_SHEET);
   if (!sheet || sheet.getLastRow() < 2) return [];
   const access = getCurrentStaffAccess_();
   return sheet.getRange(2, 1, sheet.getLastRow() - 1, LIVE_GAME_TEMPLATE_HEADERS.length).getValues()
@@ -273,7 +273,7 @@ function getLiveGamePlanTemplates_() {
 }
 
 function getLastLiveGamePlans_() {
-  const sheet = SpreadsheetApp.getActive().getSheetByName(LIVE_GAMES_SHEET);
+  const sheet = getCoachIQSpreadsheet_().getSheetByName(LIVE_GAMES_SHEET);
   if (!sheet || sheet.getLastRow() < 2) return {};
   const values = sheet.getDataRange().getValues(); const headers = values.shift(); const cols = liveGameHeaderMap_(headers);
   const access = getCurrentStaffAccess_(); const plans = {};
@@ -295,7 +295,7 @@ function saveLiveGamePlanTemplate(data) {
   requireLiveGameTeamAccess_(team);
   const objectives = cleanLiveGameTrackingPlan_(data.objectives);
   if (!objectives.length) throw new Error("Add at least one objective before saving a template.");
-  const sheet = SpreadsheetApp.getActive().getSheetByName(LIVE_GAME_TEMPLATES_SHEET);
+  const sheet = getCoachIQSpreadsheet_().getSheetByName(LIVE_GAME_TEMPLATES_SHEET);
   const rows = sheet.getLastRow() > 1 ? sheet.getRange(2, 1, sheet.getLastRow() - 1, LIVE_GAME_TEMPLATE_HEADERS.length).getValues() : [];
   const duplicate = rows.some(function(row) { return String(row[1] || "").toLowerCase() === name.toLowerCase() && String(row[2] || "") === team; });
   if (duplicate) throw new Error("That team already has a template with this name.");
@@ -310,7 +310,7 @@ function saveLiveGamePlanTemplate(data) {
 
 function deleteLiveGamePlanTemplate(templateId) {
   requireStaffCapability_("run_sessions"); initializeLiveGameSheets_();
-  const sheet = SpreadsheetApp.getActive().getSheetByName(LIVE_GAME_TEMPLATES_SHEET);
+  const sheet = getCoachIQSpreadsheet_().getSheetByName(LIVE_GAME_TEMPLATES_SHEET);
   if (!sheet || sheet.getLastRow() < 2) throw new Error("The template was not found.");
   const rows = sheet.getRange(2, 1, sheet.getLastRow() - 1, LIVE_GAME_TEMPLATE_HEADERS.length).getValues();
   const index = rows.findIndex(function(row) { return String(row[0] || "") === String(templateId); });
@@ -320,7 +320,7 @@ function deleteLiveGamePlanTemplate(templateId) {
 }
 
 function getRecentLiveGames_() {
-  const sheet = SpreadsheetApp.getActive().getSheetByName(LIVE_GAMES_SHEET);
+  const sheet = getCoachIQSpreadsheet_().getSheetByName(LIVE_GAMES_SHEET);
   if (!sheet || sheet.getLastRow() < 2) return [];
   const values = sheet.getDataRange().getValues();
   const headers = values.shift();
@@ -345,7 +345,7 @@ function getRecentLiveGames_() {
 }
 
 function getCompletedLiveGames_() {
-  const sheet = SpreadsheetApp.getActive().getSheetByName(LIVE_GAMES_SHEET);
+  const sheet = getCoachIQSpreadsheet_().getSheetByName(LIVE_GAMES_SHEET);
   if (!sheet || sheet.getLastRow() < 2) return [];
   const values = sheet.getDataRange().getValues();
   const headers = values.shift();
@@ -446,16 +446,13 @@ function recordLiveGameObjectiveEvents(gameId, events) {
   if (!Array.isArray(events) || !events.length || events.length > 50) throw new Error("Send between 1 and 50 objective taps.");
   const gameRecord = findLiveGameRecord_(gameId);
   requireLiveGameTeamAccess_(gameRecord.game.Team);
+  if (String(gameRecord.game.Status || "") === "Completed") {
+    throw new Error("A completed game cannot accept more events.");
+  }
   const objectives = parseLiveGameJson_(gameRecord.game["Active Tracking Plan"], parseLiveGameJson_(gameRecord.game["Tracking Plan"], []));
-  const eventSheet = SpreadsheetApp.getActive().getSheetByName(LIVE_GAME_EVENTS_SHEET);
-  const rows = eventSheet.getLastRow() > 1
-    ? eventSheet.getRange(2, 1, eventSheet.getLastRow() - 1, LIVE_GAME_EVENT_HEADERS.length).getValues() : [];
-  const knownIds = {};
-  rows.forEach(function(row) { knownIds[String(row[0] || "")] = true; });
-  let sequence = rows.filter(function(row) { return String(row[1] || "") === String(gameId); }).length;
-  let latestPeriod = Number(gameRecord.game["Current Period"] || 1);
+  const eventSheet = getCoachIQSpreadsheet_().getSheetByName(LIVE_GAME_EVENTS_SHEET);
   const userEmail = Session.getActiveUser().getEmail() || "";
-  const newRows = events.map(function(rawEvent) {
+  const normalizedEvents = events.map(function(rawEvent) {
     const event = rawEvent || {};
     const objective = objectives.find(function(item) { return item.id === String(event.objectiveId || ""); });
     if (!objective || objective.active === false) throw new Error("That game-plan objective is not currently active.");
@@ -471,26 +468,35 @@ function recordLiveGameObjectiveEvents(gameId, events) {
     const period = Number(event.period);
     if (!Number.isInteger(period) || period < 1 || period > 20) throw new Error("Choose a valid period.");
     if (objective.subject === "our_player") requirePlayerAccess_(objective.playerId);
-    const requestedId = String(event.eventId || "");
-    if (requestedId && knownIds[requestedId]) return null;
-    const eventId = requestedId || "GEVT-" + Utilities.getUuid().slice(0, 12).toUpperCase();
-    knownIds[eventId] = true;
-    sequence++;
-    const now = new Date();
-    latestPeriod = period;
-    return [eventId, String(gameId), sequence, now, period, "", side, objective.playerId || "",
-      objective.id, delta, userEmail, false, now];
-  }).filter(function(row) { return row; });
-  if (newRows.length) {
-    const lock = LockService.getScriptLock();
-    lock.waitLock(10000);
-    try {
+    return {eventId:String(event.eventId || "") || "GEVT-" + Utilities.getUuid().slice(0, 12).toUpperCase(),
+      period:period, side:side, playerId:objective.playerId || "", objectiveId:objective.id, delta:delta};
+  });
+
+  const lock = LockService.getScriptLock();
+  lock.waitLock(10000);
+  try {
+    const rows = eventSheet.getLastRow() > 1
+      ? eventSheet.getRange(2, 1, eventSheet.getLastRow() - 1, LIVE_GAME_EVENT_HEADERS.length).getValues() : [];
+    const knownIds = {};
+    rows.forEach(function(row) { knownIds[String(row[0] || "")] = true; });
+    let sequence = rows.filter(function(row) { return String(row[1] || "") === String(gameId); }).length;
+    let latestPeriod = Number(gameRecord.game["Current Period"] || 1);
+    const newRows = normalizedEvents.map(function(event) {
+      if (knownIds[event.eventId]) return null;
+      knownIds[event.eventId] = true;
+      sequence++;
+      latestPeriod = event.period;
+      const now = new Date();
+      return [event.eventId, String(gameId), sequence, now, event.period, "", event.side, event.playerId,
+        event.objectiveId, event.delta, userEmail, false, now];
+    }).filter(function(row) { return row; });
+    if (newRows.length) {
       eventSheet.getRange(eventSheet.getLastRow() + 1, 1, newRows.length, LIVE_GAME_EVENT_HEADERS.length).setValues(newRows);
-    } finally {
-      lock.releaseLock();
+      updateLiveGameObjectiveState_(gameRecord, latestPeriod);
     }
+  } finally {
+    lock.releaseLock();
   }
-  updateLiveGameObjectiveState_(gameRecord, latestPeriod);
   return getLiveGameTracker(gameId);
 }
 
@@ -519,6 +525,9 @@ function recordLiveGameEvent(gameId, event) {
   const gameRecord = findLiveGameRecord_(gameId);
   const game = gameRecord.game;
   requireLiveGameTeamAccess_(game.Team);
+  if (String(game.Status || "") === "Completed") {
+    throw new Error("A completed game cannot accept more events.");
+  }
   const selectedStats = parseLiveGameJson_(game["Selected Stats"], []);
   const customStats = parseLiveGameJson_(game["Custom Stat Definitions"], []);
   const actions = buildLiveGameActions_(selectedStats, customStats);
@@ -543,26 +552,26 @@ function recordLiveGameEvent(gameId, event) {
     throw new Error("Select a player within your assigned roster scope.");
   }
 
-  const eventSheet = SpreadsheetApp.getActive().getSheetByName(LIVE_GAME_EVENTS_SHEET);
-  const existing = eventSheet.getLastRow() > 1
-    ? eventSheet.getRange(2, 1, eventSheet.getLastRow() - 1, LIVE_GAME_EVENT_HEADERS.length).getValues() : [];
+  const eventSheet = getCoachIQSpreadsheet_().getSheetByName(LIVE_GAME_EVENTS_SHEET);
   const requestedId = String(event.eventId || "");
-  const duplicate = existing.some(function(row) { return String(row[0] || "") === requestedId; });
-  if (!duplicate) {
-    const sequence = existing.filter(function(row) { return String(row[1] || "") === String(gameId); }).length + 1;
-    const eventId = requestedId || "GEVT-" + Utilities.getUuid().slice(0, 12).toUpperCase();
-    const now = new Date();
-    const lock = LockService.getScriptLock();
-    lock.waitLock(10000);
-    try {
+  const eventId = requestedId || "GEVT-" + Utilities.getUuid().slice(0, 12).toUpperCase();
+  const lock = LockService.getScriptLock();
+  lock.waitLock(10000);
+  try {
+    const existing = eventSheet.getLastRow() > 1
+      ? eventSheet.getRange(2, 1, eventSheet.getLastRow() - 1, LIVE_GAME_EVENT_HEADERS.length).getValues() : [];
+    const duplicate = existing.some(function(row) { return String(row[0] || "") === eventId; });
+    if (!duplicate) {
+      const sequence = existing.filter(function(row) { return String(row[1] || "") === String(gameId); }).length + 1;
+      const now = new Date();
       eventSheet.appendRow([eventId, String(gameId), sequence, now, period, safeLiveGameValue_(gameClock),
         action.side || "Us", playerId, eventType, Number(action.points || 0),
         Session.getActiveUser().getEmail() || "", false, now]);
-    } finally {
-      lock.releaseLock();
+      updateLiveGameStateFromEvents_(gameRecord, period);
     }
+  } finally {
+    lock.releaseLock();
   }
-  updateLiveGameStateFromEvents_(gameRecord, period);
   return getLiveGameTracker(gameId);
 }
 
@@ -571,7 +580,7 @@ function voidLiveGameEvent(gameId, eventId) {
   initializeLiveGameSheets_();
   const gameRecord = findLiveGameRecord_(gameId);
   requireLiveGameTeamAccess_(gameRecord.game.Team);
-  const sheet = SpreadsheetApp.getActive().getSheetByName(LIVE_GAME_EVENTS_SHEET);
+  const sheet = getCoachIQSpreadsheet_().getSheetByName(LIVE_GAME_EVENTS_SHEET);
   if (sheet.getLastRow() < 2) throw new Error("No game events were found.");
   const values = sheet.getRange(2, 1, sheet.getLastRow() - 1, LIVE_GAME_EVENT_HEADERS.length).getValues();
   const rowIndex = values.findIndex(function(row) {
@@ -594,7 +603,7 @@ function createLiveGameCheckpoint(gameId, checkpointType) {
   const tracker = getLiveGameTracker(gameId);
   if (!tracker.objectives || !tracker.objectives.length) throw new Error("This game does not have a tracking plan.");
   const report = buildLiveGameCheckpointReport_(tracker, checkpointType);
-  const sheet = SpreadsheetApp.getActive().getSheetByName(LIVE_GAME_CHECKPOINTS_SHEET);
+  const sheet = getCoachIQSpreadsheet_().getSheetByName(LIVE_GAME_CHECKPOINTS_SHEET);
   const checkpointId = "GCHK-" + Utilities.getUuid().slice(0, 12).toUpperCase();
   sheet.appendRow([checkpointId, String(gameId), checkpointType, tracker.game.currentPeriod, "", new Date(),
     JSON.stringify(report.objectives), JSON.stringify(report.recommendations)]);
@@ -725,7 +734,7 @@ function buildLiveGamePostgameReport_(tracker, previousReports) {
 }
 
 function getPreviousCompletedReports_(team) {
-  const sheet = SpreadsheetApp.getActive().getSheetByName(LIVE_GAMES_SHEET);
+  const sheet = getCoachIQSpreadsheet_().getSheetByName(LIVE_GAMES_SHEET);
   if (!sheet || sheet.getLastRow() < 2) return [];
   const values = sheet.getDataRange().getValues(); const headers = values.shift(); const cols = liveGameHeaderMap_(headers);
   return values.filter(function(row) { return String(row[cols.Status] || "") === "Completed" && String(row[cols.Team] || "") === String(team); })
@@ -752,7 +761,7 @@ function buildLiveGameTrends_(currentObjectives, previousReports) {
 
 function getLiveGameProgramTrends_(teamFilter) {
   initializeLiveGameSheets_();
-  const sheet = SpreadsheetApp.getActive().getSheetByName(LIVE_GAMES_SHEET);
+  const sheet = getCoachIQSpreadsheet_().getSheetByName(LIVE_GAMES_SHEET);
   if (!sheet || sheet.getLastRow() < 2) return {gamesAnalyzed:0,categories:[],alerts:[]};
   const values = sheet.getDataRange().getValues(); const headers = values.shift(); const cols = liveGameHeaderMap_(headers);
   const access = getCurrentStaffAccess_();
@@ -831,7 +840,7 @@ function buildLiveGameActions_(selectedStats, customStats) {
 }
 
 function getLiveGameEvents_(gameId) {
-  const sheet = SpreadsheetApp.getActive().getSheetByName(LIVE_GAME_EVENTS_SHEET);
+  const sheet = getCoachIQSpreadsheet_().getSheetByName(LIVE_GAME_EVENTS_SHEET);
   if (!sheet || sheet.getLastRow() < 2) return [];
   return sheet.getRange(2, 1, sheet.getLastRow() - 1, LIVE_GAME_EVENT_HEADERS.length).getValues()
     .filter(function(row) { return String(row[1] || "") === String(gameId) && row[11] !== true; })
@@ -862,7 +871,7 @@ function updateLiveGameStateFromEvents_(gameRecord, period) {
 }
 
 function findLiveGameRecord_(gameId) {
-  const sheet = SpreadsheetApp.getActive().getSheetByName(LIVE_GAMES_SHEET);
+  const sheet = getCoachIQSpreadsheet_().getSheetByName(LIVE_GAMES_SHEET);
   const values = sheet.getDataRange().getValues();
   const headers = values[0];
   const cols = liveGameHeaderMap_(headers);
