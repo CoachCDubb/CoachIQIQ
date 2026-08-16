@@ -113,6 +113,8 @@ return {
 
     sport: settings["Sport"] || "Football",
 
+    attendanceStandard: normalizeAttendanceStandard_(settings["Attendance Standard"]),
+
     primaryColor: normalizeThemeColor_(settings["Primary Color"], "#1E3A5F"),
 
     secondaryColor: normalizeThemeColor_(settings["Secondary Color"], "#F59E0B"),
@@ -152,6 +154,7 @@ function saveProgramInformation(data) {
     "Mascot Name": String(data.mascotName || "").trim(),
     "Current Season": String(data.currentSeason || "").trim(),
     "Sport": String(data.sport || "Football").trim(),
+    "Attendance Standard": validateAttendanceStandard_(data.attendanceStandard),
     "Primary Color": normalizeThemeColor_(data.primaryColor, "#1E3A5F"),
     "Secondary Color": normalizeThemeColor_(data.secondaryColor, "#F59E0B"),
     "Logo URL": String(data.logoUrl || "").trim().toLowerCase().indexOf("https://") === 0
@@ -172,6 +175,7 @@ function saveProgramInformation(data) {
         mascotName: beforeSettings.mascotName,
         currentSeason: beforeSettings.currentSeason,
         sport: beforeSettings.sport,
+        attendanceStandard: beforeSettings.attendanceStandard,
         primaryColor: beforeSettings.primaryColor,
         secondaryColor: beforeSettings.secondaryColor,
         logoUrl: beforeSettings.logoUrl
@@ -182,6 +186,7 @@ function saveProgramInformation(data) {
         mascotName: afterSettings.mascotName,
         currentSeason: afterSettings.currentSeason,
         sport: afterSettings.sport,
+        attendanceStandard: afterSettings.attendanceStandard,
         primaryColor: afterSettings.primaryColor,
         secondaryColor: afterSettings.secondaryColor,
         logoUrl: afterSettings.logoUrl
@@ -195,6 +200,19 @@ function saveProgramInformation(data) {
 
   return afterSettings;
 
+}
+
+function normalizeAttendanceStandard_(value) {
+  const standard = Number(value);
+  return Number.isInteger(standard) && standard >= 1 && standard <= 100 ? standard : 75;
+}
+
+function validateAttendanceStandard_(value) {
+  const standard = Number(value);
+  if (!Number.isInteger(standard) || standard < 1 || standard > 100) {
+    throw new Error("Attendance standard must be a whole number between 1 and 100.");
+  }
+  return standard;
 }
 
 function setSettingValues_(updates) {

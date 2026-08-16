@@ -67,6 +67,7 @@ function completeCoachIQOnboarding(data) {
       "Mascot Name": normalizeMascotName_(data.mascotName),
       "Current Season": String(data.currentSeason).trim(),
       "Sport": String(data.sport || "Football").trim(),
+      "Attendance Standard": validateAttendanceStandard_(data.attendanceStandard),
       "Primary Color": primaryColor,
       "Secondary Color": secondaryColor,
       "Logo URL": logoUrl,
