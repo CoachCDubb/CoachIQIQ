@@ -33,11 +33,22 @@ function include(filename) {
     .getContent();
 }
 function getPage(pageName) {
-  if (pageName === "Staff" || pageName === "Settings") {
-    requireStaffCapability_("manage_settings");
+  const pageCapabilities = {
+    Dashboard: "view_intelligence",
+    Sessions: "run_sessions",
+    Evaluations: "evaluate_players",
+    Game: "run_sessions",
+    Players: "evaluate_players",
+    Leaderboard: "view_intelligence",
+    Staff: "manage_settings",
+    AI: "view_intelligence",
+    Settings: "manage_settings",
+    GettingStarted: ""
+  };
+  if (!Object.prototype.hasOwnProperty.call(pageCapabilities, pageName)) {
+    throw new Error("That CoachIQ page is not available.");
   }
-  if (pageName === "AI") requireStaffCapability_("view_intelligence");
-  if (pageName === "Game") requireStaffCapability_("run_sessions");
+  if (pageCapabilities[pageName]) requireStaffCapability_(pageCapabilities[pageName]);
   return HtmlService
     .createHtmlOutputFromFile(pageName)
     .getContent();

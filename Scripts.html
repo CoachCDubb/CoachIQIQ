@@ -85,6 +85,7 @@ function loadPage(page, callback){
         container.innerHTML = html;
         PageNavigation.currentPage = page;
         PageNavigation.loadingPage = null;
+        applyStaffAccess(CoachIQ.access || {});
         updatePointTerminology();
 
         // Update Navigation
@@ -1423,6 +1424,7 @@ function showSettings(settings){
     settings.currentSeason;
 
   document.getElementById("programSport").value = settings.sport || "Football";
+  document.getElementById("programAttendanceStandard").value = settings.attendanceStandard || 75;
   document.getElementById("programPrimaryColor").value = settings.primaryColor || "#1E3A5F";
   document.getElementById("programSecondaryColor").value = settings.secondaryColor || "#F59E0B";
   document.getElementById("programLogoUrl").value = settings.logoUrl || "";
@@ -1454,6 +1456,7 @@ function saveProgramInformation(){
 
     currentSeason: document.getElementById("currentSeason").value,
     sport: document.getElementById("programSport").value,
+    attendanceStandard: Number(document.getElementById("programAttendanceStandard").value),
     primaryColor: document.getElementById("programPrimaryColor").value,
     secondaryColor: document.getElementById("programSecondaryColor").value,
     logoUrl: document.getElementById("programLogoUrl").value
@@ -1695,6 +1698,7 @@ function submitCoachIQOnboarding(event){
     mascotName: document.getElementById("onboardingMascotName").value,
     currentSeason: document.getElementById("onboardingSeason").value,
     sport: document.getElementById("onboardingSport").value,
+    attendanceStandard: Number(document.getElementById("onboardingAttendanceStandard").value),
     primaryColor: document.getElementById("onboardingPrimaryColor").value,
     secondaryColor: document.getElementById("onboardingSecondaryColor").value,
     logoUrl: document.getElementById("onboardingLogoUrl").value,
