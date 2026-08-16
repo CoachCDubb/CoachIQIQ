@@ -33,6 +33,12 @@ function include(filename) {
     .getContent();
 }
 function getPage(pageName) {
+  if (pageName === "Staff" || pageName === "Settings") {
+    requireStaffCapability_("manage_settings");
+  }
+  if (pageName === "AI") requireStaffCapability_("view_intelligence");
+  // Live Game markup is safe to render. Its data and write endpoints enforce
+  // run_sessions separately, so a user-resolution issue cannot blank the page.
   return HtmlService
     .createHtmlOutputFromFile(pageName)
     .getContent();

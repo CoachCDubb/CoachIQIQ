@@ -7,12 +7,6 @@
 
   <?!= include('Styles'); ?>
 
-<?!= include('SharedJS'); ?>
-<?!= include('DashboardJS'); ?>
-<?!= include('PlayersJS'); ?>
-<?!= include('SessionsJS'); ?>
-<?!= include('SettingsJS'); ?>
-
 </head>
 
 <body>
@@ -69,6 +63,10 @@
   </div>
 
   <div id="toast" class="toast"></div>
+
+  <!-- HtmlService sometimes fails to return this large partial through a
+       second server call. Cache it in the initial document instead. -->
+  <div id="embeddedLiveGamePage" hidden><?!= include('Game'); ?></div>
 
   <div id="tutorialOverlay" class="tutorial-overlay" hidden aria-live="polite">
     <div class="tutorial-popover">

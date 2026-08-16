@@ -138,6 +138,7 @@ sheet.getRange(i + 1, 9).setValue(new Date());
 }
 
 function reopenSession(sessionId){
+  requireStaffCapability_("run_sessions");
 
   const lock = LockService.getScriptLock();
   lock.waitLock(10000);
@@ -147,9 +148,13 @@ function reopenSession(sessionId){
     const sessionCols = getColumnMap("Sessions");
     const sessionData = sessionSheet.getDataRange().getValues();
     let found = false;
+    let previousStatus = "Completed";
+    let sessionTeams = "";
 
     for(let i = 1; i < sessionData.length; i++){
       if(sessionData[i][sessionCols["Session ID"] - 1] == sessionId){
+        previousStatus = sessionData[i][sessionCols["Status"] - 1] || "Completed";
+        sessionTeams = sessionData[i][sessionCols["Teams"] - 1] || "";
         sessionSheet.getRange(i + 1, sessionCols["Status"]).setValue("In Progress");
         sessionSheet.getRange(i + 1, sessionCols["Completed Time"] || 9)
           .clearContent();
@@ -178,6 +183,20 @@ function reopenSession(sessionId){
 
     sessionCache = null;
     practiceEvaluationCache = null;
+    try {
+      logCoachIQAudit({
+        action: "REOPEN_PRACTICE_SESSION",
+        entityType: "Practice Session",
+        entityId: sessionId,
+        team: sessionTeams,
+        beforeValue: previousStatus,
+        afterValue: "In Progress",
+        success: true,
+        error: ""
+      });
+    } catch (auditError) {
+      console.error("Session reopened, but audit logging failed: " + auditError.message);
+    }
     return sessionId;
   } finally {
     lock.releaseLock();
@@ -251,6 +270,7 @@ function testSessionEvaluations(){
 
 }
 function finishEntireSession(sessionId){
+  requireStaffCapability_("run_sessions");
 
   const lock = LockService.getScriptLock();
   lock.waitLock(10000);
@@ -271,6 +291,21 @@ function finishEntireSession(sessionId){
   completeEvaluations(sessionId);
 
   rebuildPlayerSeasonStats();
+
+    try {
+      logCoachIQAudit({
+        action: "COMPLETE_PRACTICE_SESSION",
+        entityType: "Practice Session",
+        entityId: sessionId,
+        team: session["Teams"] || "",
+        beforeValue: session["Status"] || "In Progress",
+        afterValue: "Completed",
+        success: true,
+        error: ""
+      });
+    } catch (auditError) {
+      console.error("Session completed, but audit logging failed: " + auditError.message);
+    }
 
     return sessionId;
   } finally {
