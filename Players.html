@@ -12,13 +12,14 @@
 
     </div>
 
-    <button
-        class="btn-v2 btn-primary-v2 btn-lg-v2"
-        onclick="openAddPlayerModal()">
-
+    <div class="player-page-actions">
+      <button class="btn-v2 btn-secondary-v2 btn-lg-v2" type="button" onclick="openRosterImportModal()">
+        Upload Player Roster
+      </button>
+      <button class="btn-v2 btn-primary-v2 btn-lg-v2" type="button" onclick="openAddPlayerModal()">
         + Add Player
-
-    </button>
+      </button>
+    </div>
 
 </div>
 
@@ -83,3 +84,39 @@
 
 
 </section>
+
+<div id="rosterImportModal" class="modal" style="display:none;">
+  <div class="modal-content roster-import-modal">
+    <button class="modal-close" type="button" aria-label="Close roster upload" onclick="closeRosterImportModal()">&times;</button>
+    <div class="roster-import-heading">
+      <div>
+        <span class="page-kicker">Roster operations</span>
+        <h2>Upload Player Roster</h2>
+      </div>
+      <button class="btn" type="button" onclick="downloadRosterTemplate()">Download CSV Template</button>
+    </div>
+
+    <div class="roster-import-instructions">
+      <strong>Safe import rules</strong>
+      <ul>
+        <li>Existing players are never edited or overwritten.</li>
+        <li>A matching first name, last name, and team is skipped automatically.</li>
+        <li>New players are appended only after the complete file passes validation.</li>
+      </ul>
+    </div>
+
+    <label class="roster-file-drop" for="rosterCsvFile">
+      <span class="roster-file-icon" aria-hidden="true">CSV</span>
+      <span><strong>Select a roster file</strong><small>CSV format, up to 500 players</small></span>
+      <input id="rosterCsvFile" type="file" accept=".csv,text/csv" onchange="previewRosterCsv(this)">
+    </label>
+
+    <div id="rosterImportMessage" class="roster-import-message">Choose a CSV file to preview the roster before importing.</div>
+    <div id="rosterImportPreview" class="roster-import-preview"></div>
+
+    <div class="roster-import-actions">
+      <button class="btn" type="button" onclick="closeRosterImportModal()">Cancel</button>
+      <button id="confirmRosterImport" class="btn btn-primary" type="button" onclick="importRoster()" disabled>Import New Players</button>
+    </div>
+  </div>
+</div>
