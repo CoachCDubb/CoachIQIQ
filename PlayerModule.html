@@ -9,6 +9,7 @@ let currentPlayerProfile = null;
 function renderPlayers(players){
 
   const tbody = document.querySelector("#playersTable tbody");
+  const canManageRoster = ((CoachIQ.access || {}).capabilities || []).indexOf("manage_roster") >= 0;
 
   tbody.innerHTML = "";
 
@@ -35,7 +36,7 @@ function renderPlayers(players){
             👁
           </button>
 
-          <button
+          ${canManageRoster ? `<button
             class="action-btn edit-btn"
             onclick="openPlayerModal('${player[0]}', true)">
             ✏️
@@ -45,7 +46,7 @@ function renderPlayers(players){
             class="action-btn delete-btn"
             onclick="archivePlayer('${player[0]}')">
             📦
-          </button>
+          </button>` : ""}
 
         </td>
 
@@ -208,6 +209,22 @@ function getStars(score){
   return stars;
 
 }
+function getPlayerAttendanceStanding(attendance, standard){
+  attendance = attendance || {};
+  const attendancePercent = Number(attendance.seasonPercentage || 0);
+  const attendanceRecorded = Number(attendance.present || 0) + Number(attendance.absent || 0);
+  const attendanceStandard = Number(standard || 75);
+  if(!attendanceRecorded){
+    return {label:"No attendance recorded", color:"#94A3B8", standard:attendanceStandard};
+  }
+  if(attendancePercent >= attendanceStandard){
+    return {label:"Meets program standard", color:"#16A34A", standard:attendanceStandard};
+  }
+  if(attendancePercent >= Math.max(0, attendanceStandard - 10)){
+    return {label:"Close to program standard", color:"#F59E0B", standard:attendanceStandard};
+  }
+  return {label:"Below program standard", color:"#DC2626", standard:attendanceStandard};
+}
 function renderPlayerProfile(profile){
 
     currentPlayerProfile = profile;
@@ -223,28 +240,21 @@ function renderPlayerProfile(profile){
     }
 
   const attendancePercent = profile.attendance.seasonPercentage;
+  const attendanceStanding = getPlayerAttendanceStanding(profile.attendance, profile.attendanceStandard);
+  const attendanceStandard = attendanceStanding.standard;
   const playerPoints = profile.points || {};
   const totalPoints = Number(playerPoints.total || 0);
   const positivePoints = Number(playerPoints.positive || 0);
   const negativePoints = Number(playerPoints.negative || 0);
 
   let attendanceBar = `
-    <div style="
-      width:100%;
-      height:18px;
-      background:#ddd;
-      border-radius:10px;
-      overflow:hidden;
-      margin-top:10px;
-      margin-bottom:15px;
-    ">
-
-      <div style="
-        width:${attendancePercent}%;
-        height:100%;
-        background:#22C55E;
-      "></div>
-
+    <div class="player-attendance-track" role="progressbar" aria-label="Player attendance" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${attendancePercent}">
+      <span class="player-attendance-fill" style="width:${attendancePercent}%;background:${attendanceStanding.color}"></span>
+      <span class="player-attendance-standard" style="left:${attendanceStandard}%" title="Program standard: ${attendanceStandard}%"></span>
+    </div>
+    <div class="player-attendance-standing">
+      <strong style="color:${attendanceStanding.color}">${attendanceStanding.label}</strong>
+      <span>Program standard: ${attendanceStandard}%</span>
     </div>
   `;
 

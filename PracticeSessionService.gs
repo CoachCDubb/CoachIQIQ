@@ -144,7 +144,7 @@ function reopenSession(sessionId){
   lock.waitLock(10000);
 
   try {
-    const sessionSheet = SpreadsheetApp.getActive().getSheetByName("Sessions");
+    const sessionSheet = getCoachIQSpreadsheet_().getSheetByName("Sessions");
     const sessionCols = getColumnMap("Sessions");
     const sessionData = sessionSheet.getDataRange().getValues();
     let found = false;
@@ -167,7 +167,7 @@ function reopenSession(sessionId){
       throw new Error("Session not found: " + sessionId);
     }
 
-    const evaluationSheet = SpreadsheetApp.getActive()
+    const evaluationSheet = getCoachIQSpreadsheet_()
       .getSheetByName("Practice Evaluations");
     const evaluationCols = getColumnMap("Practice Evaluations");
     const evaluationData = evaluationSheet.getDataRange().getValues();
