@@ -119,6 +119,10 @@ function loadPage(page, callback){
                     loadSessions(requestId);
                     break;
 
+                case "Game":
+                    loadLiveGameSetup(requestId);
+                    break;
+
                 case "Evaluations":
                     initializeEvaluationsPage(requestId);
                     break;
@@ -129,6 +133,14 @@ function loadPage(page, callback){
 
                 case "Settings":
                     loadSettings(requestId);
+                    break;
+
+                case "Staff":
+                    loadStaff(requestId);
+                    break;
+
+                case "AI":
+                    loadIntelligence(requestId);
                     break;
 
                 case "PlayerProfile":
@@ -182,9 +194,453 @@ const CoachIQ = {
 
   players: [],
 
-  rosterImport: []
+  rosterImport: [],
+
+  liveGame: {setup:null, objectives:[], tracker:null, saving:false, lastGameId:"", tapQueue:[], protectedTaps:[], tapTimer:null, syncing:false, adjustmentDraft:[], adjustmentType:"Live Adjustment"}
 
 };
+
+function loadLiveGameSetup(requestId){
+  document.body.classList.remove("live-game-mode");
+  google.script.run
+    .withSuccessHandler(function(setup){
+      if(!isCurrentPage("Game", requestId)){ return; }
+      CoachIQ.liveGame.setup = setup;
+      CoachIQ.liveGame.objectives = [];
+      populateLiveGameSetup(setup);
+    })
+    .withFailureHandler(function(error){
+      const loading = document.getElementById("liveGameSetupLoading");
+      if(loading){ loading.textContent = error.message || "Unable to load Live Game setup."; }
+      showToast("Unable to load Live Game setup.", "error");
+    })
+    .getLiveGameSetupData();
+}
+
+function populateLiveGameSetup(setup){
+  const loading = document.getElementById("liveGameSetupLoading");
+  const form = document.getElementById("liveGameSetupForm");
+  const teamSelect = document.getElementById("liveGameTeam");
+  if(!form || !teamSelect){ return; }
+
+  const teams = setup.teams || [];
+  teamSelect.innerHTML = teams.length
+    ? teams.map(function(team){ return `<option value="${escapeHtmlValue(team)}">${escapeHtmlValue(team)}</option>`; }).join("")
+    : '<option value="">Add a team in Settings first</option>';
+  teamSelect.disabled = !teams.length;
+  document.getElementById("liveGameDate").value = new Date().toISOString().split("T")[0];
+  document.getElementById("liveGameType").value = setup.defaults.gameType || "Official Game";
+  document.getElementById("liveGameLocation").value = setup.defaults.location || "Home";
+  document.getElementById("liveGameFormat").value = setup.defaults.format || "Quarters";
+  document.getElementById("liveGamePeriodLength").value = setup.defaults.periodLength || 8;
+  renderLiveGameRoster();
+  updateObjectiveBuilderFields();
+  renderLiveGameObjectives();
+  renderRecentLiveGames(setup.recentGames || []);
+  renderCompletedLiveGames(setup.completedGames || []);
+  renderLiveGameTemplateOptions();
+  updateLiveGameType();
+  if(loading){ loading.hidden = true; }
+  form.hidden = false;
+}
+
+function renderRecentLiveGames(games){
+  const panel = document.getElementById("liveGameResumePanel");
+  if(!panel || !games.length){ if(panel){ panel.hidden = true; } return; }
+  panel.innerHTML = '<div class="live-game-resume-heading"><div><strong>Resume a Saved Game</strong><p>Continue a setup or live game already stored in the Games sheet.</p></div></div>' +
+    '<div class="live-game-resume-list">' + games.map(function(game){
+      return `<button type="button" onclick="openLiveGameTracker('${escapeHtmlValue(game.gameId)}')"><span><strong>${escapeHtmlValue(game.team)} vs. ${escapeHtmlValue(game.opponent)}</strong>` +
+        `<small>${escapeHtmlValue(game.gameDate)} · ${escapeHtmlValue(game.gameType)}</small></span><b>${escapeHtmlValue(game.status)}</b></button>`;
+    }).join("") + '</div>';
+  panel.hidden = false;
+}
+
+function renderCompletedLiveGames(games){
+  const panel=document.getElementById("liveGameHistoryPanel");
+  if(!panel||!games.length){if(panel){panel.hidden=true;}return;}
+  panel.innerHTML='<div class="live-game-resume-heading"><div><strong>Completed Game Reports</strong><p>Review game-plan execution and patterns CoachIQ is carrying forward.</p></div></div><div class="live-game-resume-list">'+games.map(function(game){
+    const score=game.scored?game.achieved+" of "+game.scored+" achieved":"Tracking report";
+    return `<button type="button" onclick="openLiveGamePostgameReport('${escapeHtmlValue(game.gameId)}')"><span><strong>${escapeHtmlValue(game.team)} vs. ${escapeHtmlValue(game.opponent)}</strong><small>${escapeHtmlValue(game.gameDate)} · ${escapeHtmlValue(score)}</small></span><b>Report</b></button>`;
+  }).join("")+'</div>'; panel.hidden=false;
+}
+
+function openLiveGamePostgameReport(gameId){
+  google.script.run.withSuccessHandler(function(report){renderLiveCheckpointReport(report);}).withFailureHandler(function(error){showToast(error.message||"Unable to open the postgame report.","error");}).getLiveGamePostgameReport(gameId);
+}
+
+function renderLiveGameRoster(){
+  const container = document.getElementById("liveGameRoster");
+  const team = document.getElementById("liveGameTeam");
+  const setup = CoachIQ.liveGame.setup || {};
+  if(!container || !team){ return; }
+  const players = (setup.players || []).filter(function(player){
+    return player.team === team.value && player.status !== "Archived";
+  });
+  if(!players.length){
+    container.innerHTML = '<div class="live-game-empty">No available players were found for this team.</div>';
+    return;
+  }
+  container.innerHTML = players.map(function(player){
+    const name = (player.firstName + " " + player.lastName).trim();
+    return `<label class="live-game-player"><input class="live-game-player-check" type="checkbox" value="${escapeHtmlValue(player.id)}" checked>` +
+      `<span class="live-game-jersey">${escapeHtmlValue(player.jersey || "—")}</span><span><strong>${escapeHtmlValue(name)}</strong>` +
+      `<small>${escapeHtmlValue(player.position || "Unassigned")}</small></span></label>`;
+  }).join("");
+  updateObjectiveBuilderFields();
+}
+
+function handleLiveGameTeamChange(){renderLiveGameRoster();renderLiveGameTemplateOptions();}
+function renderLiveGameTemplateOptions(){
+  const select=document.getElementById("liveGameTemplateSelect");const team=document.getElementById("liveGameTeam");if(!select||!team){return;}
+  const templates=((CoachIQ.liveGame.setup||{}).gamePlanTemplates||[]).filter(function(item){return item.team===team.value;});
+  select.innerHTML='<option value="">Choose saved template</option>'+templates.map(function(item){return `<option value="${escapeHtmlValue(item.templateId)}">${escapeHtmlValue(item.name)}</option>`;}).join("");
+  const last=((CoachIQ.liveGame.setup||{}).lastGamePlans||{})[team.value];const button=document.getElementById("useLastLiveGamePlanButton");if(button){button.disabled=!last;button.title=last?"Last used against "+last.opponent:"No previous game plan found";}
+}
+function cloneLiveGamePlan(objectives){return (objectives||[]).map(function(item,index){const copy=Object.assign({},item);copy.active=true;copy.order=index;copy.addedDuringGame=false;return copy;});}
+function confirmReplaceLiveGamePlan(objectives,label){
+  const apply=function(){CoachIQ.liveGame.objectives=cloneLiveGamePlan(objectives);renderLiveGameObjectives();showToast(label+" loaded.");};
+  if(CoachIQ.liveGame.objectives.length){showConfirmModal("Replace current objectives?","This will replace the objectives currently in the builder.","Replace Plan",apply);}else{apply();}
+}
+function applySelectedLiveGameTemplate(){
+  const select=document.getElementById("liveGameTemplateSelect");if(!select||!select.value){showToast("Choose a saved template first.","error");return;}
+  const template=((CoachIQ.liveGame.setup||{}).gamePlanTemplates||[]).find(function(item){return item.templateId===select.value;});if(template){confirmReplaceLiveGamePlan(template.objectives,template.name);}
+}
+function useLastLiveGamePlan(){
+  const team=document.getElementById("liveGameTeam").value;const plan=((CoachIQ.liveGame.setup||{}).lastGamePlans||{})[team];if(!plan){showToast("No previous game plan was found for this team.","error");return;}
+  confirmReplaceLiveGamePlan(plan.objectives,"Last game plan");
+}
+function saveCurrentLiveGameTemplate(){
+  const input=document.getElementById("liveGameTemplateName");const name=input.value.trim();if(!name){showToast("Name the template first.","error");return;}if(!CoachIQ.liveGame.objectives.length){showToast("Add at least one objective first.","error");return;}
+  const button=input.nextElementSibling;button.disabled=true;button.textContent="Saving…";
+  google.script.run.withSuccessHandler(function(template){button.disabled=false;button.textContent="Save Current Plan as Template";input.value="";CoachIQ.liveGame.setup.gamePlanTemplates=(CoachIQ.liveGame.setup.gamePlanTemplates||[]).concat([template]);renderLiveGameTemplateOptions();document.getElementById("liveGameTemplateSelect").value=template.templateId;showToast("Game plan template saved.");}).withFailureHandler(function(error){button.disabled=false;button.textContent="Save Current Plan as Template";showToast(error.message||"Unable to save template.","error");}).saveLiveGamePlanTemplate({name:name,team:document.getElementById("liveGameTeam").value,objectives:CoachIQ.liveGame.objectives});
+}
+
+function setLiveGameRosterSelection(selected){
+  document.querySelectorAll(".live-game-player-check").forEach(function(input){ input.checked = selected; });
+}
+
+function updateObjectiveBuilderFields(){
+  const metric = document.getElementById("objectiveMetric");
+  const goal = document.getElementById("objectiveGoal");
+  const subject = document.getElementById("objectiveSubject");
+  if(!metric || !goal || !subject){ return; }
+  document.getElementById("objectiveCustomLabelWrap").hidden = metric.value !== "Custom";
+  const comparison = goal.value === "comparison";
+  document.getElementById("objectiveSubjectWrap").hidden = comparison;
+  document.getElementById("objectiveDirectionWrap").hidden = !comparison;
+  document.getElementById("objectiveTargetWrap").hidden = goal.value === "track";
+  const playerSubject = !comparison && (subject.value === "our_player" || subject.value === "opponent_player");
+  document.getElementById("objectivePlayerWrap").hidden = !playerSubject;
+  const control = document.getElementById("objectivePlayerControl");
+  if(playerSubject && control){
+    if(subject.value === "our_player"){
+      const team = document.getElementById("liveGameTeam").value;
+      const players = ((CoachIQ.liveGame.setup || {}).players || []).filter(function(player){ return player.team === team; });
+      control.innerHTML = '<select id="objectivePlayer">' + players.map(function(player){ return `<option value="${escapeHtmlValue(player.id)}">${escapeHtmlValue((player.firstName + " " + player.lastName).trim())}</option>`; }).join("") + '</select>';
+    } else {
+      control.innerHTML = '<input id="objectivePlayer" maxlength="60" placeholder="Opponent player name">';
+    }
+  }
+  const defaults = {"Transition Points":["points","higher"],"Offensive Rebounds":["count","higher"],"Turnovers":["count","lower"],"Fouls":["count","lower"],"Points":["points","higher"]};
+  const preset = defaults[metric.value];
+  if(preset){ document.getElementById("objectiveUnit").value=preset[0]; document.getElementById("objectiveDirection").value=preset[1]; }
+}
+
+function addLiveGameObjective(){
+  const metric = document.getElementById("objectiveMetric").value;
+  const label = metric === "Custom" ? document.getElementById("objectiveCustomLabel").value.trim() : metric;
+  const goalType = document.getElementById("objectiveGoal").value;
+  const subject = goalType === "comparison" ? "both_teams" : document.getElementById("objectiveSubject").value;
+  if(!label){ showToast("Name the objective first.", "error"); return; }
+  if(CoachIQ.liveGame.objectives.length >= 12){ showToast("Keep the game plan focused to 12 objectives or fewer.", "error"); return; }
+  const playerControl = document.getElementById("objectivePlayer");
+  let playerId="", playerLabel="";
+  if(subject === "our_player" && playerControl){ playerId=playerControl.value; playerLabel=playerControl.options[playerControl.selectedIndex] ? playerControl.options[playerControl.selectedIndex].text : ""; }
+  if(subject === "opponent_player" && playerControl){ playerLabel=playerControl.value.trim(); }
+  if((subject === "our_player" || subject === "opponent_player") && !playerId && !playerLabel){ showToast("Choose or name the player.", "error"); return; }
+  const slug=label.toLowerCase().replace(/[^a-z0-9]+/g,"_").replace(/^_+|_+$/g,"").slice(0,45)||"item";
+  CoachIQ.liveGame.objectives.push({id:"objective_"+slug+"_"+Date.now().toString(36),label:label,goalType:goalType,subject:subject,
+    unit:document.getElementById("objectiveUnit").value,target:Number(document.getElementById("objectiveTarget").value||0),
+    direction:document.getElementById("objectiveDirection").value,playerId:playerId,playerLabel:playerLabel});
+  document.getElementById("objectiveCustomLabel").value="";
+  renderLiveGameObjectives();
+}
+
+function removeLiveGameObjective(id){ CoachIQ.liveGame.objectives=CoachIQ.liveGame.objectives.filter(function(item){return item.id!==id;}); renderLiveGameObjectives(); }
+function renderLiveGameObjectives(){
+  const container=document.getElementById("liveGameObjectives"); if(!container){return;}
+  const names={comparison:"Win the battle",minimum:"Reach at least",maximum:"Stay under",track:"Just track"};
+  container.innerHTML=CoachIQ.liveGame.objectives.map(function(item){
+    const target=item.goalType==="track"?"":` · ${item.goalType==="comparison"?(item.direction==="lower"?"fewer is better":"more is better"):(names[item.goalType]+" "+item.target)}`;
+    return `<div class="objective-plan-item"><span><strong>${escapeHtmlValue(item.label)}</strong><small>${escapeHtmlValue(names[item.goalType])}${escapeHtmlValue(target)}${item.playerLabel?" · "+escapeHtmlValue(item.playerLabel):""}</small></span><button type="button" onclick="removeLiveGameObjective('${escapeHtmlValue(item.id)}')">Remove</button></div>`;
+  }).join("")||'<div class="live-game-empty">Add the two to five details that define winning today.</div>';
+}
+
+function updateLiveGameType(){
+  const type = document.getElementById("liveGameType");
+  const opponent = document.getElementById("liveGameOpponent");
+  const label = document.getElementById("liveGameOpponentLabel");
+  if(!type || !opponent || !label){ return; }
+  const scrimmage = type.value === "Practice Scrimmage";
+  label.textContent = scrimmage ? "Opponent / Scrimmage Side" : "Opponent";
+  opponent.placeholder = scrimmage ? "Intrasquad (optional)" : "Opponent name";
+}
+
+function updateLiveGameFormat(){
+  const format = document.getElementById("liveGameFormat");
+  const length = document.getElementById("liveGamePeriodLength");
+  if(format && length){ length.value = format.value === "Halves" ? 20 : 8; }
+}
+
+function submitLiveGameSetup(event){
+  event.preventDefault();
+  const button = document.getElementById("saveLiveGameSetupButton");
+  if(!CoachIQ.liveGame.objectives.length){ showToast("Add at least one winning objective.", "error"); return; }
+  const playerIds = Array.from(document.querySelectorAll(".live-game-player-check:checked")).map(function(input){ return input.value; });
+  const payload = {
+    gameType:document.getElementById("liveGameType").value,
+    gameDate:document.getElementById("liveGameDate").value,
+    team:document.getElementById("liveGameTeam").value,
+    opponent:document.getElementById("liveGameOpponent").value.trim(),
+    location:document.getElementById("liveGameLocation").value,
+    format:document.getElementById("liveGameFormat").value,
+    periodLength:Number(document.getElementById("liveGamePeriodLength").value),
+    playerIds:playerIds,
+    selectedStats:[],
+    customStats:[],
+    trackingObjectives:CoachIQ.liveGame.objectives
+  };
+  button.disabled = true;
+  button.textContent = "Saving Setup…";
+  google.script.run
+    .withSuccessHandler(function(result){
+      CoachIQ.liveGame.lastGameId = result.gameId;
+      document.getElementById("liveGameSetupForm").hidden = true;
+      document.getElementById("liveGameSetupSuccess").hidden = false;
+      document.getElementById("liveGameSetupSuccessTitle").textContent = payload.team + " vs. " + (result.opponent || payload.opponent);
+      document.getElementById("openSavedLiveGameButton").onclick = function(){ openLiveGameTracker(result.gameId); };
+      button.disabled = false;
+      button.textContent = "Save Game Plan";
+      showToast(result.message || "Game setup saved.");
+    })
+    .withFailureHandler(function(error){
+      button.disabled = false;
+      button.textContent = "Save Game Plan";
+      showToast(error.message || "Unable to save game setup.", "error");
+    })
+    .createLiveGameSetup(payload);
+}
+
+function openLiveGameTracker(gameId){
+  const form = document.getElementById("liveGameSetupForm");
+  const success = document.getElementById("liveGameSetupSuccess");
+  const resume = document.getElementById("liveGameResumePanel");
+  const tracker = document.getElementById("liveGameTracker");
+  if(form){ form.hidden = true; }
+  if(success){ success.hidden = true; }
+  if(resume){ resume.hidden = true; }
+  if(tracker){ tracker.hidden = false; }
+  CoachIQ.liveGame.tapQueue=[];
+  CoachIQ.liveGame.syncing=false;
+  document.body.classList.add("live-game-mode");
+  const content = document.getElementById("content");
+  if(content){ content.scrollTop = 0; }
+  setLiveTrackerSaveState("Opening game…", "saving");
+  google.script.run
+    .withSuccessHandler(function(data){
+      CoachIQ.liveGame.tracker = data;
+      CoachIQ.liveGame.selectedPlayerId = data.players.length ? data.players[0].id : "";
+      renderLiveGameTracker(data);
+      recoverProtectedLiveGameTaps(data);
+    })
+    .withFailureHandler(function(error){
+      setLiveTrackerSaveState(error.message || "Unable to open the game.", "error");
+      showToast(error.message || "Unable to open the game.", "error");
+    })
+    .startLiveGame(gameId);
+}
+
+function exitLiveGameTracker(){
+  flushLiveObjectiveQueue(function(){
+    document.body.classList.remove("live-game-mode");
+    CoachIQ.liveGame.tracker = null;
+    CoachIQ.liveGame.selectedPlayerId = "";
+    loadPage("Game");
+  });
+}
+
+function renderLiveGameTracker(data){
+  CoachIQ.liveGame.tracker=data;
+  document.getElementById("liveTrackerTeam").textContent=data.game.team;
+  document.getElementById("liveTrackerOpponent").textContent=data.game.opponent;
+  document.getElementById("liveTrackerPeriodLabel").textContent=liveGamePeriodName(data.game.format,data.game.currentPeriod);
+  renderLiveTrackerObjectives(data);
+  renderLiveTrackerEvents(data);
+  setLiveTrackerSaveState("All taps saved", "saved");
+}
+
+function liveGamePeriodName(format,period){ if(format==="Halves") return period===1?"First Half":period===2?"Second Half":"OT "+(period-2); return period<=4?"Quarter "+period:"OT "+(period-4); }
+
+function objectiveDisplayValue(objective,total){ return objective.subject.indexOf("opponent_")===0?total.opponent:total.our; }
+function objectiveStatus(objective,total){
+  if(objective.goalType==="comparison"){ const margin=objective.direction==="lower"?total.opponent-total.our:total.our-total.opponent; const required=Math.max(1,Number(objective.target||0)); return margin>=required?"winning":margin>=0?"even":"behind"; }
+  const value=objectiveDisplayValue(objective,total);
+  if(objective.goalType==="minimum") return value>=objective.target?"winning":"behind";
+  if(objective.goalType==="maximum") return value<=objective.target?"winning":"behind";
+  return "neutral";
+}
+function objectiveButtons(objective,side){
+  const deltas=objective.unit==="points"?[1,2,3]:[1];
+  return '<div class="objective-tap-buttons">'+deltas.map(function(delta){return `<button type="button" onclick="recordLiveObjectiveChange('${escapeHtmlValue(objective.id)}','${side}',${delta})">+${delta}</button>`;}).join("")+`<button class="minus" type="button" onclick="recordLiveObjectiveChange('${escapeHtmlValue(objective.id)}','${side}',-1)">−1</button></div>`;
+}
+function renderLiveTrackerObjectives(data){
+  const container=document.getElementById("liveTrackerObjectives"); if(!container){return;}
+  container.innerHTML=(data.objectives||[]).filter(function(objective){return objective.active!==false;}).map(function(objective){
+    const total=(data.objectiveTotals||{})[objective.id]||{our:0,opponent:0};
+    const status=objectiveStatus(objective,total);
+    if(objective.subject==="both_teams") return `<article class="objective-card ${status}"><header><div><span>${escapeHtmlValue(objective.goalType==="comparison"?"GAME-PLAN BATTLE":"TRACK")}</span><h3>${escapeHtmlValue(objective.label)}</h3></div><b>${status}</b></header><div class="objective-comparison"><section><small>${escapeHtmlValue(data.game.team)}</small><strong>${total.our}</strong>${objectiveButtons(objective,"Us")}</section><i>VS</i><section><small>${escapeHtmlValue(data.game.opponent)}</small><strong>${total.opponent}</strong>${objectiveButtons(objective,"Opponent")}</section></div></article>`;
+    const value=objectiveDisplayValue(objective,total); const who=objective.playerLabel|| (objective.subject.indexOf("opponent_")===0?data.game.opponent:data.game.team); const side=objective.subject.indexOf("opponent_")===0?"Opponent":"Us";
+    const goal=objective.goalType==="minimum"?"Goal: "+objective.target+"+":objective.goalType==="maximum"?"Limit: "+objective.target:"Live count";
+    return `<article class="objective-card ${status}"><header><div><span>${escapeHtmlValue(who)}</span><h3>${escapeHtmlValue(objective.label)}</h3></div><b>${status}</b></header><div class="objective-single"><strong>${value}</strong><small>${escapeHtmlValue(goal)}</small>${objectiveButtons(objective,side)}</div></article>`;
+  }).join("");
+}
+function recordLiveObjectiveChange(objectiveId,side,delta){
+  if(!CoachIQ.liveGame.tracker){return;}
+  const eventId="CEVT-"+Date.now().toString(36)+"-"+Math.random().toString(36).slice(2,8);
+  const event={eventId:eventId,objectiveId:objectiveId,side:side,delta:delta,period:CoachIQ.liveGame.tracker.game.currentPeriod};
+  applyOptimisticLiveObjectiveTap(event);
+  CoachIQ.liveGame.tapQueue.push(event);
+  CoachIQ.liveGame.protectedTaps.push(event);
+  persistProtectedLiveGameTaps();
+  setLiveTrackerSaveState(CoachIQ.liveGame.tapQueue.length+" tap"+(CoachIQ.liveGame.tapQueue.length===1?"":"s")+" queued…","saving");
+  clearTimeout(CoachIQ.liveGame.tapTimer);
+  CoachIQ.liveGame.tapTimer=setTimeout(function(){flushLiveObjectiveQueue();},180);
+}
+function applyOptimisticLiveObjectiveTap(event){
+  const tracker=CoachIQ.liveGame.tracker; if(!tracker){return;}
+  const total=tracker.objectiveTotals[event.objectiveId]||(tracker.objectiveTotals[event.objectiveId]={our:0,opponent:0});
+  const key=event.side==="Opponent"?"opponent":"our";
+  total[key]=Math.max(0,Number(total[key]||0)+Number(event.delta||0));
+  tracker.events.unshift({eventId:event.eventId,eventType:event.objectiveId,side:event.side,value:event.delta,period:event.period});
+  tracker.events=tracker.events.slice(0,30);
+  renderLiveTrackerObjectives(tracker); renderLiveTrackerEvents(tracker);
+}
+function flushLiveObjectiveQueue(callback){
+  clearTimeout(CoachIQ.liveGame.tapTimer);
+  if(CoachIQ.liveGame.syncing){ if(callback){setTimeout(function(){flushLiveObjectiveQueue(callback);},100);} return; }
+  if(!CoachIQ.liveGame.tapQueue.length){ if(callback){callback();} return; }
+  const tracker=CoachIQ.liveGame.tracker; if(!tracker){return;}
+  const batch=CoachIQ.liveGame.tapQueue.splice(0,50); CoachIQ.liveGame.syncing=true;
+  setLiveTrackerSaveState("Saving "+batch.length+" tap"+(batch.length===1?"":"s")+"…","saving");
+  google.script.run.withSuccessHandler(function(){
+    const savedIds={}; batch.forEach(function(item){savedIds[item.eventId]=true;});
+    CoachIQ.liveGame.protectedTaps=CoachIQ.liveGame.protectedTaps.filter(function(item){return !savedIds[item.eventId];});
+    persistProtectedLiveGameTaps();
+    CoachIQ.liveGame.syncing=false;
+    if(CoachIQ.liveGame.tapQueue.length){flushLiveObjectiveQueue(callback);}else{hideLiveGameRecovery();setLiveTrackerSaveState("All taps saved","saved");if(callback){callback();}}
+  }).withFailureHandler(function(error){
+    CoachIQ.liveGame.syncing=false;
+    CoachIQ.liveGame.tapQueue=CoachIQ.liveGame.protectedTaps.slice();
+    persistProtectedLiveGameTaps(); showLiveGameRecovery(CoachIQ.liveGame.protectedTaps.length,"Sync failed. Your taps remain protected on this device.");
+    setLiveTrackerSaveState("Offline protection active","error"); showToast(error.message||"Unable to sync taps. They remain protected.","error");
+    google.script.run.withSuccessHandler(function(data){renderLiveGameTracker(data);recoverProtectedLiveGameTaps(data);}).getLiveGameTracker(tracker.game.gameId);
+  }).recordLiveGameObjectiveEvents(tracker.game.gameId,batch);
+}
+function liveGameRecoveryKey(gameId){return "coachiq_live_game_taps_"+String(gameId||"");}
+function persistProtectedLiveGameTaps(){
+  const tracker=CoachIQ.liveGame.tracker;if(!tracker){return;}
+  try{const key=liveGameRecoveryKey(tracker.game.gameId);if(CoachIQ.liveGame.protectedTaps.length){localStorage.setItem(key,JSON.stringify({gameId:tracker.game.gameId,savedAt:new Date().toISOString(),taps:CoachIQ.liveGame.protectedTaps}));}else{localStorage.removeItem(key);}}catch(error){console.error("CoachIQ could not protect live taps locally: "+error.message);}
+}
+function recoverProtectedLiveGameTaps(data){
+  let recovered=[];try{const stored=JSON.parse(localStorage.getItem(liveGameRecoveryKey(data.game.gameId))||"null");recovered=stored&&Array.isArray(stored.taps)?stored.taps:[];}catch(error){recovered=[];}
+  if(!recovered.length){CoachIQ.liveGame.protectedTaps=[];hideLiveGameRecovery();return;}
+  const serverIds={};(data.events||[]).forEach(function(event){serverIds[event.eventId]=true;});
+  recovered=recovered.filter(function(event){return !serverIds[event.eventId];});
+  CoachIQ.liveGame.protectedTaps=recovered.slice();CoachIQ.liveGame.tapQueue=recovered.slice();persistProtectedLiveGameTaps();
+  recovered.forEach(applyOptimisticLiveObjectiveTap);
+  if(recovered.length){showLiveGameRecovery(recovered.length,"Recovered after a refresh or interrupted connection. Retrying now.");setTimeout(retryProtectedLiveGameTaps,350);}else{hideLiveGameRecovery();}
+}
+function showLiveGameRecovery(count,message){const banner=document.getElementById("liveTrackerRecovery");if(!banner){return;}document.getElementById("liveTrackerRecoveryTitle").textContent=count+" protected tap"+(count===1?"":"s");document.getElementById("liveTrackerRecoveryMessage").textContent=message;banner.hidden=false;}
+function hideLiveGameRecovery(){const banner=document.getElementById("liveTrackerRecovery");if(banner){banner.hidden=true;}}
+function retryProtectedLiveGameTaps(){if(!CoachIQ.liveGame.tapQueue.length&&CoachIQ.liveGame.protectedTaps.length){CoachIQ.liveGame.tapQueue=CoachIQ.liveGame.protectedTaps.slice();}flushLiveObjectiveQueue();}
+function renderLiveTrackerEvents(data){
+  const container=document.getElementById("liveTrackerEvents"); if(!container){return;} const labels={}; (data.objectives||[]).forEach(function(item){labels[item.id]=item.label;});
+  container.innerHTML=(data.events||[]).slice(0,8).map(function(event,index){return `<div class="live-tracker-event"><span><strong>${event.value>0?"+":""}${event.value} ${escapeHtmlValue(labels[event.eventType]||event.eventType)}</strong><small>${escapeHtmlValue(event.side==="Opponent"?data.game.opponent:data.game.team)} · ${escapeHtmlValue(liveGamePeriodName(data.game.format,event.period))}</small></span>${index===0?`<button type="button" onclick="undoLiveTrackerEvent('${escapeHtmlValue(event.eventId)}')">Undo</button>`:""}</div>`;}).join("")||'<div class="live-tracker-empty">No taps yet. The screen is ready.</div>';
+}
+function undoLatestLiveTrackerEvent(){
+  const tracker=CoachIQ.liveGame.tracker; const event=((tracker||{}).events||[])[0]; if(!event){return;}
+  const queuedIndex=CoachIQ.liveGame.tapQueue.findIndex(function(item){return item.eventId===event.eventId;});
+  if(queuedIndex>=0){
+    const queued=CoachIQ.liveGame.tapQueue.splice(queuedIndex,1)[0];
+    CoachIQ.liveGame.protectedTaps=CoachIQ.liveGame.protectedTaps.filter(function(item){return item.eventId!==queued.eventId;});persistProtectedLiveGameTaps();
+    const total=tracker.objectiveTotals[queued.objectiveId]; const key=queued.side==="Opponent"?"opponent":"our";
+    total[key]=Math.max(0,Number(total[key]||0)-Number(queued.delta||0)); tracker.events.shift();
+    renderLiveTrackerObjectives(tracker); renderLiveTrackerEvents(tracker);
+    setLiveTrackerSaveState(CoachIQ.liveGame.tapQueue.length?CoachIQ.liveGame.tapQueue.length+" taps queued…":"All taps saved",CoachIQ.liveGame.tapQueue.length?"saving":"saved");
+    return;
+  }
+  flushLiveObjectiveQueue(function(){undoLiveTrackerEvent(event.eventId);});
+}
+function undoLiveTrackerEvent(eventId){ if(CoachIQ.liveGame.saving||!CoachIQ.liveGame.tracker){return;} CoachIQ.liveGame.saving=true; setLiveTrackerSaveState("Undoing tap…","saving"); google.script.run.withSuccessHandler(function(data){CoachIQ.liveGame.saving=false;renderLiveGameTracker(data);}).withFailureHandler(function(error){CoachIQ.liveGame.saving=false;showToast(error.message||"Unable to undo tap.","error");}).voidLiveGameEvent(CoachIQ.liveGame.tracker.game.gameId,eventId); }
+function createLiveCheckpoint(type){ if(!CoachIQ.liveGame.tracker){return;} flushLiveObjectiveQueue(function(){ CoachIQ.liveGame.saving=true; setLiveTrackerSaveState("Building "+type.toLowerCase()+" intelligence…","saving"); google.script.run.withSuccessHandler(function(result){CoachIQ.liveGame.saving=false;renderLiveGameTracker(result.tracker);renderLiveCheckpointReport(result.report);}).withFailureHandler(function(error){CoachIQ.liveGame.saving=false;showToast(error.message||"Unable to build report.","error");}).createLiveGameCheckpoint(CoachIQ.liveGame.tracker.game.gameId,type); }); }
+function openLivePlanAdjustment(type){
+  if(!CoachIQ.liveGame.tracker){return;}
+  CoachIQ.liveGame.adjustmentType=type||"Live Adjustment";
+  CoachIQ.liveGame.adjustmentDraft=(CoachIQ.liveGame.tracker.objectives||[]).map(function(item){return Object.assign({},item);});
+  document.getElementById("livePlanAdjustmentReason").value="";
+  renderLivePlanAdjustmentRows(); document.getElementById("livePlanAdjustment").hidden=false;
+}
+function closeLivePlanAdjustment(){document.getElementById("livePlanAdjustment").hidden=true;}
+function renderLivePlanAdjustmentRows(){
+  const container=document.getElementById("livePlanAdjustmentRows");
+  container.innerHTML=CoachIQ.liveGame.adjustmentDraft.map(function(item,index){return `<div class="plan-adjustment-row ${item.active===false?"paused":""}"><label><input type="checkbox" ${item.active===false?"":"checked"} onchange="toggleAdjustedObjective('${escapeHtmlValue(item.id)}',this.checked)"><span><strong>${escapeHtmlValue(item.label)}</strong><small>${item.addedDuringGame?"Added during game":"Original game plan"}</small></span></label><input type="number" min="0" value="${Number(item.target||0)}" aria-label="Target for ${escapeHtmlValue(item.label)}" onchange="updateAdjustedObjectiveTarget('${escapeHtmlValue(item.id)}',this.value)"><div><button type="button" ${index===0?"disabled":""} onclick="moveAdjustedObjective('${escapeHtmlValue(item.id)}',-1)">↑</button><button type="button" ${index===CoachIQ.liveGame.adjustmentDraft.length-1?"disabled":""} onclick="moveAdjustedObjective('${escapeHtmlValue(item.id)}',1)">↓</button></div></div>`;}).join("");
+}
+function toggleAdjustedObjective(id,active){const item=CoachIQ.liveGame.adjustmentDraft.find(function(row){return row.id===id;});if(item){item.active=active;}renderLivePlanAdjustmentRows();}
+function updateAdjustedObjectiveTarget(id,value){const item=CoachIQ.liveGame.adjustmentDraft.find(function(row){return row.id===id;});if(item){item.target=Math.max(0,Number(value||0));}}
+function moveAdjustedObjective(id,direction){const rows=CoachIQ.liveGame.adjustmentDraft;const index=rows.findIndex(function(row){return row.id===id;});const next=index+direction;if(index<0||next<0||next>=rows.length){return;}const item=rows.splice(index,1)[0];rows.splice(next,0,item);renderLivePlanAdjustmentRows();}
+function addObjectiveDuringGame(){
+  const label=document.getElementById("adjustmentObjectiveLabel").value.trim();if(!label){showToast("Name the new objective.","error");return;}
+  const goal=document.getElementById("adjustmentObjectiveGoal").value;const slug=label.toLowerCase().replace(/[^a-z0-9]+/g,"_").replace(/^_+|_+$/g,"").slice(0,45)||"item";
+  CoachIQ.liveGame.adjustmentDraft.push({id:"objective_"+slug+"_"+Date.now().toString(36),label:label,goalType:goal,subject:goal==="comparison"?"both_teams":"our_team",unit:document.getElementById("adjustmentObjectiveUnit").value,target:Number(document.getElementById("adjustmentObjectiveTarget").value||0),direction:document.getElementById("adjustmentObjectiveDirection").value,playerId:"",playerLabel:"",active:true,addedDuringGame:true});
+  document.getElementById("adjustmentObjectiveLabel").value="";renderLivePlanAdjustmentRows();
+}
+function saveLivePlanAdjustment(){
+  if(!CoachIQ.liveGame.adjustmentDraft.some(function(item){return item.active!==false;})){showToast("Keep at least one objective active.","error");return;}
+  const button=document.getElementById("saveLivePlanAdjustmentButton");button.disabled=true;button.textContent="Applying…";
+  flushLiveObjectiveQueue(function(){google.script.run.withSuccessHandler(function(data){button.disabled=false;button.textContent="Apply Changes";closeLivePlanAdjustment();renderLiveGameTracker(data);showToast("Live game plan adjusted.");}).withFailureHandler(function(error){button.disabled=false;button.textContent="Apply Changes";showToast(error.message||"Unable to adjust the game plan.","error");}).saveLiveGamePlanAdjustment(CoachIQ.liveGame.tracker.game.gameId,{adjustmentType:CoachIQ.liveGame.adjustmentType,reason:document.getElementById("livePlanAdjustmentReason").value,objectives:CoachIQ.liveGame.adjustmentDraft});});
+}
+function adjustPlanFromCheckpoint(){const type=CoachIQ.liveGame.currentCheckpointType||"Live Adjustment";closeLiveCheckpointReport();openLivePlanAdjustment(type);}
+function finishLiveGameFromTracker(){
+  if(!CoachIQ.liveGame.tracker){return;}
+  showConfirmModal("Finish this game?","This locks the current game plan, creates the postgame report, and moves the game into completed history.","Finish Game",function(){
+    flushLiveObjectiveQueue(function(){setLiveTrackerSaveState("Building postgame report…","saving");google.script.run.withSuccessHandler(function(report){CoachIQ.liveGame.reportCloseAction="history";renderLiveCheckpointReport(report);}).withFailureHandler(function(error){showToast(error.message||"Unable to finish the game.","error");}).finishLiveGame(CoachIQ.liveGame.tracker.game.gameId);});
+  });
+}
+function renderLiveCheckpointReport(report){
+  CoachIQ.liveGame.currentCheckpointType=report.checkpointType;
+  document.getElementById("checkpointHeadline").textContent=report.headline;
+  document.getElementById("checkpointObjectiveRows").innerHTML=(report.objectives||[]).map(function(item){return `<div class="checkpoint-row ${item.status}"><span>${escapeHtmlValue(item.label)}</span><strong>${escapeHtmlValue(item.summary)}${item.outcome?" · "+escapeHtmlValue(item.outcome):""}</strong></div>`;}).join("");
+  document.getElementById("checkpointRecommendations").innerHTML=(report.recommendations||[]).map(function(item){return `<li>${escapeHtmlValue(item)}</li>`;}).join("");
+  const scorecard=document.getElementById("checkpointScorecard"); scorecard.hidden=report.scored==null; scorecard.textContent=report.scored==null?"":report.achieved+" of "+report.scored+" game-plan objectives achieved";
+  const trendWrap=document.getElementById("checkpointTrendsWrap"); const trends=report.trends||[]; trendWrap.hidden=!trends.length; document.getElementById("checkpointTrends").innerHTML=trends.map(function(item){return `<li>${escapeHtmlValue(item)}</li>`;}).join("");
+  document.getElementById("checkpointDoneButton").textContent=report.checkpointType==="Postgame"?"Back to Game History":"Back to Tracker";
+  document.getElementById("checkpointAdjustButton").hidden=report.checkpointType==="Postgame";
+  document.getElementById("liveGameCheckpointReport").hidden=false;
+}
+function closeLiveCheckpointReport(){document.getElementById("liveGameCheckpointReport").hidden=true;if(CoachIQ.liveGame.reportCloseAction==="history"){CoachIQ.liveGame.reportCloseAction="";document.body.classList.remove("live-game-mode");CoachIQ.liveGame.tracker=null;loadPage("Game");}}
+
+function setLiveTrackerSaveState(message, state){
+  const element = document.getElementById("liveTrackerSaveState");
+  if(!element){ return; }
+  element.textContent = message;
+  element.className = "live-tracker-save-state " + (state || "");
+}
+
+function resetLiveGameSetup(){
+  document.body.classList.remove("live-game-mode");
+  CoachIQ.liveGame.setup = null;
+  loadPage("Game");
+}
 
 function showPlayers(players, requestId){
 
@@ -402,7 +858,11 @@ function importRoster(){
   google.script.run
     .withSuccessHandler(function(result){
       button.textContent = "Import Players";
-      showToast(result.imported + " players imported successfully.");
+      const imported = Number(result.imported || 0);
+      const skipped = Number(result.skipped || 0);
+      const summary = imported + " new player" + (imported === 1 ? "" : "s") + " imported" +
+        (skipped ? "; " + skipped + " duplicate" + (skipped === 1 ? "" : "s") + " skipped" : "") + ".";
+      showToast(summary);
       closeRosterImportModal();
       loadPlayers(PageNavigation.requestId);
     })
@@ -699,22 +1159,27 @@ function addPlayer(playerId){
 function archivePlayer(playerId){
 
     const player = CoachIQ.players.find(p => p[0] === playerId);
-
-    const confirmArchive = confirm(
-        `Archive ${player[1]} ${player[2]}?\n\nThis player will be removed from the active roster but all history will be preserved.`
-    );
-
-    if (!confirmArchive){
+    if(!player){
+        showToast("Player not found.");
         return;
     }
 
-    google.script.run
-        .withSuccessHandler(function(){
-
-            loadPlayers();
-
-        })
-        .archivePlayer(playerId);
+    showConfirmModal(
+        `Archive ${player[1]} ${player[2]}?`,
+        "This player will be removed from the active roster, but all history will be preserved.",
+        "Archive Player",
+        function(){
+            google.script.run
+                .withSuccessHandler(function(){
+                    showToast("Player archived.");
+                    loadPlayers();
+                })
+                .withFailureHandler(function(error){
+                    showToast(error.message || "Unable to archive player.");
+                })
+                .archivePlayer(playerId);
+        }
+    );
 
 }
 function loadDropdownSettings(callback){
@@ -742,6 +1207,200 @@ function loadSettings(requestId){
 
 }
 
+function loadStaff(requestId){
+  google.script.run
+    .withSuccessHandler(function(settings){
+      if(!isCurrentPage("Staff", requestId)){ return; }
+      renderStaffDirectory(settings);
+    })
+    .withFailureHandler(function(error){
+      if(!isCurrentPage("Staff", requestId)){ return; }
+      console.error(error);
+      showToast("Unable to load staff.");
+    })
+    .getStaffDirectoryData();
+}
+
+function renderStaffDirectory(data){
+  const staff = data.profiles || [];
+  CoachIQ.staffTeams = data.teams || [];
+  CoachIQ.staffPositions = data.positions || [];
+  const directory = document.getElementById("staffDirectory");
+  const editor = document.getElementById("staffEditorList");
+  const count = document.getElementById("staffCount");
+  if(!directory || !editor){ return; }
+
+  directory.innerHTML = "";
+  editor.innerHTML = "";
+  if(count){ count.textContent = staff.length; }
+
+  if(!staff.length){
+    const empty = document.createElement("div");
+    empty.className = "staff-empty";
+    empty.innerHTML = "<strong>Build your staff directory</strong><p>Add your first coach to make them available in evaluator lists.</p>";
+    directory.appendChild(empty);
+  }
+
+  staff.forEach(function(profile){
+    directory.appendChild(createStaffCard(profile));
+    editor.appendChild(createStaffEditorRow(profile));
+  });
+}
+
+function staffInitials(name){
+  return String(name || "")
+    .trim()
+    .split(/\s+/)
+    .slice(0, 2)
+    .map(function(part){ return part.charAt(0).toUpperCase(); })
+    .join("") || "--";
+}
+
+function createStaffCard(profile){
+  const card = document.createElement("article");
+  card.className = "staff-card";
+
+  const avatar = document.createElement("span");
+  avatar.className = "staff-avatar";
+  avatar.textContent = staffInitials(profile.name);
+
+  const copy = document.createElement("div");
+  const heading = document.createElement("h4");
+  heading.textContent = profile.name;
+  const label = document.createElement("p");
+  label.textContent = profile.role + (profile.teams && profile.teams.length ? " • " + profile.teams.join(", ") : " • All teams") + (profile.positions && profile.positions.length ? " • " + profile.positions.join(", ") : "");
+  copy.appendChild(heading);
+  copy.appendChild(label);
+
+  const status = document.createElement("span");
+  status.className = "staff-active-badge";
+  status.textContent = "Active";
+
+  card.appendChild(avatar);
+  card.appendChild(copy);
+  card.appendChild(status);
+  return card;
+}
+
+function createStaffEditorRow(profile){
+  profile = typeof profile === "string" ? {name:profile} : (profile || {});
+  const row = document.createElement("div");
+  row.className = "staff-editor-row";
+
+  const input = document.createElement("input");
+  input.type = "text";
+  input.className = "staff-name-input";
+  input.placeholder = "Coach or staff name";
+  input.value = profile.name || "";
+  input.addEventListener("input", markStaffUnsaved);
+
+  const remove = document.createElement("button");
+  remove.type = "button";
+  remove.className = "staff-remove-button";
+  remove.setAttribute("aria-label", "Remove staff member");
+  remove.textContent = "\u00d7";
+  remove.addEventListener("click", function(){
+    row.remove();
+    markStaffUnsaved();
+  });
+
+  const role = document.createElement("select");
+  role.className = "staff-role-input";
+  ["Head Coach","Assistant Coach","Position Coach","Analyst","Support Staff"].forEach(function(value){ role.add(new Option(value,value)); });
+  role.value = profile.role || "Assistant Coach";
+  const email = document.createElement("input"); email.type="email"; email.className="staff-email-input"; email.placeholder="Google account email"; email.value=profile.email || "";
+  const access = document.createElement("div"); access.className="staff-access-options";
+  access.innerHTML = "<strong>Team access</strong>" + (CoachIQ.staffTeams || []).map(function(team){ return '<label><input type="checkbox" class="staff-team-input" value="'+escapeHtmlValue(team)+'" '+((profile.teams||[]).indexOf(team)>=0?'checked':'')+'> '+escapeHtmlValue(team)+'</label>'; }).join("") +
+    "<strong>Position groups</strong>" + (CoachIQ.staffPositions || []).map(function(position){ return '<label><input type="checkbox" class="staff-position-input" value="'+escapeHtmlValue(position)+'" '+((profile.positions||[]).indexOf(position)>=0?'checked':'')+'> '+escapeHtmlValue(position)+'</label>'; }).join("") +
+    "<strong>Capabilities</strong>" + [["manage_roster","Manage roster"],["run_sessions","Run sessions"],["evaluate_players","Evaluate players"],["view_intelligence","View intelligence"],["manage_settings","Manage settings"]].map(function(item){ return '<label><input type="checkbox" class="staff-capability-input" value="'+item[0]+'" '+((profile.capabilities||[]).indexOf(item[0])>=0?'checked':'')+'> '+item[1]+'</label>'; }).join("");
+  [role,email].forEach(function(element){ element.addEventListener("change",markStaffUnsaved); });
+  access.addEventListener("change",markStaffUnsaved);
+  row.dataset.staffId = profile.id || "";
+  row.appendChild(input); row.appendChild(role); row.appendChild(email); row.appendChild(access);
+  row.appendChild(remove);
+  return row;
+}
+
+function addStaffMember(){
+  const editor = document.getElementById("staffEditorList");
+  if(!editor){ return; }
+  const row = createStaffEditorRow({name:"",role:"Assistant Coach",teams:[],capabilities:["run_sessions","evaluate_players","view_intelligence"]});
+  editor.appendChild(row);
+  row.querySelector("input").focus();
+  markStaffUnsaved();
+}
+
+function markStaffUnsaved(){
+  const state = document.getElementById("staffSaveState");
+  if(state){
+    state.textContent = "Unsaved changes";
+    state.classList.add("is-unsaved");
+  }
+}
+
+function saveStaffDirectory(){
+  const button = document.getElementById("saveStaffButton");
+  const profiles = Array.from(document.querySelectorAll("#staffEditorList .staff-editor-row")).map(function(row){
+    return {id:row.dataset.staffId,name:row.querySelector(".staff-name-input").value.trim(),email:row.querySelector(".staff-email-input").value.trim(),role:row.querySelector(".staff-role-input").value,
+      teams:Array.from(row.querySelectorAll(".staff-team-input:checked")).map(function(input){return input.value;}),positions:Array.from(row.querySelectorAll(".staff-position-input:checked")).map(function(input){return input.value;}),capabilities:Array.from(row.querySelectorAll(".staff-capability-input:checked")).map(function(input){return input.value;})};
+  }).filter(function(profile){return profile.name;});
+
+  if(button){
+    button.disabled = true;
+    button.textContent = "Saving...";
+  }
+
+  google.script.run
+    .withSuccessHandler(function(result){
+      if(button){
+        button.disabled = false;
+        button.textContent = "Save staff";
+      }
+      renderStaffDirectory(result);
+      const state = document.getElementById("staffSaveState");
+      if(state){
+        state.textContent = "All changes saved";
+        state.classList.remove("is-unsaved");
+      }
+      showToast("Staff saved!");
+    })
+    .withFailureHandler(function(error){
+      if(button){
+        button.disabled = false;
+        button.textContent = "Save staff";
+      }
+      console.error(error);
+      showToast("Unable to save staff.");
+    })
+    .saveStaffProfiles(profiles);
+}
+
+function escapeHtmlValue(value){ return String(value || "").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;"); }
+
+function previewProgramLogo(input){
+  const file=input.files&&input.files[0], preview=document.getElementById("programLogoPreview");
+  if(!file||["image/png","image/jpeg"].indexOf(file.type)<0||file.size>2*1024*1024){ showToast("Choose a PNG or JPEG smaller than 2 MB."); input.value=""; return; }
+  preview.src=URL.createObjectURL(file); preview.hidden=false;
+}
+function uploadProgramLogo(){
+  const input=document.getElementById("programLogoFile"), file=input.files&&input.files[0], button=document.getElementById("uploadLogoButton");
+  if(!file){showToast("Choose a logo file first.");return;} button.disabled=true; button.textContent="Uploading...";
+  const reader=new FileReader(); reader.onload=function(){ google.script.run.withSuccessHandler(function(result){document.getElementById("programLogoUrl").value=result.url; CoachIQ.programSettings.logoUrl=result.url; applyCoachIQTheme(CoachIQ.programSettings); button.disabled=false;button.textContent="Replace logo";showToast("Program logo uploaded!");}).withFailureHandler(function(error){button.disabled=false;button.textContent="Upload logo";showToast(error.message||"Logo upload failed.");}).uploadCoachIQLogo({name:file.name,mimeType:file.type,base64:String(reader.result).split(",")[1]});}; reader.readAsDataURL(file);
+}
+
+function loadIntelligence(requestId){
+  google.script.run.withSuccessHandler(function(data){if(!isCurrentPage("AI",requestId))return;
+    document.getElementById("intelligenceScope").textContent=data.scope.role==="Head Coach"?"Program-wide analysis":"Scoped to "+(data.scope.positions.length?data.scope.positions.join(", "):"all assigned positions")+" • "+(data.scope.teams.length?data.scope.teams.join(", "):"all assigned teams");
+    document.getElementById("intelligencePlayers").textContent=data.activePlayers; document.getElementById("intelligenceAttendance").textContent=data.attendance+"%"; document.getElementById("intelligenceSessions").textContent=data.sampleSessions; document.getElementById("intelligencePositionCount").textContent=data.positions.length;
+    renderIntelligenceList("intelligenceActions",data.actions,function(item){return item;});
+    renderIntelligenceList("intelligencePositions",data.positions,function(item){return item.position+" — "+item.average+" ("+item.players+" athletes)";});
+    renderIntelligenceList("intelligencePillars",data.pillars,function(item){return item.name+" — "+(item.average||"No scores");});
+    renderIntelligenceList("intelligenceTop",data.topPerformers,function(item){return item.name+" • "+item.position+" — "+item.average;});
+    renderIntelligenceList("intelligenceNeeds",data.needsAttention,function(item){return item.name+" • "+item.position+" — "+item.average;});
+  }).withFailureHandler(function(error){showToast(error.message||"Unable to build intelligence report.");}).getProgramIntelligence();
+}
+function renderIntelligenceList(id,items,format){const container=document.getElementById(id);container.innerHTML="";(items&&items.length?items:["Not enough completed evaluation data yet."]).forEach(function(item,index){const row=document.createElement("div");row.className="intelligence-list-row";const number=document.createElement("span");number.textContent=String(index+1).padStart(2,"0");const copy=document.createElement("p");copy.textContent=typeof item==="string"?item:format(item);row.appendChild(number);row.appendChild(copy);container.appendChild(row);});}
+
 function showSettings(settings){
 
   document.getElementById("programName").value =
@@ -759,6 +1418,8 @@ function showSettings(settings){
   document.getElementById("programPrimaryColor").value = settings.primaryColor || "#1E3A5F";
   document.getElementById("programSecondaryColor").value = settings.secondaryColor || "#F59E0B";
   document.getElementById("programLogoUrl").value = settings.logoUrl || "";
+  const logoPreview = document.getElementById("programLogoPreview");
+  if(logoPreview && settings.logoUrl){ logoPreview.src = settings.logoUrl; logoPreview.hidden = false; }
 
   renderSettingsList("teamsContainer", settings.teams);
 
@@ -855,6 +1516,7 @@ function initializeCoachIQ(){
   google.script.run
     .withSuccessHandler(function(bootstrap){
       applyCoachIQTheme(bootstrap.settings || {});
+      applyStaffAccess(bootstrap.access || {});
       if(bootstrap.setupRequired){
         document.getElementById("app").hidden = true;
         document.getElementById("onboardingOverlay").hidden = false;
@@ -874,6 +1536,14 @@ function initializeCoachIQ(){
       loadPage("Dashboard");
     })
     .getCoachIQBootstrap();
+}
+
+function applyStaffAccess(access){
+  CoachIQ.access = access || {};
+  document.querySelectorAll("[data-capability]").forEach(function(item){
+    const allowed = (access.capabilities || []).indexOf(item.dataset.capability) >= 0;
+    item.hidden = !allowed;
+  });
 }
 
 function getCoachGreeting(hour){
@@ -911,6 +1581,8 @@ function applyCoachIQTheme(settings){
       : "";
     logo.hidden = !logoUrl;
     if(logoUrl){ logo.src = logoUrl; }
+    const logoCard = logo.closest(".logo");
+    if(logoCard){ logoCard.classList.toggle("has-program-logo", Boolean(logoUrl)); }
   }
   updatePointTerminology();
 }
@@ -1052,7 +1724,9 @@ function renderSettingsList(containerId, items){
 
   container.innerHTML = "";
 
-  items.forEach(function(item){
+  const listItems = items && items.length ? items : [""];
+
+  listItems.forEach(function(item){
 
     container.innerHTML += `
 
@@ -1263,7 +1937,9 @@ function loadSessions(requestId){
 
       console.log("Result from Apps Script:", result);
 
-      showSessionsPage(result);
+      CoachIQ.sessions = Array.isArray(result) ? result : [];
+      CoachIQ.showAllSessions = false;
+      showSessionsPage(CoachIQ.sessions, false);
 
     })
     .withFailureHandler(function(error){
@@ -1441,7 +2117,12 @@ function closeCoachIQTutorial(){
   CoachIQTutorial.index = -1;
   document.getElementById("tutorialOverlay").hidden = true;
 }
-function showSessionsPage(sessions){
+function toggleAllSessions(){
+  CoachIQ.showAllSessions = !CoachIQ.showAllSessions;
+  showSessionsPage(CoachIQ.sessions || [], CoachIQ.showAllSessions);
+}
+
+function showSessionsPage(sessions, showAll){
 
   console.log("Sessions:", sessions);
 
@@ -1453,13 +2134,21 @@ function showSessionsPage(sessions){
   }
 
   container.innerHTML = "";
+  const toggleButton = document.getElementById("toggleSessionsButton");
+  if(toggleButton){
+    toggleButton.textContent = showAll ? "Show Open Sessions" : "View All Sessions";
+  }
 
-  if(!sessions || sessions.length === 0){
+  const visibleSessions = showAll
+    ? (sessions || [])
+    : (sessions || []).filter(function(session){ return session["Status"] !== "Completed"; });
+
+  if(visibleSessions.length === 0){
 
     container.innerHTML = `
       <div class="card">
-        <h3>No Sessions Found</h3>
-        <p>Create your first session to get started.</p>
+        <h3>${showAll ? "No Sessions Found" : "No Open Sessions"}</h3>
+        <p>${showAll ? "Create your first session to get started." : "All sessions are complete. Select View All Sessions to review history."}</p>
       </div>
     `;
 
@@ -1467,7 +2156,7 @@ function showSessionsPage(sessions){
 
   }
 
-  sessions.reverse().forEach(function(session){
+  visibleSessions.slice().reverse().forEach(function(session){
 
    container.innerHTML += `
 
@@ -2075,15 +2764,15 @@ function finishCurrentSession(){
     google.script.run
         .withSuccessHandler(function(){
 
-            alert("Session Completed!");
-
             window.resumeSessionId = null;
             window.currentPracticeSession = null;
             PageNavigation.evaluationMode = "new";
             PageNavigation.evaluationSessionId = null;
             window.viewMode = false;
 
-            loadPage("Sessions");
+            loadPage("Sessions", function(){
+                showToast("Session completed.");
+            });
 
         })
         .withFailureHandler(function(error){
@@ -2579,7 +3268,7 @@ function showConfirmModal(title, message, buttonText, callback){
 
     document.getElementById("confirmTitle").innerText = title;
 
-    document.getElementById("confirmMessage").innerHTML = message;
+    document.getElementById("confirmMessage").textContent = message;
 
     const button = document.getElementById("confirmButton");
 
