@@ -13,6 +13,52 @@ const EvaluationSaves = {
     failed: false
 };
 
+/* Live Game intentionally lives in this bundle rather than Index.html. */
+const EmbeddedPages = {
+  Game: `
+    <section class="live-game" aria-labelledby="liveGameTitle">
+      <div class="live-game-header">
+        <div><span class="live-game-eyebrow">GAME DAY</span><h2 id="liveGameTitle">Live Game</h2><p id="liveGameSubtitle">Set up a game or resume the active game.</p></div>
+        <div class="live-game-save" id="liveGameSaveStatus" role="status" aria-live="polite">Ready</div>
+      </div>
+
+      <div id="liveGameLoading" class="card live-game-loading">Loading game day…</div>
+
+      <div id="liveGameSetup" class="card live-game-setup" hidden>
+        <div><span class="live-game-eyebrow">NEW GAME</span><h3>Game setup</h3><p>Choose your team, opponent, and game format.</p></div>
+        <div class="live-game-form-grid">
+          <label>Team<select id="liveGameTeam"></select></label>
+          <label>Opponent<input id="liveGameOpponent" maxlength="80" placeholder="Opponent name"></label>
+          <label>Date<input id="liveGameDate" type="date"></label>
+          <label>Location<select id="liveGameLocation"><option>Home</option><option>Away</option><option>Neutral</option></select></label>
+          <label>Periods<select id="liveGamePeriods"><option value="4">4 quarters</option><option value="2">2 halves</option></select></label>
+          <label>Minutes per period<input id="liveGamePeriodMinutes" type="number" min="1" max="60" value="8"></label>
+        </div>
+        <label class="live-game-notes-label">Pregame notes<textarea id="liveGamePregameNotes" rows="3" placeholder="Matchups, goals, or reminders"></textarea></label>
+        <button class="btn btn-primary" id="liveGameStartButton" onclick="startLiveGame()">Start game</button>
+      </div>
+
+      <div id="liveGameBoard" hidden>
+        <div class="live-game-scoreboard">
+          <div class="live-game-team"><span id="liveGameOurName">CoachIQ</span><strong id="liveGameOurScore">0</strong><div class="live-game-score-actions"><button onclick="changeLiveGameScore('us',-1)" aria-label="Subtract one from our score">−</button><button onclick="changeLiveGameScore('us',1)">+1</button><button onclick="changeLiveGameScore('us',2)">+2</button><button onclick="changeLiveGameScore('us',3)">+3</button></div></div>
+          <div class="live-game-center"><span id="liveGamePeriodLabel">Q1</span><button class="live-game-clock" id="liveGameClock" onclick="toggleLiveGameClock()">08:00</button><span id="liveGameClockHint">Tap clock to start</span><div class="live-game-period-actions"><button onclick="changeLiveGamePeriod(-1)">Previous</button><button onclick="resetLiveGameClock()">Reset clock</button><button onclick="changeLiveGamePeriod(1)">Next</button></div></div>
+          <div class="live-game-team"><span id="liveGameOpponentName">Opponent</span><strong id="liveGameOpponentScore">0</strong><div class="live-game-score-actions"><button onclick="changeLiveGameScore('opponent',-1)" aria-label="Subtract one from opponent score">−</button><button onclick="changeLiveGameScore('opponent',1)">+1</button><button onclick="changeLiveGameScore('opponent',2)">+2</button><button onclick="changeLiveGameScore('opponent',3)">+3</button></div></div>
+        </div>
+
+        <div class="live-game-grid">
+          <div class="card live-game-panel"><div class="live-game-panel-title"><div><span class="live-game-eyebrow">TEAM</span><h3>Game controls</h3></div><button class="btn" onclick="addLiveGameTimeout()">Timeout <span id="liveGameTimeouts">0</span></button></div>
+            <div class="live-game-quick-events"><button onclick="addLiveGameEvent('Momentum','Great team play')">Momentum +</button><button onclick="addLiveGameEvent('Coaching','Coaching adjustment')">Coaching note</button><button onclick="addLiveGameEvent('Milestone','Team milestone')">Milestone</button></div>
+            <label>Live note<div class="live-game-note-row"><input id="liveGameNote" maxlength="180" placeholder="Capture a possession, adjustment, or moment"><button class="btn btn-primary" onclick="submitLiveGameNote()">Add</button></div></label>
+            <div class="live-game-log" id="liveGameLog" aria-live="polite"></div>
+          </div>
+          <div class="card live-game-panel"><div class="live-game-panel-title"><div><span class="live-game-eyebrow">ROSTER</span><h3>Player impact</h3></div><span id="liveGameRosterCount"></span></div><div id="liveGameRoster" class="live-game-roster"></div></div>
+        </div>
+
+        <div class="card live-game-finish"><label>Postgame notes<textarea id="liveGamePostgameNotes" rows="3" placeholder="What should the team carry forward?"></textarea></label><div><button class="btn" onclick="abandonLiveGame()">Discard game</button><button class="btn btn-primary" id="liveGameFinishButton" onclick="finishLiveGame()">Finish game</button></div></div>
+      </div>
+    </section>`
+};
+
 function updateEvaluationSaveStatus(){
     const status = document.getElementById("evaluationSaveStatus");
     const finishButton = document.getElementById("finishSessionButton");
@@ -62,6 +108,24 @@ function isCurrentPage(page, requestId){
 function loadPage(page, callback){
 
     if(PageNavigation.loadingPage === page){
+        return;
+    }
+
+    if(Object.prototype.hasOwnProperty.call(EmbeddedPages, page)){
+        const requestId = ++PageNavigation.requestId;
+        const container = document.getElementById("page-content");
+        if(!container){ return; }
+        PageNavigation.loadingPage = page;
+        container.innerHTML = EmbeddedPages[page];
+        PageNavigation.currentPage = page;
+        PageNavigation.loadingPage = null;
+        document.querySelectorAll(".nav-item").forEach(function(item){
+          item.classList.toggle("active", item.dataset.page === page);
+        });
+        requestAnimationFrame(function(){
+          if(page === "Game" && isCurrentPage(page, requestId)){ initializeLiveGamePage(); }
+          if(typeof callback === "function"){ callback(); }
+        });
         return;
     }
 
@@ -3050,5 +3114,216 @@ function populateSessionSummary(session){
     }
 
 }
+
+const LiveGame = {
+  data: null,
+  roster: [],
+  timer: null,
+  saveTimer: null,
+  saving: false,
+  dirty: false
+};
+
+function initializeLiveGamePage(){
+  stopLiveGameTimer();
+  const loading = document.getElementById("liveGameLoading");
+  google.script.run
+    .withSuccessHandler(function(result){
+      if(!isCurrentPage("Game")){ return; }
+      if(loading){ loading.hidden = true; }
+      LiveGame.roster = (result && result.players) || [];
+      if(result && result.activeGame){
+        LiveGame.data = normalizeLiveGame(result.activeGame);
+        showLiveGameBoard();
+      }else{
+        renderLiveGameSetup((result && result.settings) || {});
+      }
+    })
+    .withFailureHandler(function(error){
+      if(loading){ loading.textContent = "Unable to load Live Game. " + liveGameError(error); }
+      setLiveGameSaveStatus("Load failed", true);
+    })
+    .getLiveGameBootstrap();
+}
+
+function renderLiveGameSetup(settings){
+  document.getElementById("liveGameSetup").hidden = false;
+  document.getElementById("liveGameDate").value = new Date().toISOString().slice(0,10);
+  const select = document.getElementById("liveGameTeam");
+  const teams = settings.teams || [];
+  select.innerHTML = teams.length
+    ? teams.map(function(team){ return "<option>" + escapeLiveGameHtml(team) + "</option>"; }).join("")
+    : '<option value="">No teams configured</option>';
+}
+
+function startLiveGame(){
+  const team = document.getElementById("liveGameTeam").value.trim();
+  const opponent = document.getElementById("liveGameOpponent").value.trim();
+  if(!team || !opponent){ showToast("Choose a team and enter an opponent."); return; }
+  const button = document.getElementById("liveGameStartButton");
+  button.disabled = true;
+  button.textContent = "Starting…";
+  const setup = {
+    team: team,
+    opponent: opponent,
+    date: document.getElementById("liveGameDate").value,
+    location: document.getElementById("liveGameLocation").value,
+    totalPeriods: Number(document.getElementById("liveGamePeriods").value),
+    periodMinutes: Number(document.getElementById("liveGamePeriodMinutes").value),
+    pregameNotes: document.getElementById("liveGamePregameNotes").value
+  };
+  google.script.run.withSuccessHandler(function(result){
+    LiveGame.roster = result.players || [];
+    LiveGame.data = normalizeLiveGame(result.game);
+    showLiveGameBoard();
+  }).withFailureHandler(function(error){
+    button.disabled = false; button.textContent = "Start game";
+    showToast(liveGameError(error));
+  }).createLiveGame(setup);
+}
+
+function normalizeLiveGame(game){
+  game = game || {};
+  game.ourScore = Number(game.ourScore) || 0;
+  game.opponentScore = Number(game.opponentScore) || 0;
+  game.period = Number(game.period) || 1;
+  game.totalPeriods = Number(game.totalPeriods) || 4;
+  game.periodMinutes = Number(game.periodMinutes) || 8;
+  game.clockSeconds = game.clockSeconds == null ? game.periodMinutes * 60 : Number(game.clockSeconds);
+  game.timeouts = Number(game.timeouts) || 0;
+  game.events = Array.isArray(game.events) ? game.events : [];
+  game.playerImpact = game.playerImpact || {};
+  return game;
+}
+
+function showLiveGameBoard(){
+  document.getElementById("liveGameLoading").hidden = true;
+  document.getElementById("liveGameSetup").hidden = true;
+  document.getElementById("liveGameBoard").hidden = false;
+  document.getElementById("liveGamePostgameNotes").value = LiveGame.data.postgameNotes || "";
+  renderLiveGame();
+  setLiveGameSaveStatus("All changes saved");
+}
+
+function renderLiveGame(){
+  const game = LiveGame.data;
+  if(!game || !document.getElementById("liveGameBoard")){ return; }
+  document.getElementById("liveGameSubtitle").textContent = game.location + " • " + game.date;
+  document.getElementById("liveGameOurName").textContent = game.team;
+  document.getElementById("liveGameOpponentName").textContent = game.opponent;
+  document.getElementById("liveGameOurScore").textContent = game.ourScore;
+  document.getElementById("liveGameOpponentScore").textContent = game.opponentScore;
+  document.getElementById("liveGamePeriodLabel").textContent = (game.totalPeriods === 2 ? "H" : "Q") + game.period;
+  document.getElementById("liveGameClock").textContent = formatLiveGameClock(game.clockSeconds);
+  document.getElementById("liveGameTimeouts").textContent = game.timeouts;
+  document.getElementById("liveGameClockHint").textContent = LiveGame.timer ? "Clock running" : "Tap clock to start";
+  renderLiveGameLog();
+  renderLiveGameRoster();
+}
+
+function changeLiveGameScore(side, amount){
+  const key = side === "us" ? "ourScore" : "opponentScore";
+  LiveGame.data[key] = Math.max(0, LiveGame.data[key] + amount);
+  addLiveGameEvent("Score", (side === "us" ? LiveGame.data.team : LiveGame.data.opponent) + " " + (amount > 0 ? "+" : "") + amount, false);
+  renderLiveGame(); queueLiveGameSave();
+}
+
+function changeLiveGamePeriod(amount){
+  const max = LiveGame.data.totalPeriods + 8;
+  LiveGame.data.period = Math.max(1, Math.min(max, LiveGame.data.period + amount));
+  resetLiveGameClock();
+  addLiveGameEvent("Period", "Moved to period " + LiveGame.data.period);
+}
+
+function toggleLiveGameClock(){
+  if(LiveGame.timer){ stopLiveGameTimer(); renderLiveGame(); queueLiveGameSave(); return; }
+  if(LiveGame.data.clockSeconds <= 0){ return; }
+  LiveGame.timer = setInterval(function(){
+    LiveGame.data.clockSeconds = Math.max(0, LiveGame.data.clockSeconds - 1);
+    const clock = document.getElementById("liveGameClock");
+    if(clock){ clock.textContent = formatLiveGameClock(LiveGame.data.clockSeconds); }
+    if(LiveGame.data.clockSeconds === 0){
+      stopLiveGameTimer(); addLiveGameEvent("Clock", "Period clock expired"); renderLiveGame();
+    }else if(LiveGame.data.clockSeconds % 10 === 0){ queueLiveGameSave(); }
+  }, 1000);
+  renderLiveGame();
+}
+
+function stopLiveGameTimer(){ if(LiveGame.timer){ clearInterval(LiveGame.timer); LiveGame.timer = null; } }
+function resetLiveGameClock(){ stopLiveGameTimer(); LiveGame.data.clockSeconds = LiveGame.data.periodMinutes * 60; renderLiveGame(); queueLiveGameSave(); }
+function formatLiveGameClock(seconds){ const value = Math.max(0, Number(seconds) || 0); return String(Math.floor(value / 60)).padStart(2,"0") + ":" + String(value % 60).padStart(2,"0"); }
+function addLiveGameTimeout(){ LiveGame.data.timeouts += 1; addLiveGameEvent("Timeout", LiveGame.data.team + " timeout"); renderLiveGame(); }
+
+function submitLiveGameNote(){
+  const input = document.getElementById("liveGameNote");
+  const note = input.value.trim();
+  if(!note){ return; }
+  addLiveGameEvent("Note", note); input.value = "";
+}
+
+function addLiveGameEvent(type, text, shouldRender){
+  LiveGame.data.events.unshift({ type:type, text:text, period:LiveGame.data.period, clock:formatLiveGameClock(LiveGame.data.clockSeconds), created:new Date().toISOString() });
+  LiveGame.data.events = LiveGame.data.events.slice(0,100);
+  if(shouldRender !== false){ renderLiveGameLog(); }
+  queueLiveGameSave();
+}
+
+function renderLiveGameLog(){
+  const log = document.getElementById("liveGameLog"); if(!log){ return; }
+  log.innerHTML = LiveGame.data.events.length ? LiveGame.data.events.slice(0,20).map(function(event){
+    return '<div class="live-game-log-row"><span>' + escapeLiveGameHtml(event.type) + '</span><p>' + escapeLiveGameHtml(event.text) + '</p><time>' + escapeLiveGameHtml((LiveGame.data.totalPeriods === 2 ? "H" : "Q") + event.period + " • " + event.clock) + '</time></div>';
+  }).join("") : '<div class="live-game-empty">Game events will appear here.</div>';
+}
+
+function renderLiveGameRoster(){
+  const roster = document.getElementById("liveGameRoster"); if(!roster){ return; }
+  document.getElementById("liveGameRosterCount").textContent = LiveGame.roster.length + " players";
+  roster.innerHTML = LiveGame.roster.length ? LiveGame.roster.map(function(player){
+    const id = String(player["Player ID"] || ""); const impact = Number(LiveGame.data.playerImpact[id]) || 0;
+    const name = String(player["First Name"] || "") + " " + String(player["Last Name"] || "");
+    return '<div class="live-game-player"><div><strong>' + escapeLiveGameHtml(name.trim()) + '</strong><span>#' + escapeLiveGameHtml(player["Jersey Number"] || "—") + '</span></div><div><button onclick="changePlayerImpact(\'' + escapeLiveGameAttribute(id) + '\',-1)">−</button><b>' + impact + '</b><button onclick="changePlayerImpact(\'' + escapeLiveGameAttribute(id) + '\',1)">+</button></div></div>';
+  }).join("") : '<div class="live-game-empty">No active players found for this team.</div>';
+}
+
+function changePlayerImpact(playerId, amount){
+  LiveGame.data.playerImpact[playerId] = (Number(LiveGame.data.playerImpact[playerId]) || 0) + amount;
+  renderLiveGameRoster(); queueLiveGameSave();
+}
+
+function queueLiveGameSave(){
+  LiveGame.dirty = true; setLiveGameSaveStatus("Unsaved changes");
+  clearTimeout(LiveGame.saveTimer);
+  LiveGame.saveTimer = setTimeout(saveLiveGameNow, 650);
+}
+
+function saveLiveGameNow(callback){
+  if(!LiveGame.data || LiveGame.saving){ return; }
+  LiveGame.saving = true; LiveGame.dirty = false; setLiveGameSaveStatus("Saving…");
+  LiveGame.data.postgameNotes = (document.getElementById("liveGamePostgameNotes") || {}).value || LiveGame.data.postgameNotes || "";
+  google.script.run.withSuccessHandler(function(){
+    LiveGame.saving = false; setLiveGameSaveStatus(LiveGame.dirty ? "Unsaved changes" : "All changes saved");
+    if(LiveGame.dirty){ saveLiveGameNow(callback); } else if(typeof callback === "function"){ callback(); }
+  }).withFailureHandler(function(error){ LiveGame.saving = false; LiveGame.dirty = true; setLiveGameSaveStatus("Save failed: " + liveGameError(error), true); }).saveLiveGame(LiveGame.data);
+}
+
+function finishLiveGame(){
+  stopLiveGameTimer();
+  const button = document.getElementById("liveGameFinishButton"); button.disabled = true; button.textContent = "Finishing…";
+  LiveGame.data.postgameNotes = document.getElementById("liveGamePostgameNotes").value;
+  google.script.run.withSuccessHandler(function(){ showToast("Game saved as final."); LiveGame.data = null; loadPage("Sessions"); })
+    .withFailureHandler(function(error){ button.disabled = false; button.textContent = "Finish game"; showToast(liveGameError(error)); })
+    .completeLiveGame(LiveGame.data);
+}
+
+function abandonLiveGame(){
+  showConfirmModal("Discard Live Game", "Discard this game and its live event log?", "Discard", function(){
+    stopLiveGameTimer(); google.script.run.withSuccessHandler(function(){ LiveGame.data = null; initializeLiveGamePage(); }).discardLiveGame(LiveGame.data.gameId);
+  });
+}
+
+function setLiveGameSaveStatus(text, failed){ const status = document.getElementById("liveGameSaveStatus"); if(status){ status.textContent = text; status.classList.toggle("is-error", Boolean(failed)); } }
+function liveGameError(error){ return error && error.message ? error.message : "Please try again."; }
+function escapeLiveGameHtml(value){ const div = document.createElement("div"); div.textContent = value == null ? "" : String(value); return div.innerHTML; }
+function escapeLiveGameAttribute(value){ return String(value == null ? "" : value).replace(/\\/g,"\\\\").replace(/'/g,"\\'"); }
 
 </script>
