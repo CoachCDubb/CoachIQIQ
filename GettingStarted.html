@@ -1,43 +1,20 @@
 <section class="getting-started-page">
   <div class="getting-started-hero">
-    <div>
-      <span class="eyebrow">COACHIQ QUICK START</span>
-      <h2>Welcome to your new program</h2>
-      <p>Take a two-minute guided tour, then add your roster and run your first session.</p>
-    </div>
-    <button class="btn-v2 btn-primary-v2 btn-lg-v2" onclick="startCoachIQTutorial()">
-      Start Guided Tour
-    </button>
+    <div><span class="eyebrow">COACHIQ QUICK START</span><h2>Run your entire program from one command center</h2><p>Take the guided tour to see roster management, staff access, practice evaluation, Live Game plans, Intelligence, and reporting.</p></div>
+    <button class="btn-v2 btn-primary-v2 btn-lg-v2" onclick="startCoachIQTutorial()">Start Full Guided Tour</button>
   </div>
 
   <div class="getting-started-grid">
-    <article class="getting-started-step">
-      <span class="step-number">01</span>
-      <h3>Add your players</h3>
-      <p>Upload the roster CSV or add an athlete individually. Team, position, and status must match Settings.</p>
-      <button class="btn" onclick="tutorialOpenRoster()">Open Players</button>
-    </article>
-    <article class="getting-started-step">
-      <span class="step-number">02</span>
-      <h3>Start a session</h3>
-      <p>Select the session date, evaluator, and teams. CoachIQ creates one evaluation for every active player selected.</p>
-      <button class="btn" onclick="startNewSession()">Create Session</button>
-    </article>
-    <article class="getting-started-step">
-      <span class="step-number">03</span>
-      <h3>Save evaluations</h3>
-      <p>Record attendance, pillar scores, rewards, and notes. Wait for “All changes saved” before finishing.</p>
-      <button class="btn" onclick="loadPage('Sessions')">View Sessions</button>
-    </article>
-    <article class="getting-started-step">
-      <span class="step-number">04</span>
-      <h3>Review and report</h3>
-      <p>Use player profiles, the Dashboard, and your program leaderboard to recognize progress and download PDFs.</p>
-      <button class="btn" onclick="loadPage('Dashboard')">Open Dashboard</button>
-    </article>
+    <article class="getting-started-step"><span class="step-number">01</span><h3>Configure your program</h3><p>Confirm teams, positions, player statuses, culture categories, branding, and rewards in Settings.</p><button class="btn" onclick="loadPage('Settings')">Open Settings</button></article>
+    <article class="getting-started-step"><span class="step-number">02</span><h3>Set staff access</h3><p>Add coaches and decide which teams, position groups, and CoachIQ capabilities each person can use.</p><button class="btn" onclick="loadPage('Staff')">Open Staff</button></article>
+    <article class="getting-started-step"><span class="step-number">03</span><h3>Add your players</h3><p>Upload the roster CSV or add an athlete individually. Team, position, and status must match Settings.</p><button class="btn" onclick="tutorialOpenRoster()">Open Players</button></article>
+    <article class="getting-started-step"><span class="step-number">04</span><h3>Run practice sessions</h3><p>Create a session, record attendance, evaluate program pillars, add notes and rewards, then finish after all changes save.</p><button class="btn" onclick="startNewSession()">Create Session</button></article>
+    <article class="getting-started-step"><span class="step-number">05</span><h3>Build a Live Game plan</h3><p>Track only the winning objectives that matter, reuse templates, adjust at timeouts, and protect taps through connection problems.</p><button class="btn" onclick="loadPage('Game')">Open Live Game</button></article>
+    <article class="getting-started-step"><span class="step-number">06</span><h3>Use Game Intelligence</h3><p>Generate timeout, quarter, and postgame reports. CoachIQ remembers recurring objective wins and misses across completed games.</p><button class="btn" onclick="loadPage('Game')">View Game Reports</button></article>
+    <article class="getting-started-step"><span class="step-number">07</span><h3>Review Program Intelligence</h3><p>See attendance, pillar performance, position comparisons, coaching priorities, and athletes needing attention.</p><button class="btn" onclick="loadPage('AI')">Open Intelligence</button></article>
+    <article class="getting-started-step"><span class="step-number">08</span><h3>Recognize and report</h3><p>Use the Dashboard, player profiles, leaderboard, and printable reports to reinforce progress throughout the program.</p><button class="btn" onclick="loadPage('Dashboard')">Open Dashboard</button></article>
   </div>
 
-  <div class="getting-started-note">
-    <strong>Safe first-session rule:</strong> Do not finish a session while CoachIQ shows pending or failed saves.
-  </div>
+  <div class="getting-started-note"><strong>Game-day safety:</strong> Live Game taps are protected on the current device until Google confirms the save. Do not clear browser data during an active game.</div>
+  <div class="getting-started-note"><strong>Practice safety:</strong> Do not finish an evaluation session while CoachIQ shows pending or failed saves.</div>
 </section>
