@@ -85,6 +85,7 @@ function loadPage(page, callback){
         container.innerHTML = html;
         PageNavigation.currentPage = page;
         PageNavigation.loadingPage = null;
+        applyStaffAccess(CoachIQ.access || {});
         updatePointTerminology();
 
         // Update Navigation
