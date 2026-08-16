@@ -7,12 +7,6 @@
 
   <?!= include('Styles'); ?>
 
-<?!= include('SharedJS'); ?>
-<?!= include('DashboardJS'); ?>
-<?!= include('PlayersJS'); ?>
-<?!= include('SessionsJS'); ?>
-<?!= include('SettingsJS'); ?>
-
 </head>
 
 <body>
@@ -69,6 +63,10 @@
   </div>
 
   <div id="toast" class="toast"></div>
+
+  <!-- Store the Live Game shell as inert text. It is rendered locally so an
+       Apps Script page-fragment request cannot leave the command center blank. -->
+  <script type="text/x-coachiq-template" id="liveGamePageTemplate"><?!= include('Game'); ?></script>
 
   <div id="tutorialOverlay" class="tutorial-overlay" hidden aria-live="polite">
     <div class="tutorial-popover">
