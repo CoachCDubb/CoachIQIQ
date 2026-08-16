@@ -1,8 +1,11 @@
 /**
  * Returns the core dashboard statistics.
  */
+const PROGRAM_ATTENDANCE_STANDARD = 75;
+
 function getDashboardDataCore(){
 
+  const access = requireStaffCapability_("view_intelligence");
   const ss = SpreadsheetApp.getActive();
 
   // -----------------------------
@@ -10,8 +13,7 @@ function getDashboardDataCore(){
   // -----------------------------
   const playerSheet = ss.getSheetByName("Players");
 const playerData = playerSheet.getDataRange().getValues();
-const activePlayerRows = playerData
-  .slice(1)
+const activePlayerRows = filterPlayersForCurrentStaff_(playerData.slice(1))
   .filter(row => row[7] === "Active");
 const activePlayerIds = {};
 
@@ -26,10 +28,15 @@ activePlayerRows.forEach(function(row){
   // -----------------------------
   const sessionSheet = ss.getSheetByName("Sessions");
   const sessionData = sessionSheet.getDataRange().getValues();
+  const visibleSessions = sessionData.slice(1).filter(function(row) {
+    if (!access.configured || access.role === "Head Coach" || !access.teams.length) return true;
+    const sessionTeams = String(row[4] || "").split(",").map(function(team) { return team.trim(); });
+    return access.teams.some(function(team) { return sessionTeams.indexOf(team) >= 0; });
+  });
 
   const latest =
-    sessionData.length > 1
-      ? sessionData[sessionData.length - 1]
+    visibleSessions.length
+      ? visibleSessions[visibleSessions.length - 1]
       : null;
 
 // -----------------------------
@@ -109,13 +116,15 @@ activePlayerRows.forEach(function(row){
       )
     : 0,
 
+    attendanceRecorded: totalPresent + totalAbsent,
+
     cultureScore:
       cultureCount
       ? Math.round((cultureTotal / cultureCount) * 10) / 10
       : 0,
 
     totalSessions:
-      Math.max(sessionData.length - 1, 0),
+      visibleSessions.length,
 
     leader: leader
 
@@ -126,7 +135,6 @@ activePlayerRows.forEach(function(row){
  * Returns dashboard statistics.
  */
 function getDashboardData(){
-
 const stats = getDashboardDataCore();
 
 const activePlayers = stats.activePlayers;
@@ -147,6 +155,8 @@ const leader = stats.leader;
       : "No Sessions",
 
     attendance: attendance,
+
+    attendanceStandard: PROGRAM_ATTENDANCE_STANDARD,
 
     cultureScore: cultureScore,
 
@@ -173,6 +183,19 @@ focus: getDashboardFocus(stats, leader)
 
   };
 
+}
+
+function getDashboardAttendanceStanding_(stats) {
+  if (!stats.attendanceRecorded) {
+    return {label:"No attendance recorded", color:"#94A3B8"};
+  }
+  if (stats.attendance >= PROGRAM_ATTENDANCE_STANDARD) {
+    return {label:"Meets program standard", color:"#16A34A"};
+  }
+  if (stats.attendance >= PROGRAM_ATTENDANCE_STANDARD - 10) {
+    return {label:"Close to program standard", color:"#F59E0B"};
+  }
+  return {label:"Below program standard", color:"#DC2626"};
 }
 /**
  * Returns recent dashboard activity.
@@ -218,19 +241,24 @@ function getDashboardInsight(stats, leader){
   leader = leader || stats.leader;
 
   let insight = "";
+  const attendanceStanding = getDashboardAttendanceStanding_(stats);
 
   // Attendance
-  if(attendance >= 90){
+  if(!stats.attendanceRecorded){
+
+    insight += "Record attendance to begin tracking the program standard. ";
+
+  }else if(attendance >= 90){
 
     insight += "✅ Attendance is outstanding. ";
 
-  }else if(attendance >= 75){
+  }else if(attendance >= PROGRAM_ATTENDANCE_STANDARD){
 
     insight += "👍 Attendance is solid but has room to improve. ";
 
   }else{
 
-    insight += "⚠️ Attendance is below the program standard. ";
+    insight += "⚠️ " + attendanceStanding.label + ". ";
 
   }
 
@@ -269,6 +297,7 @@ function getDashboardInsight(stats, leader){
 function getDashboardTrends(stats){
 
   stats = stats || getDashboardDataCore();
+  const attendanceStanding = getDashboardAttendanceStanding_(stats);
 
   return `
   
@@ -286,11 +315,11 @@ function getDashboardTrends(stats){
         <div style="
           width:${stats.attendance}%;
           height:100%;
-          background:#22C55E;
+          background:${attendanceStanding.color};
         "></div>
       </div>
 
-      ${stats.attendance}%
+      ${stats.attendance}% · ${attendanceStanding.label} (${PROGRAM_ATTENDANCE_STANDARD}% standard)
 
     </div>
 
@@ -336,7 +365,7 @@ function getDashboardFocus(stats, leader){
   leader = leader || stats.leader;
 
   // Attendance is priority
-  if(stats.attendance < 75){
+  if(stats.attendanceRecorded && stats.attendance < PROGRAM_ATTENDANCE_STANDARD){
 
     return `
       📉 Attendance is only <strong>${stats.attendance}%</strong>.
