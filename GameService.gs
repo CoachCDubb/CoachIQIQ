@@ -11,7 +11,7 @@ const LIVE_GAME_HEADERS = [
   "Period Length", "Status", "Current Period", "Our Score", "Opponent Score",
   "Roster Player IDs", "Selected Stats", "Created By", "Created At", "Updated At",
   "Game Type", "Custom Stat Definitions", "Tracking Plan", "Final Report", "Completed At",
-  "Active Tracking Plan", "Plan Adjustments"
+  "Active Tracking Plan", "Plan Adjustments", "Sport"
 ];
 
 const LIVE_GAME_EVENT_HEADERS = [
@@ -46,10 +46,81 @@ function getBasketballLiveStatCatalog_() {
   ];
 }
 
+function getLiveGameSportPreset_(sport) {
+  const presets = {
+    Basketball: {
+      formats:[{value:"Quarters", length:8, lengthLabel:"Minutes per Quarter", endLabel:"End Quarter"}, {value:"Halves", length:20, lengthLabel:"Minutes per Half", endLabel:"End Half"}],
+      endPeriodLabel:"End Quarter", periodNoun:"Quarter",
+      metrics:[
+        {label:"Transition Points", unit:"points", direction:"higher"}, {label:"Offensive Rebounds", unit:"count", direction:"higher"},
+        {label:"Turnovers", unit:"count", direction:"lower"}, {label:"Paint Touches", unit:"count", direction:"higher"},
+        {label:"Deflections", unit:"count", direction:"higher"}, {label:"Fouls", unit:"count", direction:"lower"},
+        {label:"Points", unit:"points", direction:"higher"}
+      ]
+    },
+    Football: {
+      formats:[{value:"Quarters", length:12, lengthLabel:"Minutes per Quarter", endLabel:"End Quarter"}],
+      endPeriodLabel:"End Quarter", periodNoun:"Quarter",
+      metrics:[
+        {label:"Points", unit:"points", direction:"higher"}, {label:"Turnovers", unit:"count", direction:"lower"},
+        {label:"Takeaways", unit:"count", direction:"higher"}, {label:"Explosive Plays", unit:"count", direction:"higher"},
+        {label:"Third Down Conversions", unit:"count", direction:"higher"}, {label:"Red Zone Scores", unit:"count", direction:"higher"},
+        {label:"Sacks Allowed", unit:"count", direction:"lower"}, {label:"Penalties", unit:"count", direction:"lower"}
+      ]
+    },
+    Baseball: {
+      formats:[{value:"Innings", length:7, lengthLabel:"Scheduled Innings", endLabel:"End Inning"}],
+      endPeriodLabel:"End Inning", periodNoun:"Inning",
+      metrics:[
+        {label:"Runs", unit:"points", direction:"higher"}, {label:"Quality At-Bats", unit:"count", direction:"higher"},
+        {label:"Extra-Base Hits", unit:"count", direction:"higher"}, {label:"Walks Earned", unit:"count", direction:"higher"},
+        {label:"First-Pitch Strikes", unit:"count", direction:"higher"}, {label:"Strikeouts", unit:"count", direction:"higher"},
+        {label:"Errors", unit:"count", direction:"lower"}, {label:"Runners Left On Base", unit:"count", direction:"lower"}
+      ]
+    },
+    Soccer: {
+      formats:[{value:"Halves", length:40, lengthLabel:"Minutes per Half", endLabel:"End Half"}, {value:"Periods", length:20, lengthLabel:"Minutes per Period", endLabel:"End Period"}],
+      endPeriodLabel:"End Half", periodNoun:"Half",
+      metrics:[
+        {label:"Goals", unit:"points", direction:"higher"}, {label:"Shots on Goal", unit:"count", direction:"higher"},
+        {label:"Possession Wins", unit:"count", direction:"higher"}, {label:"Turnovers", unit:"count", direction:"lower"},
+        {label:"Corner Kicks", unit:"count", direction:"higher"}, {label:"Saves", unit:"count", direction:"higher"},
+        {label:"Fouls", unit:"count", direction:"lower"}, {label:"Defensive Stops", unit:"count", direction:"higher"}
+      ]
+    },
+    Volleyball: {
+      formats:[{value:"Sets", length:25, lengthLabel:"Points per Set", endLabel:"End Set"}],
+      endPeriodLabel:"End Set", periodNoun:"Set",
+      metrics:[
+        {label:"Points", unit:"points", direction:"higher"}, {label:"Kills", unit:"count", direction:"higher"},
+        {label:"Aces", unit:"count", direction:"higher"}, {label:"Blocks", unit:"count", direction:"higher"},
+        {label:"Digs", unit:"count", direction:"higher"}, {label:"Passing Wins", unit:"count", direction:"higher"},
+        {label:"Attack Errors", unit:"count", direction:"lower"}, {label:"Service Errors", unit:"count", direction:"lower"}
+      ]
+    },
+    Other: {
+      formats:[{value:"Periods", length:10, lengthLabel:"Minutes per Period", endLabel:"End Period"}, {value:"Halves", length:20, lengthLabel:"Minutes per Half", endLabel:"End Half"}, {value:"Quarters", length:10, lengthLabel:"Minutes per Quarter", endLabel:"End Quarter"}],
+      endPeriodLabel:"End Period", periodNoun:"Period",
+      metrics:[
+        {label:"Points", unit:"points", direction:"higher"}, {label:"Turnovers", unit:"count", direction:"lower"},
+        {label:"Opportunities Created", unit:"count", direction:"higher"}, {label:"Defensive Stops", unit:"count", direction:"higher"},
+        {label:"Penalties", unit:"count", direction:"lower"}
+      ]
+    }
+  };
+  const normalizedSport = Object.prototype.hasOwnProperty.call(presets, sport) ? sport : "Other";
+  const preset = presets[normalizedSport];
+  return {sport:normalizedSport, formats:preset.formats, endPeriodLabel:preset.endPeriodLabel,
+    periodNoun:preset.periodNoun, metrics:preset.metrics,
+    defaults:{gameType:"Official Game", format:preset.formats[0].value,
+      periodLength:preset.formats[0].length, location:"Home"}};
+}
+
 function getLiveGameSetupData() {
   requireStaffCapability_("run_sessions");
   initializeLiveGameSheets_();
   const settings = getCoachIQSettings();
+  const sportPreset = getLiveGameSportPreset_(settings.sport || "Other");
   const players = filterPlayersForCurrentStaff_(getPlayers())
     .filter(function(player) { return String(player[7] || "") !== "Archived"; })
     .map(function(player) {
@@ -65,15 +136,16 @@ function getLiveGameSetupData() {
     });
 
   return {
-    sport: settings.sport || "Basketball",
+    sport: sportPreset.sport,
+    sportPreset: sportPreset,
     teams: settings.teams || [],
     players: players,
-    stats: getBasketballLiveStatCatalog_(),
+    stats: sportPreset.sport === "Basketball" ? getBasketballLiveStatCatalog_() : [],
     recentGames: getRecentLiveGames_(),
     completedGames: getCompletedLiveGames_(),
     gamePlanTemplates: getLiveGamePlanTemplates_(),
     lastGamePlans: getLastLiveGamePlans_(),
-    defaults: {gameType:"Official Game", format:"Quarters", periodLength:8, location:"Home"}
+    defaults: sportPreset.defaults
   };
 }
 
@@ -83,6 +155,7 @@ function createLiveGameSetup(data) {
   data = data || {};
 
   const settings = getCoachIQSettings();
+  const sportPreset = getLiveGameSportPreset_(settings.sport || "Other");
   const team = String(data.team || "").trim();
   const gameType = ["Official Game", "Practice Scrimmage"].indexOf(data.gameType) >= 0
     ? data.gameType : "Official Game";
@@ -90,7 +163,8 @@ function createLiveGameSetup(data) {
     (gameType === "Practice Scrimmage" ? "Intrasquad" : "");
   const gameDate = String(data.gameDate || "").trim();
   const location = ["Home", "Away", "Neutral"].indexOf(data.location) >= 0 ? data.location : "Home";
-  const format = ["Quarters", "Halves"].indexOf(data.format) >= 0 ? data.format : "Quarters";
+  const validFormats = sportPreset.formats.map(function(item) { return item.value; });
+  const format = validFormats.indexOf(data.format) >= 0 ? data.format : sportPreset.defaults.format;
   const periodLength = Number(data.periodLength);
   const rosterIds = Array.isArray(data.playerIds) ? data.playerIds.map(String) : [];
   const selectedStats = Array.isArray(data.selectedStats) ? data.selectedStats.map(String) : [];
@@ -100,7 +174,7 @@ function createLiveGameSetup(data) {
   if (!gameDate) throw new Error("Choose a game date.");
   if (!team || (settings.teams || []).indexOf(team) === -1) throw new Error("Choose a valid CoachIQ team.");
   if (!opponent) throw new Error("Enter the opponent.");
-  if (!Number.isInteger(periodLength) || periodLength < 1 || periodLength > 60) throw new Error("Period length must be between 1 and 60 minutes.");
+  if (!Number.isInteger(periodLength) || periodLength < 1 || periodLength > 99) throw new Error("Choose a valid period setting between 1 and 99.");
   if (!rosterIds.length) throw new Error("Select at least one available player.");
   if (!trackingPlan.length && !selectedStats.length) throw new Error("Add at least one game-plan objective.");
   trackingPlan.forEach(function(objective) {
@@ -127,7 +201,7 @@ function createLiveGameSetup(data) {
   const gameId = "GAME-" + Utilities.formatDate(now, Session.getScriptTimeZone(), "yyyyMMdd-HHmmss") +
     "-" + Utilities.getUuid().slice(0, 6).toUpperCase();
   const userEmail = Session.getActiveUser().getEmail() || "";
-  const sheet = SpreadsheetApp.getActive().getSheetByName(LIVE_GAMES_SHEET);
+  const sheet = getCoachIQSpreadsheet_().getSheetByName(LIVE_GAMES_SHEET);
   const lock = LockService.getScriptLock();
   lock.waitLock(10000);
   try {
@@ -136,7 +210,7 @@ function createLiveGameSetup(data) {
       location, format, periodLength, "Setup", 1, 0, 0,
       JSON.stringify(rosterIds), JSON.stringify(selectedStats), userEmail, now, now,
       gameType, JSON.stringify(customStats), JSON.stringify(trackingPlan), "", "",
-      JSON.stringify(trackingPlan), JSON.stringify([])
+      JSON.stringify(trackingPlan), JSON.stringify([]), sportPreset.sport
     ]);
   } finally {
     lock.releaseLock();
@@ -151,7 +225,7 @@ function createLiveGameSetup(data) {
       beforeValue:"Game did not exist",
       afterValue:{gameDate:gameDate, gameType:gameType, opponent:opponent, location:location, format:format,
         periodLength:periodLength, rosterSize:rosterIds.length, selectedStats:selectedStats,
-        customStats:customStats, trackingObjectives:trackingPlan},
+        customStats:customStats, trackingObjectives:trackingPlan, sport:sportPreset.sport},
       success:true,
       error:""
     });
@@ -170,7 +244,7 @@ function initializeLiveGameSheets_() {
 }
 
 function ensureLiveGameSheet_(sheetName, headers) {
-  const spreadsheet = SpreadsheetApp.getActive();
+  const spreadsheet = getCoachIQSpreadsheet_();
   let sheet = spreadsheet.getSheetByName(sheetName);
   if (!sheet) {
     sheet = spreadsheet.insertSheet(sheetName);
@@ -264,7 +338,7 @@ function normalizeLiveGameCategoryKey_(value) {
 }
 
 function getLiveGamePlanTemplates_() {
-  const sheet = SpreadsheetApp.getActive().getSheetByName(LIVE_GAME_TEMPLATES_SHEET);
+  const sheet = getCoachIQSpreadsheet_().getSheetByName(LIVE_GAME_TEMPLATES_SHEET);
   if (!sheet || sheet.getLastRow() < 2) return [];
   const access = getCurrentStaffAccess_();
   return sheet.getRange(2, 1, sheet.getLastRow() - 1, LIVE_GAME_TEMPLATE_HEADERS.length).getValues()
@@ -273,7 +347,7 @@ function getLiveGamePlanTemplates_() {
 }
 
 function getLastLiveGamePlans_() {
-  const sheet = SpreadsheetApp.getActive().getSheetByName(LIVE_GAMES_SHEET);
+  const sheet = getCoachIQSpreadsheet_().getSheetByName(LIVE_GAMES_SHEET);
   if (!sheet || sheet.getLastRow() < 2) return {};
   const values = sheet.getDataRange().getValues(); const headers = values.shift(); const cols = liveGameHeaderMap_(headers);
   const access = getCurrentStaffAccess_(); const plans = {};
@@ -295,7 +369,7 @@ function saveLiveGamePlanTemplate(data) {
   requireLiveGameTeamAccess_(team);
   const objectives = cleanLiveGameTrackingPlan_(data.objectives);
   if (!objectives.length) throw new Error("Add at least one objective before saving a template.");
-  const sheet = SpreadsheetApp.getActive().getSheetByName(LIVE_GAME_TEMPLATES_SHEET);
+  const sheet = getCoachIQSpreadsheet_().getSheetByName(LIVE_GAME_TEMPLATES_SHEET);
   const rows = sheet.getLastRow() > 1 ? sheet.getRange(2, 1, sheet.getLastRow() - 1, LIVE_GAME_TEMPLATE_HEADERS.length).getValues() : [];
   const duplicate = rows.some(function(row) { return String(row[1] || "").toLowerCase() === name.toLowerCase() && String(row[2] || "") === team; });
   if (duplicate) throw new Error("That team already has a template with this name.");
@@ -310,7 +384,7 @@ function saveLiveGamePlanTemplate(data) {
 
 function deleteLiveGamePlanTemplate(templateId) {
   requireStaffCapability_("run_sessions"); initializeLiveGameSheets_();
-  const sheet = SpreadsheetApp.getActive().getSheetByName(LIVE_GAME_TEMPLATES_SHEET);
+  const sheet = getCoachIQSpreadsheet_().getSheetByName(LIVE_GAME_TEMPLATES_SHEET);
   if (!sheet || sheet.getLastRow() < 2) throw new Error("The template was not found.");
   const rows = sheet.getRange(2, 1, sheet.getLastRow() - 1, LIVE_GAME_TEMPLATE_HEADERS.length).getValues();
   const index = rows.findIndex(function(row) { return String(row[0] || "") === String(templateId); });
@@ -320,7 +394,7 @@ function deleteLiveGamePlanTemplate(templateId) {
 }
 
 function getRecentLiveGames_() {
-  const sheet = SpreadsheetApp.getActive().getSheetByName(LIVE_GAMES_SHEET);
+  const sheet = getCoachIQSpreadsheet_().getSheetByName(LIVE_GAMES_SHEET);
   if (!sheet || sheet.getLastRow() < 2) return [];
   const values = sheet.getDataRange().getValues();
   const headers = values.shift();
@@ -345,7 +419,7 @@ function getRecentLiveGames_() {
 }
 
 function getCompletedLiveGames_() {
-  const sheet = SpreadsheetApp.getActive().getSheetByName(LIVE_GAMES_SHEET);
+  const sheet = getCoachIQSpreadsheet_().getSheetByName(LIVE_GAMES_SHEET);
   if (!sheet || sheet.getLastRow() < 2) return [];
   const values = sheet.getDataRange().getValues();
   const headers = values.shift();
@@ -391,6 +465,9 @@ function getLiveGameTracker(gameId) {
   const gameRecord = findLiveGameRecord_(gameId);
   const game = gameRecord.game;
   requireLiveGameTeamAccess_(game.Team);
+  const sportPreset = getLiveGameSportPreset_(String(game.Sport || getCoachIQSettings().sport || "Other"));
+  const activeFormat = sportPreset.formats.find(function(item) { return item.value === String(game["Game Format"] || ""); });
+  if (activeFormat && activeFormat.endLabel) sportPreset.endPeriodLabel = activeFormat.endLabel;
   const rosterIds = parseLiveGameJson_(game["Roster Player IDs"], []);
   const selectedStats = parseLiveGameJson_(game["Selected Stats"], []);
   const customStats = parseLiveGameJson_(game["Custom Stat Definitions"], []);
@@ -408,10 +485,11 @@ function getLiveGameTracker(gameId) {
     return {
       game:{gameId:String(game["Game ID"] || ""), gameDate:formatLiveGameDate_(game["Game Date"]),
         team:String(game.Team || ""), opponent:String(game.Opponent || ""), location:String(game.Location || ""),
-        format:String(game["Game Format"] || "Quarters"), periodLength:Number(game["Period Length"] || 8),
+        sport:sportPreset.sport, format:String(game["Game Format"] || sportPreset.defaults.format), periodLength:Number(game["Period Length"] || sportPreset.defaults.periodLength),
         status:String(game.Status || "Setup"), currentPeriod:Number(game["Current Period"] || 1),
         gameType:String(game["Game Type"] || "Official Game")},
       players:players,
+      sportPreset:sportPreset,
       objectives:objectives.sort(function(a, b) { return Number(a.order || 0) - Number(b.order || 0); }),
       originalObjectives:originalObjectives,
       planAdjustments:parseLiveGameJson_(game["Plan Adjustments"], []),
@@ -423,10 +501,11 @@ function getLiveGameTracker(gameId) {
   return {
     game:{gameId:String(game["Game ID"] || ""), gameDate:formatLiveGameDate_(game["Game Date"]),
       team:String(game.Team || ""), opponent:String(game.Opponent || ""), location:String(game.Location || ""),
-      format:String(game["Game Format"] || "Quarters"), periodLength:Number(game["Period Length"] || 8),
+      sport:sportPreset.sport, format:String(game["Game Format"] || sportPreset.defaults.format), periodLength:Number(game["Period Length"] || sportPreset.defaults.periodLength),
       status:String(game.Status || "Setup"), currentPeriod:Number(game["Current Period"] || 1),
       gameType:String(game["Game Type"] || "Official Game")},
     players:players,
+    sportPreset:sportPreset,
     selectedStats:selectedStats,
     customStats:customStats,
     actions:buildLiveGameActions_(selectedStats, customStats),
@@ -446,16 +525,13 @@ function recordLiveGameObjectiveEvents(gameId, events) {
   if (!Array.isArray(events) || !events.length || events.length > 50) throw new Error("Send between 1 and 50 objective taps.");
   const gameRecord = findLiveGameRecord_(gameId);
   requireLiveGameTeamAccess_(gameRecord.game.Team);
+  if (String(gameRecord.game.Status || "") === "Completed") {
+    throw new Error("A completed game cannot accept more events.");
+  }
   const objectives = parseLiveGameJson_(gameRecord.game["Active Tracking Plan"], parseLiveGameJson_(gameRecord.game["Tracking Plan"], []));
-  const eventSheet = SpreadsheetApp.getActive().getSheetByName(LIVE_GAME_EVENTS_SHEET);
-  const rows = eventSheet.getLastRow() > 1
-    ? eventSheet.getRange(2, 1, eventSheet.getLastRow() - 1, LIVE_GAME_EVENT_HEADERS.length).getValues() : [];
-  const knownIds = {};
-  rows.forEach(function(row) { knownIds[String(row[0] || "")] = true; });
-  let sequence = rows.filter(function(row) { return String(row[1] || "") === String(gameId); }).length;
-  let latestPeriod = Number(gameRecord.game["Current Period"] || 1);
+  const eventSheet = getCoachIQSpreadsheet_().getSheetByName(LIVE_GAME_EVENTS_SHEET);
   const userEmail = Session.getActiveUser().getEmail() || "";
-  const newRows = events.map(function(rawEvent) {
+  const normalizedEvents = events.map(function(rawEvent) {
     const event = rawEvent || {};
     const objective = objectives.find(function(item) { return item.id === String(event.objectiveId || ""); });
     if (!objective || objective.active === false) throw new Error("That game-plan objective is not currently active.");
@@ -471,26 +547,35 @@ function recordLiveGameObjectiveEvents(gameId, events) {
     const period = Number(event.period);
     if (!Number.isInteger(period) || period < 1 || period > 20) throw new Error("Choose a valid period.");
     if (objective.subject === "our_player") requirePlayerAccess_(objective.playerId);
-    const requestedId = String(event.eventId || "");
-    if (requestedId && knownIds[requestedId]) return null;
-    const eventId = requestedId || "GEVT-" + Utilities.getUuid().slice(0, 12).toUpperCase();
-    knownIds[eventId] = true;
-    sequence++;
-    const now = new Date();
-    latestPeriod = period;
-    return [eventId, String(gameId), sequence, now, period, "", side, objective.playerId || "",
-      objective.id, delta, userEmail, false, now];
-  }).filter(function(row) { return row; });
-  if (newRows.length) {
-    const lock = LockService.getScriptLock();
-    lock.waitLock(10000);
-    try {
+    return {eventId:String(event.eventId || "") || "GEVT-" + Utilities.getUuid().slice(0, 12).toUpperCase(),
+      period:period, side:side, playerId:objective.playerId || "", objectiveId:objective.id, delta:delta};
+  });
+
+  const lock = LockService.getScriptLock();
+  lock.waitLock(10000);
+  try {
+    const rows = eventSheet.getLastRow() > 1
+      ? eventSheet.getRange(2, 1, eventSheet.getLastRow() - 1, LIVE_GAME_EVENT_HEADERS.length).getValues() : [];
+    const knownIds = {};
+    rows.forEach(function(row) { knownIds[String(row[0] || "")] = true; });
+    let sequence = rows.filter(function(row) { return String(row[1] || "") === String(gameId); }).length;
+    let latestPeriod = Number(gameRecord.game["Current Period"] || 1);
+    const newRows = normalizedEvents.map(function(event) {
+      if (knownIds[event.eventId]) return null;
+      knownIds[event.eventId] = true;
+      sequence++;
+      latestPeriod = event.period;
+      const now = new Date();
+      return [event.eventId, String(gameId), sequence, now, event.period, "", event.side, event.playerId,
+        event.objectiveId, event.delta, userEmail, false, now];
+    }).filter(function(row) { return row; });
+    if (newRows.length) {
       eventSheet.getRange(eventSheet.getLastRow() + 1, 1, newRows.length, LIVE_GAME_EVENT_HEADERS.length).setValues(newRows);
-    } finally {
-      lock.releaseLock();
+      updateLiveGameObjectiveState_(gameRecord, latestPeriod);
     }
+  } finally {
+    lock.releaseLock();
   }
-  updateLiveGameObjectiveState_(gameRecord, latestPeriod);
   return getLiveGameTracker(gameId);
 }
 
@@ -519,6 +604,9 @@ function recordLiveGameEvent(gameId, event) {
   const gameRecord = findLiveGameRecord_(gameId);
   const game = gameRecord.game;
   requireLiveGameTeamAccess_(game.Team);
+  if (String(game.Status || "") === "Completed") {
+    throw new Error("A completed game cannot accept more events.");
+  }
   const selectedStats = parseLiveGameJson_(game["Selected Stats"], []);
   const customStats = parseLiveGameJson_(game["Custom Stat Definitions"], []);
   const actions = buildLiveGameActions_(selectedStats, customStats);
@@ -543,26 +631,26 @@ function recordLiveGameEvent(gameId, event) {
     throw new Error("Select a player within your assigned roster scope.");
   }
 
-  const eventSheet = SpreadsheetApp.getActive().getSheetByName(LIVE_GAME_EVENTS_SHEET);
-  const existing = eventSheet.getLastRow() > 1
-    ? eventSheet.getRange(2, 1, eventSheet.getLastRow() - 1, LIVE_GAME_EVENT_HEADERS.length).getValues() : [];
+  const eventSheet = getCoachIQSpreadsheet_().getSheetByName(LIVE_GAME_EVENTS_SHEET);
   const requestedId = String(event.eventId || "");
-  const duplicate = existing.some(function(row) { return String(row[0] || "") === requestedId; });
-  if (!duplicate) {
-    const sequence = existing.filter(function(row) { return String(row[1] || "") === String(gameId); }).length + 1;
-    const eventId = requestedId || "GEVT-" + Utilities.getUuid().slice(0, 12).toUpperCase();
-    const now = new Date();
-    const lock = LockService.getScriptLock();
-    lock.waitLock(10000);
-    try {
+  const eventId = requestedId || "GEVT-" + Utilities.getUuid().slice(0, 12).toUpperCase();
+  const lock = LockService.getScriptLock();
+  lock.waitLock(10000);
+  try {
+    const existing = eventSheet.getLastRow() > 1
+      ? eventSheet.getRange(2, 1, eventSheet.getLastRow() - 1, LIVE_GAME_EVENT_HEADERS.length).getValues() : [];
+    const duplicate = existing.some(function(row) { return String(row[0] || "") === eventId; });
+    if (!duplicate) {
+      const sequence = existing.filter(function(row) { return String(row[1] || "") === String(gameId); }).length + 1;
+      const now = new Date();
       eventSheet.appendRow([eventId, String(gameId), sequence, now, period, safeLiveGameValue_(gameClock),
         action.side || "Us", playerId, eventType, Number(action.points || 0),
         Session.getActiveUser().getEmail() || "", false, now]);
-    } finally {
-      lock.releaseLock();
+      updateLiveGameStateFromEvents_(gameRecord, period);
     }
+  } finally {
+    lock.releaseLock();
   }
-  updateLiveGameStateFromEvents_(gameRecord, period);
   return getLiveGameTracker(gameId);
 }
 
@@ -571,7 +659,7 @@ function voidLiveGameEvent(gameId, eventId) {
   initializeLiveGameSheets_();
   const gameRecord = findLiveGameRecord_(gameId);
   requireLiveGameTeamAccess_(gameRecord.game.Team);
-  const sheet = SpreadsheetApp.getActive().getSheetByName(LIVE_GAME_EVENTS_SHEET);
+  const sheet = getCoachIQSpreadsheet_().getSheetByName(LIVE_GAME_EVENTS_SHEET);
   if (sheet.getLastRow() < 2) throw new Error("No game events were found.");
   const values = sheet.getRange(2, 1, sheet.getLastRow() - 1, LIVE_GAME_EVENT_HEADERS.length).getValues();
   const rowIndex = values.findIndex(function(row) {
@@ -590,15 +678,17 @@ function voidLiveGameEvent(gameId, eventId) {
 function createLiveGameCheckpoint(gameId, checkpointType) {
   requireStaffCapability_("run_sessions");
   initializeLiveGameSheets_();
-  if (["Timeout", "End Quarter"].indexOf(checkpointType) < 0) throw new Error("Choose a valid game checkpoint.");
+  if (["Timeout", "End Quarter", "End Period"].indexOf(checkpointType) < 0) throw new Error("Choose a valid game checkpoint.");
+  if (checkpointType === "End Quarter") checkpointType = "End Period";
   const tracker = getLiveGameTracker(gameId);
   if (!tracker.objectives || !tracker.objectives.length) throw new Error("This game does not have a tracking plan.");
   const report = buildLiveGameCheckpointReport_(tracker, checkpointType);
-  const sheet = SpreadsheetApp.getActive().getSheetByName(LIVE_GAME_CHECKPOINTS_SHEET);
+  if (checkpointType === "End Period") report.headline = tracker.sportPreset.endPeriodLabel + " Game Intelligence";
+  const sheet = getCoachIQSpreadsheet_().getSheetByName(LIVE_GAME_CHECKPOINTS_SHEET);
   const checkpointId = "GCHK-" + Utilities.getUuid().slice(0, 12).toUpperCase();
   sheet.appendRow([checkpointId, String(gameId), checkpointType, tracker.game.currentPeriod, "", new Date(),
     JSON.stringify(report.objectives), JSON.stringify(report.recommendations)]);
-  if (checkpointType === "End Quarter") {
+  if (checkpointType === "End Period") {
     const record = findLiveGameRecord_(gameId);
     updateLiveGameObjectiveState_(record, Math.min(20, tracker.game.currentPeriod + 1));
   }
@@ -620,7 +710,7 @@ function saveLiveGamePlanAdjustment(gameId, data) {
     return objective;
   });
   if (!nextPlan.some(function(objective) { return objective.active !== false; })) throw new Error("Keep at least one objective active.");
-  const adjustmentType = ["Timeout", "End Quarter", "Live Adjustment"].indexOf(data.adjustmentType) >= 0
+  const adjustmentType = ["Timeout", "End Quarter", "End Period", "Live Adjustment"].indexOf(data.adjustmentType) >= 0
     ? data.adjustmentType : "Live Adjustment";
   const adjustments = parseLiveGameJson_(gameRecord.game["Plan Adjustments"], []);
   const adjustment = {adjustmentId:"ADJ-" + Utilities.getUuid().slice(0, 10).toUpperCase(),
@@ -725,7 +815,7 @@ function buildLiveGamePostgameReport_(tracker, previousReports) {
 }
 
 function getPreviousCompletedReports_(team) {
-  const sheet = SpreadsheetApp.getActive().getSheetByName(LIVE_GAMES_SHEET);
+  const sheet = getCoachIQSpreadsheet_().getSheetByName(LIVE_GAMES_SHEET);
   if (!sheet || sheet.getLastRow() < 2) return [];
   const values = sheet.getDataRange().getValues(); const headers = values.shift(); const cols = liveGameHeaderMap_(headers);
   return values.filter(function(row) { return String(row[cols.Status] || "") === "Completed" && String(row[cols.Team] || "") === String(team); })
@@ -752,7 +842,7 @@ function buildLiveGameTrends_(currentObjectives, previousReports) {
 
 function getLiveGameProgramTrends_(teamFilter) {
   initializeLiveGameSheets_();
-  const sheet = SpreadsheetApp.getActive().getSheetByName(LIVE_GAMES_SHEET);
+  const sheet = getCoachIQSpreadsheet_().getSheetByName(LIVE_GAMES_SHEET);
   if (!sheet || sheet.getLastRow() < 2) return {gamesAnalyzed:0,categories:[],alerts:[]};
   const values = sheet.getDataRange().getValues(); const headers = values.shift(); const cols = liveGameHeaderMap_(headers);
   const access = getCurrentStaffAccess_();
@@ -831,7 +921,7 @@ function buildLiveGameActions_(selectedStats, customStats) {
 }
 
 function getLiveGameEvents_(gameId) {
-  const sheet = SpreadsheetApp.getActive().getSheetByName(LIVE_GAME_EVENTS_SHEET);
+  const sheet = getCoachIQSpreadsheet_().getSheetByName(LIVE_GAME_EVENTS_SHEET);
   if (!sheet || sheet.getLastRow() < 2) return [];
   return sheet.getRange(2, 1, sheet.getLastRow() - 1, LIVE_GAME_EVENT_HEADERS.length).getValues()
     .filter(function(row) { return String(row[1] || "") === String(gameId) && row[11] !== true; })
@@ -862,7 +952,7 @@ function updateLiveGameStateFromEvents_(gameRecord, period) {
 }
 
 function findLiveGameRecord_(gameId) {
-  const sheet = SpreadsheetApp.getActive().getSheetByName(LIVE_GAMES_SHEET);
+  const sheet = getCoachIQSpreadsheet_().getSheetByName(LIVE_GAMES_SHEET);
   const values = sheet.getDataRange().getValues();
   const headers = values[0];
   const cols = liveGameHeaderMap_(headers);

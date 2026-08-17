@@ -5,29 +5,19 @@
  */
 
 const SETTINGS_SHEET = "Settings";
+const COACHIQ_SETTINGS_CACHE_KEY_ = "coachiq-settings-map-v1";
+let COACHIQ_SETTINGS_MAP_CACHE_ = null;
+let COACHIQ_STAFF_ACCESS_CACHE_ = null;
 
 /**
  * Returns a setting by name.
  */
 function getSetting(settingName) {
 
-  const sheet = SpreadsheetApp
-    .getActive()
-    .getSheetByName(SETTINGS_SHEET);
-
-  const data = sheet.getDataRange().getValues();
-
-  for (let i = 0; i < data.length; i++) {
-
-    if (data[i][0] === settingName) {
-
-      return data[i][1];
-
-    }
-
-  }
-
-  return "";
+  const settings = getSettingsMap_();
+  return Object.prototype.hasOwnProperty.call(settings, settingName)
+    ? settings[settingName]
+    : "";
 
 }
 /**
@@ -64,9 +54,20 @@ rewards: getActiveRewards()
 
 function getSettingsMap_() {
 
-  const sheet = SpreadsheetApp
-    .getActive()
-    .getSheetByName(SETTINGS_SHEET);
+  if (COACHIQ_SETTINGS_MAP_CACHE_) return COACHIQ_SETTINGS_MAP_CACHE_;
+
+  const cachedSettings = CacheService.getScriptCache().get(COACHIQ_SETTINGS_CACHE_KEY_);
+  if (cachedSettings) {
+    try {
+      COACHIQ_SETTINGS_MAP_CACHE_ = JSON.parse(cachedSettings);
+      return COACHIQ_SETTINGS_MAP_CACHE_;
+    } catch (error) {
+      CacheService.getScriptCache().remove(COACHIQ_SETTINGS_CACHE_KEY_);
+    }
+  }
+
+  const sheet = getCoachIQSpreadsheet_().getSheetByName(SETTINGS_SHEET);
+  if (!sheet) throw new Error("The Settings sheet was not found.");
   const data = sheet.getDataRange().getValues();
   const settings = {};
 
@@ -78,7 +79,9 @@ function getSettingsMap_() {
     }
   });
 
-  return settings;
+  COACHIQ_SETTINGS_MAP_CACHE_ = settings;
+  CacheService.getScriptCache().put(COACHIQ_SETTINGS_CACHE_KEY_, JSON.stringify(settings), 30);
+  return COACHIQ_SETTINGS_MAP_CACHE_;
 
 }
 
@@ -112,6 +115,8 @@ return {
     currentSeason: settings["Current Season"] || "",
 
     sport: settings["Sport"] || "Football",
+
+    attendanceStandard: normalizeAttendanceStandard_(settings["Attendance Standard"]),
 
     primaryColor: normalizeThemeColor_(settings["Primary Color"], "#1E3A5F"),
 
@@ -152,6 +157,7 @@ function saveProgramInformation(data) {
     "Mascot Name": String(data.mascotName || "").trim(),
     "Current Season": String(data.currentSeason || "").trim(),
     "Sport": String(data.sport || "Football").trim(),
+    "Attendance Standard": validateAttendanceStandard_(data.attendanceStandard),
     "Primary Color": normalizeThemeColor_(data.primaryColor, "#1E3A5F"),
     "Secondary Color": normalizeThemeColor_(data.secondaryColor, "#F59E0B"),
     "Logo URL": String(data.logoUrl || "").trim().toLowerCase().indexOf("https://") === 0
@@ -172,6 +178,7 @@ function saveProgramInformation(data) {
         mascotName: beforeSettings.mascotName,
         currentSeason: beforeSettings.currentSeason,
         sport: beforeSettings.sport,
+        attendanceStandard: beforeSettings.attendanceStandard,
         primaryColor: beforeSettings.primaryColor,
         secondaryColor: beforeSettings.secondaryColor,
         logoUrl: beforeSettings.logoUrl
@@ -182,6 +189,7 @@ function saveProgramInformation(data) {
         mascotName: afterSettings.mascotName,
         currentSeason: afterSettings.currentSeason,
         sport: afterSettings.sport,
+        attendanceStandard: afterSettings.attendanceStandard,
         primaryColor: afterSettings.primaryColor,
         secondaryColor: afterSettings.secondaryColor,
         logoUrl: afterSettings.logoUrl
@@ -197,8 +205,21 @@ function saveProgramInformation(data) {
 
 }
 
+function normalizeAttendanceStandard_(value) {
+  const standard = Number(value);
+  return Number.isInteger(standard) && standard >= 1 && standard <= 100 ? standard : 75;
+}
+
+function validateAttendanceStandard_(value) {
+  const standard = Number(value);
+  if (!Number.isInteger(standard) || standard < 1 || standard > 100) {
+    throw new Error("Attendance standard must be a whole number between 1 and 100.");
+  }
+  return standard;
+}
+
 function setSettingValues_(updates) {
-  const sheet = SpreadsheetApp.getActive().getSheetByName(SETTINGS_SHEET);
+  const sheet = getCoachIQSpreadsheet_().getSheetByName(SETTINGS_SHEET);
   if (!sheet) {
     throw new Error("The Settings sheet was not found.");
   }
@@ -220,6 +241,9 @@ function setSettingValues_(updates) {
       sheet.appendRow([name, value]);
     }
   });
+  COACHIQ_SETTINGS_MAP_CACHE_ = null;
+  COACHIQ_STAFF_ACCESS_CACHE_ = null;
+  CacheService.getScriptCache().remove(COACHIQ_SETTINGS_CACHE_KEY_);
 }
 
 function safeSettingValue_(value) {
@@ -344,27 +368,7 @@ function saveStaffProfiles(profiles) {
  */
 function saveTeams(teams) {
   requireStaffCapability_("manage_settings");
-
-  const sheet = SpreadsheetApp
-    .getActive()
-    .getSheetByName(SETTINGS_SHEET);
-
-  const data = sheet.getDataRange().getValues();
-
-  for (let i = 0; i < data.length; i++) {
-
-    if (data[i][0] === "Teams") {
-
-      sheet
-        .getRange(i + 1, 2)
-        .setValue(teams.join(", "));
-
-      return;
-
-    }
-
-  }
-
+  setSettingValues_({"Teams": (teams || []).join(", ")});
 }
 /**
  * Saves any comma-separated setting list.
@@ -407,16 +411,24 @@ function saveSettingList(settingName, items) {
 }
 
 function getCurrentStaffAccess_() {
+  if (COACHIQ_STAFF_ACCESS_CACHE_) return COACHIQ_STAFF_ACCESS_CACHE_;
   let profiles = [];
   try { profiles = JSON.parse(getSetting("Staff Profiles") || "[]"); } catch (error) { profiles = []; }
   const verified = Array.isArray(profiles) ? profiles.filter(function(profile) { return String(profile.email || "").trim(); }) : [];
   const allCapabilities = ["manage_roster", "run_sessions", "evaluate_players", "view_intelligence", "manage_settings"];
-  if (!verified.length) return {configured: false, email: "", role: "Owner setup", teams: [], positions: [], capabilities: allCapabilities};
+  if (!verified.length) {
+    COACHIQ_STAFF_ACCESS_CACHE_ = {configured: false, email: "", role: "Owner setup", teams: [], positions: [], capabilities: allCapabilities};
+    return COACHIQ_STAFF_ACCESS_CACHE_;
+  }
   const email = String(Session.getActiveUser().getEmail() || "").trim().toLowerCase();
   const profile = verified.find(function(item) { return String(item.email || "").trim().toLowerCase() === email; });
-  if (!profile) return {configured: true, email: email, role: "Unassigned", teams: [], positions: [], capabilities: []};
+  if (!profile) {
+    COACHIQ_STAFF_ACCESS_CACHE_ = {configured: true, email: email, role: "Unassigned", teams: [], positions: [], capabilities: []};
+    return COACHIQ_STAFF_ACCESS_CACHE_;
+  }
   const capabilities = profile.role === "Head Coach" ? allCapabilities : (profile.capabilities || []);
-  return {configured: true, email: email, name: profile.name, role: profile.role, teams: profile.teams || [], positions: profile.positions || [], capabilities: capabilities};
+  COACHIQ_STAFF_ACCESS_CACHE_ = {configured: true, email: email, name: profile.name, role: profile.role, teams: profile.teams || [], positions: profile.positions || [], capabilities: capabilities};
+  return COACHIQ_STAFF_ACCESS_CACHE_;
 }
 
 function filterPlayersForCurrentStaff_(players) {
