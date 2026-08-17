@@ -491,7 +491,7 @@ function getLeaderboard(options){
 
   const players = getPlayersForUI();
   const pointTotals = {};
-  const pointSheet = SpreadsheetApp.getActive()
+  const pointSheet = getCoachIQSpreadsheet_()
     .getSheetByName(CULTURE_POINTS_SHEET);
 
   if(pointSheet && pointSheet.getLastRow() > 1){
