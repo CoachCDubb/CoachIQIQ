@@ -10,7 +10,7 @@ const AUDIT_HEADERS = [
 
 function logCoachIQAudit(event) {
   event = event || {};
-  const sheet = SpreadsheetApp.getActive().getSheetByName(AUDIT_SHEET);
+  const sheet = getCoachIQSpreadsheet_().getSheetByName(AUDIT_SHEET);
   if (!sheet) {
     throw new Error("The Audit Log sheet was not found.");
   }
