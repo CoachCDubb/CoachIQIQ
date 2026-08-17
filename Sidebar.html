@@ -3,7 +3,7 @@
   <div class="logo">
     <div class="brand-mark-wrap">
       <img id="programLogo" class="program-logo" alt="" hidden>
-      <span class="brand-fallback" aria-hidden="true">CIQ</span>
+      <span class="brand-fallback coachiq-brand-icon" aria-hidden="true"></span>
     </div>
     <div class="brand-copy">
       <h2 id="programBrandName">CoachIQ</h2>
@@ -13,11 +13,11 @@
 
   <div class="nav-label">Workspace</div>
 
-  <div class="nav-item" data-page="Dashboard" onclick="loadPage('Dashboard')">
+  <div class="nav-item" data-page="Dashboard" data-capability="view_intelligence" onclick="loadPage('Dashboard')">
     <span class="nav-icon">⌂</span><span>Dashboard</span>
   </div>
 
-<div class="nav-item" data-page="Sessions" onclick="loadPage('Sessions')">
+<div class="nav-item" data-page="Sessions" data-capability="run_sessions" onclick="loadPage('Sessions')">
   <span class="nav-icon">▣</span><span>Sessions</span>
 </div>
 
@@ -25,11 +25,11 @@
     <span class="nav-icon">G</span><span>Live Game</span>
   </div>
 
-  <div class="nav-item" data-page="Players" onclick="loadPage('Players')">
+  <div class="nav-item" data-page="Players" data-capability="evaluate_players" onclick="loadPage('Players')">
     <span class="nav-icon">♟</span><span>Players</span>
   </div>
 
-  <div class="nav-item" data-page="Leaderboard" onclick="loadPage('Leaderboard')">
+  <div class="nav-item" data-page="Leaderboard" data-capability="view_intelligence" onclick="loadPage('Leaderboard')">
     <span class="nav-icon">♛</span><span>Leaderboard</span>
 </div>
 
@@ -50,7 +50,7 @@
   </div>
 
   <div class="sidebar-footer">
-    <span class="sidebar-footer-mark">C</span>
+    <span class="sidebar-footer-mark coachiq-brand-icon" aria-hidden="true"></span>
     <div><strong>CoachIQ</strong><small>Program OS</small></div>
   </div>
 

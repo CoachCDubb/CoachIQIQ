@@ -24,8 +24,7 @@ function createPracticeSession(data){
 
 function createPracticeSession_(data){
 
-  const sheet = SpreadsheetApp
-    .getActive()
+  const sheet = getCoachIQSpreadsheet_()
     .getSheetByName(SESSION_SHEET);
 
   const sessionId = generatePracticeSessionId();
@@ -53,33 +52,38 @@ function createPracticeSession_(data){
 }
 
 function createPracticeSessionWithEvaluations(data){
+  requireStaffCapability_("run_sessions");
+  const players = getPlayersByTeams(data.teams || []);
 
+  if(!players.length){
+    throw new Error("No active players were found for the selected team(s).");
+  }
+
+  // Only ID allocation and the Sessions row append need the global lock. Player
+  // loading and evaluation-row creation can be slow and must not block Live
+  // Game saves or another coach from opening a practice.
   const lock = LockService.getScriptLock();
-  lock.waitLock(10000);
-
+  if(!lock.tryLock(30000)){
+    throw new Error("CoachIQ is finishing another save. Wait a moment, then start the session again.");
+  }
+  let sessionId;
   try {
-    const players = getPlayersByTeams(data.teams || []);
-
-    if(!players.length){
-      throw new Error("No active players were found for the selected team(s).");
-    }
-
-    const sessionId = createPracticeSession_(data);
-
-    try {
-      createEvaluationRows(sessionId, players, (data.evaluators || [""])[0]);
-    } catch(error){
-      deleteSession(sessionId);
-      throw error;
-    }
-
-    return JSON.parse(JSON.stringify({
-      sessionId: sessionId,
-      players: players
-    }));
+    sessionId = createPracticeSession_(data);
   } finally {
     lock.releaseLock();
   }
+
+  try {
+    createEvaluationRows(sessionId, players, (data.evaluators || [""])[0]);
+  } catch(error){
+    deleteSession(sessionId);
+    throw error;
+  }
+
+  return JSON.parse(JSON.stringify({
+    sessionId: sessionId,
+    players: players
+  }));
 
 }
 /**
@@ -87,8 +91,7 @@ function createPracticeSessionWithEvaluations(data){
  */
 function generatePracticeSessionId(){
 
-  const sheet = SpreadsheetApp
-    .getActive()
+  const sheet = getCoachIQSpreadsheet_()
     .getSheetByName(SESSION_SHEET);
 
   const lastRow = sheet.getLastRow();
@@ -111,8 +114,7 @@ function generatePracticeSessionId(){
  */
 function finishSession(sessionId){
 
-  const sheet = SpreadsheetApp
-    .getActive()
+  const sheet = getCoachIQSpreadsheet_()
     .getSheetByName("Sessions");
 
   const data = sheet.getDataRange().getValues();
@@ -144,7 +146,7 @@ function reopenSession(sessionId){
   lock.waitLock(10000);
 
   try {
-    const sessionSheet = SpreadsheetApp.getActive().getSheetByName("Sessions");
+    const sessionSheet = getCoachIQSpreadsheet_().getSheetByName("Sessions");
     const sessionCols = getColumnMap("Sessions");
     const sessionData = sessionSheet.getDataRange().getValues();
     let found = false;
@@ -167,7 +169,7 @@ function reopenSession(sessionId){
       throw new Error("Session not found: " + sessionId);
     }
 
-    const evaluationSheet = SpreadsheetApp.getActive()
+    const evaluationSheet = getCoachIQSpreadsheet_()
       .getSheetByName("Practice Evaluations");
     const evaluationCols = getColumnMap("Practice Evaluations");
     const evaluationData = evaluationSheet.getDataRange().getValues();
@@ -208,8 +210,7 @@ function reopenSession(sessionId){
  */
 function getActiveSession(){
 
-  const sheet = SpreadsheetApp
-    .getActive()
+  const sheet = getCoachIQSpreadsheet_()
     .getSheetByName("Sessions");
 
   const cols = getColumnMap("Sessions");
@@ -241,8 +242,7 @@ function getActiveSession(){
 
 function getSessionEvaluations(sessionId){
 
-  const sheet = SpreadsheetApp
-    .getActive()
+  const sheet = getCoachIQSpreadsheet_()
     .getSheetByName("Practice Evaluations");
 
   const data = sheet.getDataRange().getValues();
@@ -273,10 +273,13 @@ function finishEntireSession(sessionId){
   requireStaffCapability_("run_sessions");
 
   const lock = LockService.getScriptLock();
-  lock.waitLock(10000);
+  if(!lock.tryLock(30000)){
+    throw new Error("CoachIQ is still saving practice changes. Wait a moment, then tap Finish Session again.");
+  }
 
+  let session;
   try {
-    const session = getPracticeSession(sessionId);
+    session = getPracticeSession(sessionId);
 
     if(!session){
       throw new Error("Session not found: " + sessionId);
@@ -290,9 +293,15 @@ function finishEntireSession(sessionId){
 
   completeEvaluations(sessionId);
 
+  } finally {
+    lock.releaseLock();
+  }
+
+  // Season totals are derived data. Rebuild them after releasing the global
+  // lock so other coaches can start sessions and Live Game taps can continue.
   rebuildPlayerSeasonStats();
 
-    try {
+  try {
       logCoachIQAudit({
         action: "COMPLETE_PRACTICE_SESSION",
         entityType: "Practice Session",
@@ -303,14 +312,11 @@ function finishEntireSession(sessionId){
         success: true,
         error: ""
       });
-    } catch (auditError) {
-      console.error("Session completed, but audit logging failed: " + auditError.message);
-    }
-
-    return sessionId;
-  } finally {
-    lock.releaseLock();
+  } catch (auditError) {
+    console.error("Session completed, but audit logging failed: " + auditError.message);
   }
+
+  return sessionId;
 
 }
 /**
@@ -318,8 +324,7 @@ function finishEntireSession(sessionId){
  */
 function getPracticeSession(sessionId){
 
- const sheet = SpreadsheetApp
-.getActive()
+ const sheet = getCoachIQSpreadsheet_()
 .getSheetByName(SESSION_SHEET);
 
   const headers = sheet
