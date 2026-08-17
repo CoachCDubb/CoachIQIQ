@@ -54,3 +54,23 @@ function rowToObject(headers, row){
   return obj;
 
 }
+
+/**
+ * Returns the CoachIQ workbook in both spreadsheet-dialog and web-app runs.
+ * Some deployed services use this helper because a web-app request may not
+ * expose an active spreadsheet even though the script is container-bound.
+ */
+function getCoachIQSpreadsheet_() {
+  const properties = PropertiesService.getScriptProperties();
+  const active = SpreadsheetApp.getActive();
+  if (active) {
+    properties.setProperty("COACHIQ_SPREADSHEET_ID", active.getId());
+    return active;
+  }
+
+  const spreadsheetId = properties.getProperty("COACHIQ_SPREADSHEET_ID");
+  if (!spreadsheetId) {
+    throw new Error("CoachIQ could not identify its spreadsheet. Open CoachIQ from the spreadsheet once, then retry.");
+  }
+  return SpreadsheetApp.openById(spreadsheetId);
+}

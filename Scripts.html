@@ -167,7 +167,7 @@ function loadPage(page, callback){
         console.error(error);
 
         showToast(
-            "Unable to load page.",
+            (error && error.message) || "Unable to load page.",
             "error"
         );
 
@@ -1205,6 +1205,27 @@ function loadSettings(requestId){
     })
     .getCoachIQSettings();
 
+  google.script.run
+    .withSuccessHandler(function(status){ if(isCurrentPage("Settings", requestId)){ renderCoachIQBackupStatus(status); } })
+    .withFailureHandler(function(error){ if(isCurrentPage("Settings", requestId)){ renderCoachIQBackupError(error); } })
+    .getCoachIQBackupStatus();
+
+}
+
+function renderCoachIQBackupStatus(status){
+  const element=document.getElementById("backupStatus");if(!element){return;}
+  const last=status.lastBackupAt?new Date(status.lastBackupAt).toLocaleString():"No successful backup recorded";
+  element.className="backup-status "+(status.lastError?"error":status.enabled?"protected":"warning");
+  element.innerHTML=`<strong>${status.enabled?"Daily protection enabled":"Daily protection not enabled"}</strong><span>Last backup: ${escapeHtmlValue(last)}</span><span>Reason: ${escapeHtmlValue(status.lastBackupReason||"—")}</span><span>Retention: newest ${Number(status.retentionLimit||0)} copies</span>${status.lastError?`<span>Last error: ${escapeHtmlValue(status.lastError)}</span>`:""}`;
+  const button=document.getElementById("enableBackupsButton");if(button){button.hidden=!!status.enabled;}
+}
+function renderCoachIQBackupError(error){const element=document.getElementById("backupStatus");if(element){element.className="backup-status error";element.textContent=error.message||"Backup status is unavailable.";}}
+function enableCoachIQBackups(){runCoachIQBackupAction_("enableAutomaticCoachIQBackups","Enabling…","Daily backup protection enabled.");}
+function createCoachIQBackupNow(){runCoachIQBackupAction_("createCoachIQBackup","Creating…","Protected spreadsheet backup created.");}
+function runCoachIQBackupAction_(method,busyText,successText){
+  const buttons=[document.getElementById("enableBackupsButton"),document.getElementById("createBackupButton")].filter(Boolean);buttons.forEach(function(button){button.disabled=true;});
+  const status=document.getElementById("backupStatus");if(status){status.textContent=busyText;}
+  google.script.run.withSuccessHandler(function(){buttons.forEach(function(button){button.disabled=false;});showToast(successText);google.script.run.withSuccessHandler(renderCoachIQBackupStatus).withFailureHandler(renderCoachIQBackupError).getCoachIQBackupStatus();}).withFailureHandler(function(error){buttons.forEach(function(button){button.disabled=false;});renderCoachIQBackupError(error);showToast(error.message||"Backup failed.","error");})[method]();
 }
 
 function loadStaff(requestId){
@@ -1968,16 +1989,11 @@ function showEvaluationPage(settings){
   const evaluator = document.getElementById("evaluatorSelect");
 
   evaluator.innerHTML = "";
-
-  settings.staff.forEach(function(coach){
-
-    evaluator.innerHTML += `
-      <option value="${coach}">
-        ${coach}
-      </option>
-    `;
-
-  });
+  const signedInEvaluator=String((CoachIQ.access||{}).name||"").trim();
+  const evaluatorNames=(settings.staff||[]).slice();
+  if(signedInEvaluator && evaluatorNames.indexOf(signedInEvaluator)===-1){evaluatorNames.unshift(signedInEvaluator);}
+  evaluatorNames.forEach(function(coach){const option=document.createElement("option");option.value=coach;option.textContent=coach;evaluator.appendChild(option);});
+  if(signedInEvaluator){evaluator.value=signedInEvaluator;evaluator.disabled=true;evaluator.title="Evaluator is assigned from your signed-in staff profile.";}
 
   // Team Checkboxes
   const teamContainer = document.getElementById("teamCheckboxes");
@@ -3409,6 +3425,11 @@ if(document.getElementById("dashboardTrends")){
         .withFailureHandler(function(error){
 
             console.error(error);
+            const message=(error&&error.message)||"Dashboard data could not be loaded.";
+            ["dashboardPlayers","dashboardLatestSession","dashboardAttendance","dashboardCulture","dashboardLeader","dashboardActivity","dashboardInsight","dashboardFocus","dashboardTrends"].forEach(function(id){
+                const element=document.getElementById(id);if(element){element.textContent=message;}
+            });
+            showToast(message,"error");
 
         })
         .getDashboardData();
