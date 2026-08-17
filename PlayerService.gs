@@ -5,20 +5,32 @@
  */
 
 const PLAYER_SHEET = "Players";
+const COACHIQ_PLAYERS_CACHE_KEY_ = "coachiq-active-roster-v1";
+
+function clearPlayersCache_() {
+  CacheService.getScriptCache().remove(COACHIQ_PLAYERS_CACHE_KEY_);
+}
 
 /**
  * Returns every player.
  */
 function getPlayers() {
 
-  const sheet = SpreadsheetApp
-    .getActive()
-    .getSheetByName(PLAYER_SHEET);
+  const cachedPlayers = CacheService.getScriptCache().get(COACHIQ_PLAYERS_CACHE_KEY_);
+  if (cachedPlayers) {
+    try { return JSON.parse(cachedPlayers); } catch (error) { clearPlayersCache_(); }
+  }
+
+  const sheet = getCoachIQSpreadsheet_().getSheetByName(PLAYER_SHEET);
 
   const values = sheet.getDataRange().getValues();
 
   values.shift();
 
+  const serializedPlayers = JSON.stringify(values);
+  if (serializedPlayers.length < 90000) {
+    CacheService.getScriptCache().put(COACHIQ_PLAYERS_CACHE_KEY_, serializedPlayers, 20);
+  }
   return values;
 
 }
@@ -50,9 +62,7 @@ function updatePlayer(player) {
 
   try {
 
-  const sheet = SpreadsheetApp
-    .getActive()
-    .getSheetByName(PLAYER_SHEET);
+  const sheet = getCoachIQSpreadsheet_().getSheetByName(PLAYER_SHEET);
 
   const data = sheet.getDataRange().getValues();
 
@@ -70,13 +80,16 @@ function updatePlayer(player) {
         status: data[i][7]
       };
 
-      sheet.getRange(i + 1, 2).setValue(player.firstName);
-      sheet.getRange(i + 1, 3).setValue(player.lastName);
-      sheet.getRange(i + 1, 4).setValue(player.jersey);
-      sheet.getRange(i + 1, 5).setValue(player.grade);
-      sheet.getRange(i + 1, 6).setValue(player.team);
-      sheet.getRange(i + 1, 7).setValue(player.position);
-      sheet.getRange(i + 1, 8).setValue(player.status);
+      sheet.getRange(i + 1, 2, 1, 7).setValues([[
+        player.firstName,
+        player.lastName,
+        player.jersey,
+        player.grade,
+        player.team,
+        player.position,
+        player.status
+      ]]);
+      clearPlayersCache_();
 
       try {
         logCoachIQAudit({
@@ -138,9 +151,7 @@ function getNextPlayerId() {
 function addPlayer(player) {
   requireStaffCapability_("manage_roster");
 
-  const sheet = SpreadsheetApp
-    .getActive()
-    .getSheetByName(PLAYER_SHEET);
+  const sheet = getCoachIQSpreadsheet_().getSheetByName(PLAYER_SHEET);
 
   sheet.appendRow([
     player.id,
@@ -152,6 +163,7 @@ function addPlayer(player) {
     player.position,
     player.status
   ]);
+  clearPlayersCache_();
 
   try {
     logCoachIQAudit({
@@ -196,7 +208,7 @@ function importPlayers(roster) {
   lock.waitLock(10000);
 
   try {
-    const sheet = SpreadsheetApp.getActive().getSheetByName(PLAYER_SHEET);
+    const sheet = getCoachIQSpreadsheet_().getSheetByName(PLAYER_SHEET);
 
     if (!sheet) {
       throw new Error("The Players sheet was not found.");
@@ -311,6 +323,7 @@ function importPlayers(roster) {
     if (rows.length) {
       sheet.getRange(sheet.getLastRow() + 1, 1, rows.length, lastColumn)
         .setValues(rows);
+      clearPlayersCache_();
     }
 
     const result = {
@@ -379,9 +392,7 @@ function archivePlayer(playerId) {
   requireStaffCapability_("manage_roster");
   requirePlayerAccess_(playerId);
 
-  const sheet = SpreadsheetApp
-    .getActive()
-    .getSheetByName(PLAYER_SHEET);
+  const sheet = getCoachIQSpreadsheet_().getSheetByName(PLAYER_SHEET);
 
   const data = sheet.getDataRange().getValues();
 
@@ -395,6 +406,7 @@ function archivePlayer(playerId) {
 
       // Column 8 = Status
       sheet.getRange(i + 1, 8).setValue("Archived");
+      clearPlayersCache_();
 
       try {
         logCoachIQAudit({
@@ -422,9 +434,7 @@ function archivePlayer(playerId) {
 }
 function getPlayersByTeams(selectedTeams){
 
-  const sheet = SpreadsheetApp
-    .getActive()
-    .getSheetByName(PLAYER_SHEET);
+  const sheet = getCoachIQSpreadsheet_().getSheetByName(PLAYER_SHEET);
 
   const headers = sheet
     .getRange(1,1,1,sheet.getLastColumn())
@@ -432,9 +442,8 @@ function getPlayersByTeams(selectedTeams){
 
   const cols = getColumnMap("Players");
 
-  const data = sheet
-    .getRange(2,1,sheet.getLastRow()-1,sheet.getLastColumn())
-    .getValues();
+  if(sheet.getLastRow() < 2){ return []; }
+  const data = sheet.getRange(2,1,sheet.getLastRow()-1,sheet.getLastColumn()).getValues();
 
   return filterPlayersForCurrentStaff_(data)
     .filter(function(row){
@@ -555,6 +564,8 @@ return {
   player: insight.player,
 
   attendance: insight.attendance,
+
+  attendanceStandard: settings.attendanceStandard,
 
   trend: insight.trend,
 
