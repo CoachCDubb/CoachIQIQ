@@ -10,6 +10,8 @@ const SESSION_SHEET = "Sessions";
  * Creates a new Practice Session.
  */
 function createPracticeSession(data){
+  requireStaffCapability_("run_sessions");
+  data = preparePracticeSessionForCurrentStaff_(data);
 
   const lock = LockService.getScriptLock();
   lock.waitLock(10000);
@@ -53,12 +55,14 @@ function createPracticeSession_(data){
 }
 
 function createPracticeSessionWithEvaluations(data){
+  requireStaffCapability_("run_sessions");
+  data = preparePracticeSessionForCurrentStaff_(data);
 
   const lock = LockService.getScriptLock();
   lock.waitLock(10000);
 
   try {
-    const players = getPlayersByTeams(data.teams || []);
+    const players = filterPlayersForCurrentStaff_(getPlayersByTeams(data.teams || []));
 
     if(!players.length){
       throw new Error("No active players were found for the selected team(s).");
@@ -81,6 +85,30 @@ function createPracticeSessionWithEvaluations(data){
     lock.releaseLock();
   }
 
+}
+
+/**
+ * Binds a new session to the signed-in staff profile. The browser-provided
+ * evaluator is never trusted when staff access has been configured.
+ */
+function preparePracticeSessionForCurrentStaff_(data) {
+  data = data || {};
+  const access = getCurrentStaffAccess_();
+  const teams = Array.isArray(data.teams) ? data.teams.map(String) : [];
+  if (access.configured) {
+    if (!access.email || !access.name) {
+      throw new Error("CoachIQ could not match your signed-in Google account to a staff profile. Ask a Head Coach to verify your staff email and web app access settings.");
+    }
+    if (access.teams.length && teams.some(function(team) { return access.teams.indexOf(team) === -1; })) {
+      throw new Error("You cannot create a session for a team outside your staff assignment.");
+    }
+    data.evaluators = [access.name];
+  }
+  if (!Array.isArray(data.evaluators) || !String(data.evaluators[0] || "").trim()) {
+    throw new Error("CoachIQ could not identify the session evaluator.");
+  }
+  data.teams = teams;
+  return data;
 }
 /**
  * Generates the next Practice Session ID.
