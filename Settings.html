@@ -70,5 +70,12 @@
       <div id="pointRewardsContainer" class="settings-list"></div>
       <div class="settings-actions"><button class="btn" onclick="addPointReward()">+ Add reward</button><button class="btn btn-primary" onclick="savePointRewards()">Save rewards</button></div>
     </div>
+
+    <div class="settings-section settings-backup-section">
+      <div class="settings-section-heading"><span class="settings-section-number">08</span><div><h3>Protected backups</h3><p>Retained copies of the entire CoachIQ spreadsheet.</p></div></div>
+      <div id="backupStatus" class="backup-status" aria-live="polite">Checking backup protection…</div>
+      <p class="backup-restore-note"><strong>Manual restore only:</strong> CoachIQ never overwrites production here. Open the <em>CoachIQ Backups</em> folder in Drive, verify the copy and date, make a separate working copy, and have the owner move only reviewed sheets or rows into production. Keep production unchanged until the result is validated.</p>
+      <div class="settings-actions"><button id="enableBackupsButton" class="btn" type="button" onclick="enableCoachIQBackups()">Enable daily backups</button><button id="createBackupButton" class="btn btn-primary" type="button" onclick="createCoachIQBackupNow()">Create backup now</button></div>
+    </div>
   </div>
 </section>
