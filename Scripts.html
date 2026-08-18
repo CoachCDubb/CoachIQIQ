@@ -167,7 +167,7 @@ function loadPage(page, callback){
         console.error(error);
 
         showToast(
-            "Unable to load page.",
+            (error && error.message) || "Unable to load page.",
             "error"
         );
 
@@ -1205,6 +1205,27 @@ function loadSettings(requestId){
     })
     .getCoachIQSettings();
 
+  google.script.run
+    .withSuccessHandler(function(status){ if(isCurrentPage("Settings", requestId)){ renderCoachIQBackupStatus(status); } })
+    .withFailureHandler(function(error){ if(isCurrentPage("Settings", requestId)){ renderCoachIQBackupError(error); } })
+    .getCoachIQBackupStatus();
+
+}
+
+function renderCoachIQBackupStatus(status){
+  const element=document.getElementById("backupStatus");if(!element){return;}
+  const last=status.lastBackupAt?new Date(status.lastBackupAt).toLocaleString():"No successful backup recorded";
+  element.className="backup-status "+(status.lastError?"error":status.enabled?"protected":"warning");
+  element.innerHTML=`<strong>${status.enabled?"Daily protection enabled":"Daily protection not enabled"}</strong><span>Last backup: ${escapeHtmlValue(last)}</span><span>Reason: ${escapeHtmlValue(status.lastBackupReason||"—")}</span><span>Retention: newest ${Number(status.retentionLimit||0)} copies</span>${status.lastError?`<span>Last error: ${escapeHtmlValue(status.lastError)}</span>`:""}`;
+  const button=document.getElementById("enableBackupsButton");if(button){button.hidden=!!status.enabled;}
+}
+function renderCoachIQBackupError(error){const element=document.getElementById("backupStatus");if(element){element.className="backup-status error";element.textContent=error.message||"Backup status is unavailable.";}}
+function enableCoachIQBackups(){runCoachIQBackupAction_("enableAutomaticCoachIQBackups","Enabling…","Daily backup protection enabled.");}
+function createCoachIQBackupNow(){runCoachIQBackupAction_("createCoachIQBackup","Creating…","Protected spreadsheet backup created.");}
+function runCoachIQBackupAction_(method,busyText,successText){
+  const buttons=[document.getElementById("enableBackupsButton"),document.getElementById("createBackupButton")].filter(Boolean);buttons.forEach(function(button){button.disabled=true;});
+  const status=document.getElementById("backupStatus");if(status){status.textContent=busyText;}
+  google.script.run.withSuccessHandler(function(){buttons.forEach(function(button){button.disabled=false;});showToast(successText);google.script.run.withSuccessHandler(renderCoachIQBackupStatus).withFailureHandler(renderCoachIQBackupError).getCoachIQBackupStatus();}).withFailureHandler(function(error){buttons.forEach(function(button){button.disabled=false;});renderCoachIQBackupError(error);showToast(error.message||"Backup failed.","error");})[method]();
 }
 
 function loadStaff(requestId){
@@ -1440,8 +1461,14 @@ function showSettings(settings){
   renderSettingsList("staffContainer", settings.staff);
 
   renderRewards(settings.rewards);
+  renderSessionPolicyEditors(settings.sessionPolicies || []);
 
 }
+
+function renderSessionPolicyEditors(policies){const container=document.getElementById("sessionPoliciesContainer");if(!container)return;container.innerHTML="";(policies||[]).forEach(function(policy){container.appendChild(createSessionPolicyEditor_(policy));});if(!(policies||[]).length)addSessionPolicyEditor();}
+function createSessionPolicyEditor_(policy){policy=policy||{};const row=document.createElement("div");row.className="session-policy-editor";row.dataset.id=policy.id||"";row.innerHTML='<div class="session-policy-name"><label>Session name<input class="session-policy-name-input" maxlength="60" value="'+escapeHtmlValue(policy.name||"")+'"></label><label class="session-policy-active"><input type="checkbox" '+(policy.active===false?'':'checked')+'> Active</label></div><div class="session-policy-toggles"><label><input class="session-policy-attendance" type="checkbox" '+(policy.trackAttendance===false?'':'checked')+'> Attendance</label><label><input class="session-policy-evaluations" type="checkbox" '+(policy.enableEvaluations===false?'':'checked')+'> Evaluations</label><label><input class="session-policy-rewards" type="checkbox" '+(policy.allowRewards===false?'':'checked')+'> Rewards</label><label><input class="session-policy-notes" type="checkbox" '+(policy.allowNotes===false?'':'checked')+'> Player notes</label></div><div class="session-policy-rules"><label>Unexcused points<input class="session-policy-points" type="number" max="0" min="-100" step="1" value="'+Number(policy.unexcusedPoints||0)+'"></label><label>Excused attendance<select class="session-policy-excused"><option value="exclude">Exclude from percentage</option><option value="present">Count as present</option><option value="absent">Count as absent</option></select></label><button type="button" class="delete-setting-btn" onclick="this.closest(\'.session-policy-editor\').remove()">×</button></div>';row.querySelector(".session-policy-excused").value=policy.excusedTreatment||"exclude";return row;}
+function addSessionPolicyEditor(){const container=document.getElementById("sessionPoliciesContainer");if(container)container.appendChild(createSessionPolicyEditor_({active:true,trackAttendance:true,enableEvaluations:true,allowRewards:true,allowNotes:true,excusedTreatment:"exclude",unexcusedPoints:0}));}
+function saveSessionPolicySettings(){const button=document.getElementById("saveSessionPoliciesButton");const policies=Array.from(document.querySelectorAll(".session-policy-editor")).map(function(row){return{id:row.dataset.id,name:row.querySelector(".session-policy-name-input").value,active:row.querySelector(".session-policy-active input").checked,trackAttendance:row.querySelector(".session-policy-attendance").checked,enableEvaluations:row.querySelector(".session-policy-evaluations").checked,allowRewards:row.querySelector(".session-policy-rewards").checked,allowNotes:row.querySelector(".session-policy-notes").checked,unexcusedPoints:Number(row.querySelector(".session-policy-points").value||0),excusedTreatment:row.querySelector(".session-policy-excused").value};});button.disabled=true;button.textContent="Saving…";google.script.run.withSuccessHandler(function(saved){button.disabled=false;button.textContent="Save session types";renderSessionPolicyEditors(saved);showToast("Session types saved.");}).withFailureHandler(function(error){button.disabled=false;button.textContent="Save session types";showToast(error.message||"Unable to save session types.","error");}).saveSessionPolicies(policies);}
 function saveProgramInformation(){
 
   const data = {
@@ -1964,6 +1991,11 @@ function showEvaluationPage(settings){
   const today = new Date().toISOString().split("T")[0];
   document.getElementById("practiceDate").value = today;
 
+  const sessionType=document.getElementById("sessionType");
+  const policies=(settings.sessionPolicies||[]).filter(function(policy){return policy.active!==false;});
+  sessionType.innerHTML="";policies.forEach(function(policy){const option=document.createElement("option");option.value=policy.name;option.textContent=policy.name;sessionType.appendChild(option);});
+  CoachIQ.sessionPolicies=policies;
+
   // Evaluator Dropdown
   const evaluator = document.getElementById("evaluatorSelect");
 
@@ -1971,13 +2003,14 @@ function showEvaluationPage(settings){
 
   settings.staff.forEach(function(coach){
 
-    evaluator.innerHTML += `
-      <option value="${coach}">
-        ${coach}
-      </option>
-    `;
+    const option = document.createElement("option");
+    option.value = coach;
+    option.textContent = coach;
+    evaluator.appendChild(option);
 
   });
+
+  evaluator.disabled = false;
 
   // Team Checkboxes
   const teamContainer = document.getElementById("teamCheckboxes");
@@ -2416,6 +2449,7 @@ const session = {
     sessionNotes: document.getElementById("practiceNotes").value
 
 };
+session.policy=(CoachIQ.sessionPolicies||[]).find(function(policy){return policy.name===session.sessionType;})||null;
 
  google.script.run
   .withSuccessHandler(function(result){
@@ -2426,6 +2460,7 @@ const session = {
 
       const sessionId = result.sessionId;
       const players = result.players || [];
+      CoachIQ.currentSessionPolicy=result.policy||session.policy||null;
       window.currentPracticeSession = sessionId;
       const evaluator = session.evaluators[0];
 
@@ -2495,7 +2530,8 @@ function showEvaluationTable(players){
     return;
   }
 
-  const categories = evaluationSettings.cultureCategories;
+  const policy=CoachIQ.currentSessionPolicy||{trackAttendance:true,enableEvaluations:true,allowRewards:true,allowNotes:true};
+  const categories = policy.enableEvaluations===false ? [] : evaluationSettings.cultureCategories;
 
   let html = `
    <div class="card">
@@ -2504,13 +2540,13 @@ function showEvaluationTable(players){
 
     <div class="evaluation-table-wrapper">
 
-        <table>
+        <table class="${policy.trackAttendance===false?'no-attendance':''}">
 
         <thead>
 
           <tr>
 
-    <th class="sticky-attendance">Att.</th>
+    ${policy.trackAttendance===false ? "" : '<th class="sticky-attendance">Attendance</th>'}
 
     <th class="sticky-player">Player</th>
   `;
@@ -2540,14 +2576,7 @@ function showEvaluationTable(players){
     class="evaluation-row"
     data-player="${player["Player ID"]}">
 
-    <td class="sticky-attendance" style="text-align:center;">
-
-        <input
-            type="checkbox"
-            class="attendance-check"
-            checked>
-
-   </td>
+    ${policy.trackAttendance===false ? "" : '<td class="sticky-attendance"><select class="attendance-status"><option value="Present">Present</option><option value="Excused">Excused</option><option value="Unexcused">Unexcused</option><option value="Not Marked">Not Marked</option></select></td>'}
 
 <td class="sticky-player">
 
@@ -2594,7 +2623,7 @@ categories.forEach(function(category){
 });
 
 html += `
-  <td>
+  <td ${policy.allowRewards===false&&policy.allowNotes===false?'hidden':''}>
     <button class="action-btn evaluation-more-button"
       onclick="toggleEvaluationDetails('${player["Player ID"]}', this)">
       More
@@ -2604,7 +2633,7 @@ html += `
 <tr class="evaluation-details-row" data-player="${player["Player ID"]}" hidden>
   <td colspan="${categories.length + 3}">
     <div class="evaluation-details-panel">
-      <label>
+      <label ${policy.allowRewards===false?'hidden':''}>
         <span>Reward</span>
         <select class="reward-select" data-player="${player["Player ID"]}">
           <option value="">-- No Reward --</option>
@@ -2613,7 +2642,7 @@ html += `
           }).join("")}
         </select>
       </label>
-      <div class="evaluation-note-control">
+      <div class="evaluation-note-control" ${policy.allowNotes===false?'hidden':''}>
         <span class="evaluation-note-preview" data-player="${player["Player ID"]}">No note saved.</span>
         <button class="action-btn" onclick="openNotesModal('${player["Player ID"]}')">
           View / Edit Note
@@ -2639,7 +2668,7 @@ html += `
 
 initializeRatingButtons();
 
-initializeAttendanceCheckboxes();
+initializeAttendanceControls();
 
 initializeRewardDropdowns();
 
@@ -2789,6 +2818,17 @@ function initializeAttendanceCheckboxes(){
         });
 
 }
+function initializeAttendanceControls(){
+  document.querySelectorAll(".attendance-status").forEach(function(control){
+    control.addEventListener("change",function(){
+      const row=control.closest(".evaluation-row"),playerId=row.dataset.player,status=control.value,previous=control.dataset.saved||"Present";
+      const buttons=row.querySelectorAll(".rating-btn");control.disabled=true;retryEvaluationSave();
+      row.classList.toggle("player-absent",status!=="Present");buttons.forEach(function(button){button.disabled=status!=="Present";});
+      google.script.run.withSuccessHandler(function(result){control.disabled=false;control.dataset.saved=result.status;control.value=result.status;endEvaluationSave(true);}).withFailureHandler(function(error){control.disabled=false;control.value=previous;row.classList.toggle("player-absent",previous!=="Present");buttons.forEach(function(button){button.disabled=previous!=="Present";});endEvaluationSave(false);showToast(error.message||"Unable to save attendance.","error");}).updateAttendanceStatus(window.currentPracticeSession,playerId,status);
+    });
+    control.dataset.saved=control.value;
+  });
+}
 function finishCurrentSession(){
 
     if(EvaluationSaves.pending > 0){
@@ -2906,6 +2946,8 @@ function loadSessionView(sessionId, requestId, readOnly){
                     window.pointRewards = data.rewards;
 
                     showEvaluationPage(data.settings);
+                    let savedPolicy=null;try{savedPolicy=JSON.parse(data.session["Session Policy"]||"");}catch(error){savedPolicy=null;}
+                    CoachIQ.currentSessionPolicy=savedPolicy||(data.settings.sessionPolicies||[]).find(function(policy){return policy.name===data.session["Session Type"];})||null;
 
                     if(readOnly){
                         populateSessionSummary(data.session);
@@ -3063,6 +3105,9 @@ console.log(playerScores);
     // -------------------------
     // Restore Attendance
     // -------------------------
+
+    const attendanceStatus=document.querySelector(`.evaluation-row[data-player="${playerId}"] .attendance-status`);
+    if(attendanceStatus){attendanceStatus.value=playerScores.AttendanceStatus||(playerScores.Attendance===false?"Unexcused":"Present");attendanceStatus.dataset.saved=attendanceStatus.value;}
 
     if(playerScores.Attendance === false){
 
@@ -3409,6 +3454,11 @@ if(document.getElementById("dashboardTrends")){
         .withFailureHandler(function(error){
 
             console.error(error);
+            const message=(error&&error.message)||"Dashboard data could not be loaded.";
+            ["dashboardPlayers","dashboardLatestSession","dashboardAttendance","dashboardCulture","dashboardLeader","dashboardActivity","dashboardInsight","dashboardFocus","dashboardTrends"].forEach(function(id){
+                const element=document.getElementById(id);if(element){element.textContent=message;}
+            });
+            showToast(message,"error");
 
         })
         .getDashboardData();
