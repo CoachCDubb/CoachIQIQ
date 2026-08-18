@@ -419,6 +419,20 @@ function getCurrentStaffAccess_() {
   return {configured: true, email: email, name: profile.name, role: profile.role, teams: profile.teams || [], positions: profile.positions || [], capabilities: capabilities};
 }
 
+/** Returns the signed-in staff identity needed by browser UI controls. */
+function getCurrentStaffAccessForUI() {
+  const access = getCurrentStaffAccess_();
+  return {
+    configured: access.configured === true,
+    email: access.email || "",
+    name: access.name || "",
+    role: access.role || "",
+    teams: access.teams || [],
+    positions: access.positions || [],
+    capabilities: access.capabilities || []
+  };
+}
+
 function filterPlayersForCurrentStaff_(players) {
   const access = getCurrentStaffAccess_();
   if (!access.configured || access.role === "Head Coach" || access.capabilities.indexOf("manage_settings") >= 0) return players;
