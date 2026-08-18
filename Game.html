@@ -17,13 +17,15 @@
           <label>Team<select id="liveGameTeam" required onchange="handleLiveGameTeamChange()"></select></label>
           <label><span id="liveGameOpponentLabel">Opponent</span><input id="liveGameOpponent" type="text" maxlength="80" placeholder="Opponent name"></label>
           <label>Location<select id="liveGameLocation"><option>Home</option><option>Away</option><option>Neutral</option></select></label>
-          <label>Game Format<select id="liveGameFormat" onchange="updateLiveGameFormat()"><option>Quarters</option><option>Halves</option></select></label>
+          <label>Sport<select id="liveGameSport" onchange="updateLiveGameSport()"></select></label>
+          <label>Game Format<select id="liveGameFormat" onchange="updateLiveGameFormat()"></select></label>
           <label>Minutes per Period<input id="liveGamePeriodLength" type="number" min="1" max="60" value="8" required></label>
         </div>
       </article>
       <article class="card live-game-panel">
         <div class="live-game-panel-heading"><span>02</span><div><h3>Available Roster</h3><p>Select the athletes available tonight. Players are only attached to player-specific objectives.</p></div></div>
         <div class="live-game-select-actions"><button class="btn" type="button" onclick="setLiveGameRosterSelection(true)">Select all</button><button class="btn" type="button" onclick="setLiveGameRosterSelection(false)">Clear</button></div>
+        <div class="live-game-manual-player"><input id="liveGameManualPlayerName" maxlength="80" placeholder="Player name"><input id="liveGameManualPlayerJersey" maxlength="12" placeholder="#"><button class="btn" type="button" onclick="addManualLiveGamePlayer()">+ Add game-only player</button></div>
         <div id="liveGameRoster" class="live-game-roster"></div>
       </article>
     </div>
