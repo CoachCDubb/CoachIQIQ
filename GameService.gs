@@ -11,7 +11,7 @@ const LIVE_GAME_HEADERS = [
   "Period Length", "Status", "Current Period", "Our Score", "Opponent Score",
   "Roster Player IDs", "Selected Stats", "Created By", "Created At", "Updated At",
   "Game Type", "Custom Stat Definitions", "Tracking Plan", "Final Report", "Completed At",
-  "Active Tracking Plan", "Plan Adjustments"
+  "Active Tracking Plan", "Plan Adjustments", "Sport", "Guest Roster"
 ];
 
 const LIVE_GAME_EVENT_HEADERS = [
@@ -46,10 +46,33 @@ function getBasketballLiveStatCatalog_() {
   ];
 }
 
+function getLiveGameSportPreset_(sport){
+  const key=String(sport||"Basketball").toLowerCase();
+  const objective=function(id,label,goalType,subject,target,direction,unit){return{id:"objective_"+id,label:label,categoryKey:id,goalType:goalType,subject:subject,target:target,direction:direction||"higher",unit:unit||"count",playerId:"",playerLabel:"",active:true};};
+  const presets={
+    basketball:{formats:[{name:"Quarters",periodLength:8},{name:"Halves",periodLength:20}],objectives:[objective("transition_points","Transition Points","comparison","both_teams",1,"higher","points"),objective("field_goal_percentage","Field Goal Percentage","minimum","our_team",45,"higher","percentage"),objective("offensive_rebounds","Offensive Rebounds","minimum","our_team",10),objective("turnovers","Turnovers","maximum","our_team",12,"lower"),objective("paint_touches","Paint Touches","minimum","our_team",20)]},
+    football:{formats:[{name:"Quarters",periodLength:12},{name:"Halves",periodLength:24}],objectives:[objective("explosive_plays","Explosive Plays","minimum","our_team",5),objective("completion_percentage","Completion Percentage","minimum","our_team",60,"higher","percentage"),objective("turnovers","Turnovers","maximum","our_team",1,"lower"),objective("third_down_conversions","Third Down Conversions","minimum","our_team",5),objective("penalties","Penalties","maximum","our_team",5,"lower")]},
+    baseball:{formats:[{name:"7 Innings",periodLength:7},{name:"9 Innings",periodLength:9}],objectives:[objective("quality_at_bats","Quality At-Bats","minimum","our_team",12),objective("free_bases","Free Bases Allowed","maximum","our_team",3,"lower"),objective("errors","Errors","maximum","our_team",1,"lower"),objective("strikeouts","Pitcher Strikeouts","minimum","our_team",6)]},
+    soccer:{formats:[{name:"Halves",periodLength:40},{name:"Quarters",periodLength:20}],objectives:[objective("shots_on_goal","Shots on Goal","comparison","both_teams",1),objective("possession_wins","Possession Wins","minimum","our_team",20),objective("set_pieces","Dangerous Set Pieces","minimum","our_team",5),objective("goals","Goals","comparison","both_teams",1,"higher","points")]},
+    volleyball:{formats:[{name:"Best of 5 Sets",periodLength:25},{name:"Best of 3 Sets",periodLength:25}],objectives:[objective("serve_in_percentage","Serve-In Percentage","minimum","our_team",90,"higher","percentage"),objective("serve_aces","Serve Aces","minimum","our_team",5),objective("serve_errors","Serve Errors","maximum","our_team",5,"lower"),objective("blocks","Blocks","minimum","our_team",5),objective("first_ball_kills","First-Ball Kills","minimum","our_team",8)]},
+    other:{formats:[{name:"Periods",periodLength:10},{name:"Halves",periodLength:20}],objectives:[objective("scoring_opportunities","Scoring Opportunities","minimum","our_team",10),objective("turnovers","Turnovers","maximum","our_team",5,"lower"),objective("effort_plays","Effort Plays","minimum","our_team",10)]}
+  };
+  return presets[key]||presets.other;
+}
+
+function getLiveGameSportPresets_(){
+  const presets={};
+  ["Basketball","Football","Baseball","Soccer","Volleyball","Other"].forEach(function(sport){
+    presets[sport]=getLiveGameSportPreset_(sport);
+  });
+  return presets;
+}
+
 function getLiveGameSetupData() {
   requireStaffCapability_("run_sessions");
   initializeLiveGameSheets_();
   const settings = getCoachIQSettings();
+  const sportPreset=getLiveGameSportPreset_(settings.sport);
   const players = filterPlayersForCurrentStaff_(getPlayers())
     .filter(function(player) { return String(player[7] || "") !== "Archived"; })
     .map(function(player) {
@@ -73,7 +96,10 @@ function getLiveGameSetupData() {
     completedGames: getCompletedLiveGames_(),
     gamePlanTemplates: getLiveGamePlanTemplates_(),
     lastGamePlans: getLastLiveGamePlans_(),
-    defaults: {gameType:"Official Game", format:"Quarters", periodLength:8, location:"Home"}
+    sportPresets:getLiveGameSportPresets_(),
+    sportFormats:sportPreset.formats,
+    sportObjectives:sportPreset.objectives,
+    defaults: {gameType:"Official Game", format:sportPreset.formats[0].name, periodLength:sportPreset.formats[0].periodLength, location:"Home"}
   };
 }
 
@@ -90,9 +116,18 @@ function createLiveGameSetup(data) {
     (gameType === "Practice Scrimmage" ? "Intrasquad" : "");
   const gameDate = String(data.gameDate || "").trim();
   const location = ["Home", "Away", "Neutral"].indexOf(data.location) >= 0 ? data.location : "Home";
-  const format = ["Quarters", "Halves"].indexOf(data.format) >= 0 ? data.format : "Quarters";
+  const sportPresets=getLiveGameSportPresets_();
+  const requestedSport=String(data.sport||"");
+  const configuredSport=String(settings.sport||"Basketball");
+  const sport=Object.prototype.hasOwnProperty.call(sportPresets,requestedSport)?requestedSport:
+    (Object.prototype.hasOwnProperty.call(sportPresets,configuredSport)?configuredSport:"Other");
+  const sportPreset=getLiveGameSportPreset_(sport);
+  const allowedFormats=sportPreset.formats.map(function(item){return item.name;});
+  const format = allowedFormats.indexOf(data.format) >= 0 ? data.format : sportPreset.formats[0].name;
   const periodLength = Number(data.periodLength);
   const rosterIds = Array.isArray(data.playerIds) ? data.playerIds.map(String) : [];
+  const guestPlayers = cleanLiveGameGuestPlayers_(data.guestPlayers);
+  const allRosterIds = rosterIds.concat(guestPlayers.map(function(player){return player.id;}));
   const selectedStats = Array.isArray(data.selectedStats) ? data.selectedStats.map(String) : [];
   const customStats = cleanLiveGameCustomStats_(data.customStats);
   const trackingPlan = cleanLiveGameTrackingPlan_(data.trackingObjectives);
@@ -101,10 +136,10 @@ function createLiveGameSetup(data) {
   if (!team || (settings.teams || []).indexOf(team) === -1) throw new Error("Choose a valid CoachIQ team.");
   if (!opponent) throw new Error("Enter the opponent.");
   if (!Number.isInteger(periodLength) || periodLength < 1 || periodLength > 60) throw new Error("Period length must be between 1 and 60 minutes.");
-  if (!rosterIds.length) throw new Error("Select at least one available player.");
+  if (!allRosterIds.length) throw new Error("Select or manually add at least one available player.");
   if (!trackingPlan.length && !selectedStats.length) throw new Error("Add at least one game-plan objective.");
   trackingPlan.forEach(function(objective) {
-    if (objective.subject === "our_player" && rosterIds.indexOf(objective.playerId) < 0) {
+    if (objective.subject === "our_player" && allRosterIds.indexOf(objective.playerId) < 0) {
       throw new Error(objective.playerLabel + " must be included on the available roster.");
     }
   });
@@ -134,9 +169,9 @@ function createLiveGameSetup(data) {
     sheet.appendRow([
       gameId, safeLiveGameValue_(gameDate), safeLiveGameValue_(team), safeLiveGameValue_(opponent),
       location, format, periodLength, "Setup", 1, 0, 0,
-      JSON.stringify(rosterIds), JSON.stringify(selectedStats), userEmail, now, now,
+      JSON.stringify(allRosterIds), JSON.stringify(selectedStats), userEmail, now, now,
       gameType, JSON.stringify(customStats), JSON.stringify(trackingPlan), "", "",
-      JSON.stringify(trackingPlan), JSON.stringify([])
+      JSON.stringify(trackingPlan), JSON.stringify([]), sport, JSON.stringify(guestPlayers)
     ]);
   } finally {
     lock.releaseLock();
@@ -149,8 +184,8 @@ function createLiveGameSetup(data) {
       entityId:gameId,
       team:team,
       beforeValue:"Game did not exist",
-      afterValue:{gameDate:gameDate, gameType:gameType, opponent:opponent, location:location, format:format,
-        periodLength:periodLength, rosterSize:rosterIds.length, selectedStats:selectedStats,
+      afterValue:{gameDate:gameDate, gameType:gameType, opponent:opponent, location:location, sport:sport, format:format,
+        periodLength:periodLength, rosterSize:allRosterIds.length, guestRosterSize:guestPlayers.length, selectedStats:selectedStats,
         customStats:customStats, trackingObjectives:trackingPlan},
       success:true,
       error:""
@@ -159,7 +194,7 @@ function createLiveGameSetup(data) {
     console.error("Live game created, but audit logging failed: " + auditError.message);
   }
 
-  return {gameId:gameId, status:"Setup", gameType:gameType, opponent:opponent, message:"Game setup saved."};
+  return {gameId:gameId, status:"Setup", gameType:gameType, sport:sport, opponent:opponent, message:"Game setup saved."};
 }
 
 function initializeLiveGameSheets_() {
@@ -167,6 +202,22 @@ function initializeLiveGameSheets_() {
   ensureLiveGameSheet_(LIVE_GAME_EVENTS_SHEET, LIVE_GAME_EVENT_HEADERS);
   ensureLiveGameSheet_(LIVE_GAME_CHECKPOINTS_SHEET, LIVE_GAME_CHECKPOINT_HEADERS);
   ensureLiveGameSheet_(LIVE_GAME_TEMPLATES_SHEET, LIVE_GAME_TEMPLATE_HEADERS);
+}
+
+function cleanLiveGameGuestPlayers_(players){
+  if(!Array.isArray(players)){return[];}
+  if(players.length>20){throw new Error("A Live Game can include up to 20 manually added players.");}
+  const seen={};
+  return players.map(function(player,index){
+    const name=String((player||{}).name||"").trim().slice(0,80);
+    const jersey=String((player||{}).jersey||"").trim().slice(0,12);
+    let id=String((player||{}).id||"").trim();
+    if(!/^GUEST-[A-Z0-9-]{4,40}$/i.test(id)){id="GUEST-"+(index+1)+"-"+Utilities.getUuid().slice(0,8).toUpperCase();}
+    if(!name){throw new Error("Every manually added player needs a name.");}
+    if(seen[id]){throw new Error("A manually added player appears more than once.");}
+    seen[id]=true;
+    return{id:id,name:safeLiveGameValue_(name),jersey:safeLiveGameValue_(jersey)};
+  });
 }
 
 function ensureLiveGameSheet_(sheetName, headers) {
@@ -214,7 +265,7 @@ function cleanLiveGameTrackingPlan_(objectives) {
   if (objectives.length > 12) throw new Error("A game plan can include up to 12 objectives.");
   const validSubjects = ["our_team", "opponent_team", "our_player", "opponent_player", "both_teams"];
   const validGoals = ["track", "minimum", "maximum", "comparison"];
-  const validUnits = ["count", "points"];
+  const validUnits = ["count", "points", "percentage"];
   const seen = {};
   return objectives.map(function(objective, index) {
     objective = objective || {};
@@ -232,6 +283,7 @@ function cleanLiveGameTrackingPlan_(objectives) {
     if (["minimum", "maximum", "comparison"].indexOf(goalType) >= 0 && (!Number.isFinite(target) || target < 0 || target > 9999)) {
       throw new Error(label + " needs a valid target.");
     }
+    if(unit === "percentage" && target > 100){throw new Error(label + " percentage target cannot exceed 100.");}
     if ((subject === "our_player" || subject === "opponent_player") && !playerId && !playerLabel) {
       throw new Error(label + " needs a player.");
     }
@@ -392,6 +444,7 @@ function getLiveGameTracker(gameId) {
   const game = gameRecord.game;
   requireLiveGameTeamAccess_(game.Team);
   const rosterIds = parseLiveGameJson_(game["Roster Player IDs"], []);
+  const guestPlayers = parseLiveGameJson_(game["Guest Roster"], []);
   const selectedStats = parseLiveGameJson_(game["Selected Stats"], []);
   const customStats = parseLiveGameJson_(game["Custom Stat Definitions"], []);
   const originalObjectives = parseLiveGameJson_(game["Tracking Plan"], []);
@@ -402,7 +455,10 @@ function getLiveGameTracker(gameId) {
   }).map(function(player) {
     return {id:String(player[0] || ""), firstName:String(player[1] || ""), lastName:String(player[2] || ""),
       jersey:String(player[3] || ""), position:String(player[6] || "")};
-  });
+  }).concat(guestPlayers.map(function(player){
+    const names=String(player.name||"").trim().split(/\s+/);
+    return{id:String(player.id||""),firstName:names.shift()||"",lastName:names.join(" "),jersey:String(player.jersey||""),position:"Game-only player",guest:true};
+  }));
   const events = getLiveGameEvents_(gameId);
   if (objectives.length) {
     return {
@@ -465,6 +521,11 @@ function recordLiveGameObjectiveEvents(gameId, events) {
     } else {
       side = objective.subject.indexOf("opponent_") === 0 ? "Opponent" : "Us";
     }
+    if(objective.unit === "percentage"){
+      const component=String(event.component||"");
+      if(["made","attempt"].indexOf(component)<0) throw new Error("Choose success or miss for a percentage objective.");
+      side += component === "made" ? " Made" : " Attempt";
+    }
     const period = Number(event.period);
     if (!Number.isInteger(period) || period < 1 || period > 20) throw new Error("Choose a valid period.");
     if (objective.subject === "our_player") requirePlayerAccess_(objective.playerId);
@@ -502,11 +563,20 @@ function recordLiveGameObjectiveEvents(gameId, events) {
 
 function calculateLiveGameObjectiveTotals_(events, objectives) {
   const totals = {};
-  (objectives || []).forEach(function(objective) { totals[objective.id] = {our:0, opponent:0}; });
+  const objectiveMap={};
+  (objectives || []).forEach(function(objective) { totals[objective.id] = {our:0, opponent:0, ourMade:0, ourAttempts:0, opponentMade:0, opponentAttempts:0}; objectiveMap[objective.id]=objective; });
   (events || []).forEach(function(event) {
     if (!totals[event.eventType]) return;
-    const key = event.side === "Opponent" ? "opponent" : "our";
-    totals[event.eventType][key] = Math.max(0, totals[event.eventType][key] + Number(event.value || 0));
+    const total=totals[event.eventType],objective=objectiveMap[event.eventType],opponent=String(event.side||"").indexOf("Opponent")===0;
+    if(objective&&objective.unit==="percentage"){
+      const madeKey=opponent?"opponentMade":"ourMade",attemptKey=opponent?"opponentAttempts":"ourAttempts";
+      if(String(event.side||"").indexOf(" Made")>0){total[madeKey]=Math.max(0,total[madeKey]+Number(event.value||0));total[attemptKey]=Math.max(total[madeKey],total[attemptKey]+Number(event.value||0));}
+      else{total[attemptKey]=Math.max(total[madeKey],total[attemptKey]+Number(event.value||0));}
+      total[opponent?"opponent":"our"]=total[attemptKey]?Math.round(total[madeKey]/total[attemptKey]*1000)/10:0;
+    }else{
+      const key = opponent ? "opponent" : "our";
+      total[key] = Math.max(0, total[key] + Number(event.value || 0));
+    }
   });
   return totals;
 }
@@ -547,7 +617,8 @@ function recordLiveGameEvent(gameId, event) {
   if (gameClock && !/^\d{1,2}:\d{2}$/.test(gameClock)) throw new Error("Use MM:SS for the game clock.");
   const playerId = String(event.playerId || "");
   const rosterIds = parseLiveGameJson_(game["Roster Player IDs"], []);
-  const permittedPlayerIds = filterPlayersForCurrentStaff_(getPlayers()).map(function(player) { return String(player[0] || ""); });
+  const guestPlayerIds = parseLiveGameJson_(game["Guest Roster"], []).map(function(player){return String(player.id||"");});
+  const permittedPlayerIds = filterPlayersForCurrentStaff_(getPlayers()).map(function(player) { return String(player[0] || ""); }).concat(guestPlayerIds);
   if (action.requiresPlayer && (rosterIds.indexOf(playerId) === -1 || permittedPlayerIds.indexOf(playerId) === -1)) {
     throw new Error("Select a player within your assigned roster scope.");
   }
@@ -654,25 +725,26 @@ function buildLiveGameCheckpointReport_(tracker, checkpointType) {
     const value = objective.subject.indexOf("opponent_") === 0 ? total.opponent : total.our;
     let margin = null;
     let status = "neutral";
-    let summary = objective.label + ": " + value;
+    const unitSuffix=objective.unit==="percentage"?"%":"";
+    let summary = objective.label + ": " + value + unitSuffix;
     let recommendation = "Keep charting " + objective.label.toLowerCase() + ".";
     if (objective.goalType === "comparison") {
       margin = objective.direction === "lower" ? total.opponent - total.our : total.our - total.opponent;
       const requiredMargin = Math.max(1, Number(objective.target || 0));
       status = margin >= requiredMargin ? "winning" : margin >= 0 ? "even" : "behind";
-      summary = objective.label + ": " + tracker.game.team + " " + total.our + " – " + tracker.game.opponent + " " + total.opponent;
+      summary = objective.label + ": " + tracker.game.team + " " + total.our + unitSuffix + " – " + tracker.game.opponent + " " + total.opponent + unitSuffix;
       recommendation = margin >= Number(objective.target || 0)
         ? "Protect the " + objective.label.toLowerCase() + " advantage."
         : "Prioritize " + objective.label.toLowerCase() + "; the battle is " + (margin === 0 ? "even" : "currently against us") + ".";
     } else if (objective.goalType === "minimum") {
       margin = value - Number(objective.target || 0);
       status = value >= objective.target ? "winning" : value >= objective.target * .65 ? "even" : "behind";
-      summary += " of " + objective.target + " minimum";
+      summary += " of " + objective.target + unitSuffix + " minimum";
       recommendation = status === "winning" ? "Maintain the pace on " + objective.label.toLowerCase() + "." : "Create more opportunities for " + objective.label.toLowerCase() + ".";
     } else if (objective.goalType === "maximum") {
       margin = Number(objective.target || 0) - value;
       status = value <= objective.target ? "winning" : "behind";
-      summary += " of " + objective.target + " maximum";
+      summary += " of " + objective.target + unitSuffix + " maximum";
       recommendation = status === "winning" ? "Keep " + objective.label.toLowerCase() + " under control." : "Immediate adjustment: reduce " + objective.label.toLowerCase() + ".";
     }
     if (status === "behind" || status === "even") recommendations.push(recommendation);
