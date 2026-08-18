@@ -46,10 +46,25 @@ function getBasketballLiveStatCatalog_() {
   ];
 }
 
+function getLiveGameSportPreset_(sport){
+  const key=String(sport||"Basketball").toLowerCase();
+  const objective=function(id,label,goalType,subject,target,direction,unit){return{id:"objective_"+id,label:label,categoryKey:id,goalType:goalType,subject:subject,target:target,direction:direction||"higher",unit:unit||"count",playerId:"",playerLabel:"",active:true};};
+  const presets={
+    basketball:{formats:[{name:"Quarters",periodLength:8},{name:"Halves",periodLength:20}],objectives:[objective("transition_points","Transition Points","comparison","both_teams",1,"higher","points"),objective("offensive_rebounds","Offensive Rebounds","minimum","our_team",10),objective("turnovers","Turnovers","maximum","our_team",12,"lower"),objective("paint_touches","Paint Touches","minimum","our_team",20)]},
+    football:{formats:[{name:"Quarters",periodLength:12},{name:"Halves",periodLength:24}],objectives:[objective("explosive_plays","Explosive Plays","minimum","our_team",5),objective("turnovers","Turnovers","maximum","our_team",1,"lower"),objective("third_down_conversions","Third Down Conversions","minimum","our_team",5),objective("penalties","Penalties","maximum","our_team",5,"lower")]},
+    baseball:{formats:[{name:"7 Innings",periodLength:7},{name:"9 Innings",periodLength:9}],objectives:[objective("quality_at_bats","Quality At-Bats","minimum","our_team",12),objective("free_bases","Free Bases Allowed","maximum","our_team",3,"lower"),objective("errors","Errors","maximum","our_team",1,"lower"),objective("strikeouts","Pitcher Strikeouts","minimum","our_team",6)]},
+    soccer:{formats:[{name:"Halves",periodLength:40},{name:"Quarters",periodLength:20}],objectives:[objective("shots_on_goal","Shots on Goal","comparison","both_teams",1),objective("possession_wins","Possession Wins","minimum","our_team",20),objective("set_pieces","Dangerous Set Pieces","minimum","our_team",5),objective("goals","Goals","comparison","both_teams",1,"higher","points")]},
+    volleyball:{formats:[{name:"Best of 5 Sets",periodLength:25},{name:"Best of 3 Sets",periodLength:25}],objectives:[objective("serve_aces","Serve Aces","minimum","our_team",5),objective("serve_errors","Serve Errors","maximum","our_team",5,"lower"),objective("blocks","Blocks","minimum","our_team",5),objective("first_ball_kills","First-Ball Kills","minimum","our_team",8)]},
+    other:{formats:[{name:"Periods",periodLength:10},{name:"Halves",periodLength:20}],objectives:[objective("scoring_opportunities","Scoring Opportunities","minimum","our_team",10),objective("turnovers","Turnovers","maximum","our_team",5,"lower"),objective("effort_plays","Effort Plays","minimum","our_team",10)]}
+  };
+  return presets[key]||presets.other;
+}
+
 function getLiveGameSetupData() {
   requireStaffCapability_("run_sessions");
   initializeLiveGameSheets_();
   const settings = getCoachIQSettings();
+  const sportPreset=getLiveGameSportPreset_(settings.sport);
   const players = filterPlayersForCurrentStaff_(getPlayers())
     .filter(function(player) { return String(player[7] || "") !== "Archived"; })
     .map(function(player) {
@@ -73,7 +88,9 @@ function getLiveGameSetupData() {
     completedGames: getCompletedLiveGames_(),
     gamePlanTemplates: getLiveGamePlanTemplates_(),
     lastGamePlans: getLastLiveGamePlans_(),
-    defaults: {gameType:"Official Game", format:"Quarters", periodLength:8, location:"Home"}
+    sportFormats:sportPreset.formats,
+    sportObjectives:sportPreset.objectives,
+    defaults: {gameType:"Official Game", format:sportPreset.formats[0].name, periodLength:sportPreset.formats[0].periodLength, location:"Home"}
   };
 }
 
@@ -90,7 +107,9 @@ function createLiveGameSetup(data) {
     (gameType === "Practice Scrimmage" ? "Intrasquad" : "");
   const gameDate = String(data.gameDate || "").trim();
   const location = ["Home", "Away", "Neutral"].indexOf(data.location) >= 0 ? data.location : "Home";
-  const format = ["Quarters", "Halves"].indexOf(data.format) >= 0 ? data.format : "Quarters";
+  const sportPreset=getLiveGameSportPreset_(settings.sport);
+  const allowedFormats=sportPreset.formats.map(function(item){return item.name;});
+  const format = allowedFormats.indexOf(data.format) >= 0 ? data.format : sportPreset.formats[0].name;
   const periodLength = Number(data.periodLength);
   const rosterIds = Array.isArray(data.playerIds) ? data.playerIds.map(String) : [];
   const selectedStats = Array.isArray(data.selectedStats) ? data.selectedStats.map(String) : [];
