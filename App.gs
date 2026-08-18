@@ -38,6 +38,8 @@ function getPage(pageName) {
   }
   if (pageName === "AI") requireStaffCapability_("view_intelligence");
   if (pageName === "Game") requireStaffCapability_("run_sessions");
+  if (pageName === "Sessions") requireStaffCapability_("run_sessions");
+  if (pageName === "Evaluations") requireStaffCapability_("evaluate_players");
   return HtmlService
     .createHtmlOutputFromFile(pageName)
     .getContent();

@@ -3,7 +3,7 @@
  */
 function getDashboardDataCore(){
 
-  const ss = SpreadsheetApp.getActive();
+  const ss = getCoachIQSpreadsheet_();
 
   // -----------------------------
   // Active Players
@@ -72,29 +72,14 @@ getPlayerSeasonStats().forEach(function(stat){
   }
 });
 
-const pointTotals = {};
-const culturePointSheet = ss.getSheetByName("Culture Points");
-const culturePointData = culturePointSheet.getDataRange().getValues();
-const cultureHeaders = culturePointData[0] || [];
-const culturePlayerIndex = cultureHeaders.indexOf("Player ID");
-const pointsIndex = cultureHeaders.indexOf("Points");
-
-culturePointData.slice(1).forEach(function(row){
-  if(culturePlayerIndex < 0 || pointsIndex < 0){
-    return;
-  }
-  const playerId = String(row[culturePlayerIndex]);
-  pointTotals[playerId] = (pointTotals[playerId] || 0) + Number(row[pointsIndex] || 0);
+const rankedPlayers = getLeaderboard().filter(function(player){
+  return activePlayerIds[String(player.playerId)];
 });
-
-let leader = null;
-activePlayerRows.forEach(function(row){
-  const points = pointTotals[String(row[0])] || 0;
-
-  if(!leader || points > leader.points){
-    leader = {name: row[1] + " " + row[2], points: points};
-  }
-});
+const topPlayer = rankedPlayers.length ? rankedPlayers[0] : null;
+const leader = topPlayer ? {
+  name: String(topPlayer.firstName || "") + " " + String(topPlayer.lastName || ""),
+  points: Number(topPlayer.points || 0)
+} : null;
 
   return {
 
