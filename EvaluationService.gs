@@ -39,6 +39,7 @@ row[cols["Session ID"] - 1] = sessionId;
 row[cols["Player ID"] - 1] = playerId;
 row[cols["Evaluator"] - 1] = evaluator;
 row[cols["Attendance"] - 1] = true;
+if(cols["Attendance Status"]) row[cols["Attendance Status"] - 1] = "Present";
 row[cols["Created"] - 1] = new Date();
 row[cols["Last Updated"] - 1] = new Date();
 row[cols["Complete"] - 1] = false;
@@ -217,7 +218,8 @@ function getEvaluationScores(sessionId){
 
     scores[playerId] = {
 
-  Attendance: data[i][cols["Attendance"] - 1]
+  Attendance: data[i][cols["Attendance"] - 1],
+  AttendanceStatus: cols["Attendance Status"] ? (data[i][cols["Attendance Status"] - 1] || "Present") : (data[i][cols["Attendance"] - 1] === false ? "Unexcused" : "Present")
 
 };
 
@@ -225,11 +227,9 @@ function getEvaluationScores(sessionId){
       scores[playerId].Notes = data[i][cols["Notes"] - 1] || "";
     }
 
-for(let c = 6; c < headers.length - 2; c++){
-
-  scores[playerId][headers[c]] = data[i][c];
-
-}
+(getCoachIQSettings().cultureCategories||[]).forEach(function(category){
+  if(cols[category]) scores[playerId][category]=data[i][cols[category]-1];
+});
 
   }
 
@@ -291,6 +291,29 @@ practiceEvaluationCache = null;
 
   throw new Error("Evaluation row not found for attendance update.");
 
+}
+
+function updateAttendanceStatus(sessionId, playerId, status){
+  requirePlayerAccess_(playerId);
+  const allowed=["Present","Excused","Unexcused","Not Marked"];
+  status=String(status||"");if(allowed.indexOf(status)<0)throw new Error("Choose a valid attendance status.");
+  const session=getPracticeSession(sessionId);if(!session)throw new Error("Session not found.");
+  const policy=getSessionPolicyForSession_(session);
+  if(!policy.trackAttendance)throw new Error("This session type does not track attendance.");
+  const sheet=getCoachIQSpreadsheet_().getSheetByName("Practice Evaluations"),cols=getColumnMap("Practice Evaluations");
+  let statusColumn=cols["Attendance Status"];
+  if(!statusColumn){statusColumn=sheet.getLastColumn()+1;sheet.getRange(1,statusColumn).setValue("Attendance Status");}
+  const data=sheet.getDataRange().getValues();
+  for(let i=1;i<data.length;i++){
+    if(data[i][cols["Session ID"]-1]===sessionId&&data[i][cols["Player ID"]-1]===playerId){
+      const booleanValue=status==="Present"?true:status==="Unexcused"?false:policy.excusedTreatment==="present"&&status==="Excused"?true:policy.excusedTreatment==="absent"&&status==="Excused"?false:"";
+      sheet.getRange(i+1,cols["Attendance"]).setValue(booleanValue);sheet.getRange(i+1,statusColumn).setValue(status);sheet.getRange(i+1,cols["Last Updated"]).setValue(new Date());practiceEvaluationCache=null;
+      syncUnexcusedAttendancePoints_(sessionId,playerId,status,policy);
+      try{logCoachIQAudit({action:"UPDATE_ATTENDANCE_STATUS",entityType:"Player Evaluation",entityId:sessionId+":"+playerId+":Attendance",team:session["Teams"]||"",beforeValue:"",afterValue:{status:status,points:status==="Unexcused"?policy.unexcusedPoints:0},success:true,error:""});}catch(error){console.error("Attendance saved, but audit logging failed: "+error.message);}
+      return {status:status,points:status==="Unexcused"?policy.unexcusedPoints:0};
+    }
+  }
+  throw new Error("Evaluation row not found for attendance update.");
 }
 
 /**

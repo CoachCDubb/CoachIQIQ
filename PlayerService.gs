@@ -192,6 +192,9 @@ function importPlayers(roster) {
     throw new Error("A roster import is limited to 500 players at a time.");
   }
 
+  // Never begin this high-volume write unless the current workbook is safe.
+  createCoachIQSafetyBackup_("Before roster import");
+
   const lock = LockService.getScriptLock();
   lock.waitLock(10000);
 
