@@ -3,7 +3,7 @@
  */
 function getDashboardDataCore(){
 
-  const ss = SpreadsheetApp.getActive();
+  const ss = getCoachIQSpreadsheet_();
 
   // -----------------------------
   // Active Players
@@ -44,6 +44,11 @@ const evaluationData = evaluationSheet.getDataRange().getValues();
 const evaluationHeaders = evaluationData[0] || [];
 const evaluationPlayerIndex = evaluationHeaders.indexOf("Player ID");
 const attendanceIndex = evaluationHeaders.indexOf("Attendance");
+const completeIndex = evaluationHeaders.indexOf("Complete");
+const evaluationPointTotals = {};
+const categoryIndexes = getSettingList("Culture Categories").map(function(category){
+  return evaluationHeaders.indexOf(category);
+}).filter(function(index){ return index >= 0; });
 
 evaluationData.slice(1).forEach(function(row){
   if(evaluationPlayerIndex < 0 || attendanceIndex < 0){
@@ -57,6 +62,14 @@ evaluationData.slice(1).forEach(function(row){
     totalPresent++;
   }else if(row[attendanceIndex] === false){
     totalAbsent++;
+  }
+  const complete = completeIndex < 0 || row[completeIndex] === true || String(row[completeIndex]).toUpperCase() === "TRUE";
+  if(complete){
+    const playerId=String(row[evaluationPlayerIndex]||"");
+    categoryIndexes.forEach(function(index){
+      const score=Number(row[index]);
+      if(Number.isFinite(score)&&score>=1&&score<=5){evaluationPointTotals[playerId]=(evaluationPointTotals[playerId]||0)+score;}
+    });
   }
 });
 
@@ -72,28 +85,17 @@ getPlayerSeasonStats().forEach(function(stat){
   }
 });
 
-const pointTotals = {};
-const culturePointSheet = ss.getSheetByName("Culture Points");
-const culturePointData = culturePointSheet.getDataRange().getValues();
-const cultureHeaders = culturePointData[0] || [];
-const culturePlayerIndex = cultureHeaders.indexOf("Player ID");
-const pointsIndex = cultureHeaders.indexOf("Points");
-
-culturePointData.slice(1).forEach(function(row){
-  if(culturePlayerIndex < 0 || pointsIndex < 0){
-    return;
-  }
-  const playerId = String(row[culturePlayerIndex]);
-  pointTotals[playerId] = (pointTotals[playerId] || 0) + Number(row[pointsIndex] || 0);
-});
-
-let leader = null;
+const culturePointTotals={};
+const culturePointSheet=ss.getSheetByName("Culture Points");
+if(culturePointSheet&&culturePointSheet.getLastRow()>1){
+  const cultureRows=culturePointSheet.getDataRange().getValues(),cultureHeaders=cultureRows.shift();
+  const culturePlayerIndex=cultureHeaders.indexOf("Player ID"),pointsIndex=cultureHeaders.indexOf("Points");
+  if(culturePlayerIndex>=0&&pointsIndex>=0){cultureRows.forEach(function(row){const playerId=String(row[culturePlayerIndex]||"");culturePointTotals[playerId]=(culturePointTotals[playerId]||0)+(Number(row[pointsIndex])||0);});}
+}
+let leader=null;
 activePlayerRows.forEach(function(row){
-  const points = pointTotals[String(row[0])] || 0;
-
-  if(!leader || points > leader.points){
-    leader = {name: row[1] + " " + row[2], points: points};
-  }
+  const playerId=String(row[0]||""),points=(culturePointTotals[playerId]||0)+(evaluationPointTotals[playerId]||0);
+  if(!leader||points>leader.points){leader={name:String(row[1]||"")+" "+String(row[2]||""),points:points};}
 });
 
   return {
