@@ -11,9 +11,7 @@ const SETTINGS_SHEET = "Settings";
  */
 function getSetting(settingName) {
 
-  const sheet = SpreadsheetApp
-    .getActive()
-    .getSheetByName(SETTINGS_SHEET);
+  const sheet = getCoachIQSpreadsheet_().getSheetByName(SETTINGS_SHEET);
 
   const data = sheet.getDataRange().getValues();
 
@@ -57,16 +55,36 @@ positions: splitSettingList_(settings["Positions"]),
 statuses: splitSettingList_(settings["Player Statuses"]),
 cultureCategories: splitSettingList_(settings["Culture Categories"]),
 staff: splitSettingList_(settings["Staff"]),
+sessionPolicies: typeof getSessionPolicies_ === "function" ? getSessionPolicies_().filter(function(policy){ return policy.active; }) : [],
 rewards: getActiveRewards()
 };
 
 }
 
+/**
+ * Returns backup status without breaking Settings when an older Apps Script
+ * copy has not received BackupService.gs yet.
+ */
+function getCoachIQBackupStatusForUI() {
+  requireStaffCapability_("manage_settings");
+  if(typeof getCoachIQBackupStatus !== "function"){
+    return {
+      available: false,
+      enabled: false,
+      lastBackupAt: "",
+      lastBackupReason: "",
+      lastError: "BackupService.gs has not been added to this Apps Script project.",
+      retentionLimit: 0
+    };
+  }
+  const status = getCoachIQBackupStatus();
+  status.available = true;
+  return status;
+}
+
 function getSettingsMap_() {
 
-  const sheet = SpreadsheetApp
-    .getActive()
-    .getSheetByName(SETTINGS_SHEET);
+  const sheet = getCoachIQSpreadsheet_().getSheetByName(SETTINGS_SHEET);
   const data = sheet.getDataRange().getValues();
   const settings = {};
 
@@ -97,9 +115,9 @@ function splitSettingList_(value) {
 /**
  * Returns all CoachIQ settings.
  */
-function getCoachIQSettings() {
+function getCoachIQSettings(settingsMap) {
 
-const settings = getSettingsMap_();
+const settings = settingsMap && typeof settingsMap === "object" ? settingsMap : getSettingsMap_();
 
 return {
 
@@ -128,6 +146,8 @@ return {
     cultureCategories: splitSettingList_(settings["Culture Categories"]),
 
    staff: splitSettingList_(settings["Staff"]),
+
+sessionPolicies: typeof getSessionPolicies_ === "function" ? getSessionPolicies_() : [],
 
 rewards: getPointAwards(),
 
@@ -406,9 +426,12 @@ function saveSettingList(settingName, items) {
   return settings;
 }
 
-function getCurrentStaffAccess_() {
+function getCurrentStaffAccess_(settingsMap) {
   let profiles = [];
-  try { profiles = JSON.parse(getSetting("Staff Profiles") || "[]"); } catch (error) { profiles = []; }
+  try {
+    const rawProfiles=settingsMap&&typeof settingsMap==="object"?settingsMap["Staff Profiles"]:getSetting("Staff Profiles");
+    profiles = JSON.parse(rawProfiles || "[]");
+  } catch (error) { profiles = []; }
   const verified = Array.isArray(profiles) ? profiles.filter(function(profile) { return String(profile.email || "").trim(); }) : [];
   const allCapabilities = ["manage_roster", "run_sessions", "evaluate_players", "view_intelligence", "manage_settings"];
   if (!verified.length) return {configured: false, email: "", role: "Owner setup", teams: [], positions: [], capabilities: allCapabilities};
@@ -417,6 +440,20 @@ function getCurrentStaffAccess_() {
   if (!profile) return {configured: true, email: email, role: "Unassigned", teams: [], positions: [], capabilities: []};
   const capabilities = profile.role === "Head Coach" ? allCapabilities : (profile.capabilities || []);
   return {configured: true, email: email, name: profile.name, role: profile.role, teams: profile.teams || [], positions: profile.positions || [], capabilities: capabilities};
+}
+
+/** Returns the signed-in staff identity needed by browser UI controls. */
+function getCurrentStaffAccessForUI() {
+  const access = getCurrentStaffAccess_();
+  return {
+    configured: access.configured === true,
+    email: access.email || "",
+    name: access.name || "",
+    role: access.role || "",
+    teams: access.teams || [],
+    positions: access.positions || [],
+    capabilities: access.capabilities || []
+  };
 }
 
 function filterPlayersForCurrentStaff_(players) {
