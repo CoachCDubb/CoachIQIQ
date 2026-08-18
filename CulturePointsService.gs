@@ -5,6 +5,20 @@
  */
 
 const CULTURE_POINTS_SHEET = "Culture Points";
+const UNEXCUSED_ATTENDANCE_MARKER = "CoachIQ unexcused attendance penalty";
+
+function syncUnexcusedAttendancePoints_(sessionId,playerId,status,policy){
+  const lock=LockService.getDocumentLock();lock.waitLock(10000);
+  try{
+  const sheet=getCoachIQSpreadsheet_().getSheetByName(CULTURE_POINTS_SHEET),data=sheet.getDataRange().getValues(),headers=data[0]||[];
+  const sessionCol=headers.indexOf("Session ID"),playerCol=headers.indexOf("Player ID"),notesCol=headers.indexOf("Notes")>=0?headers.indexOf("Notes"):7;
+  if(sessionCol<0||playerCol<0)throw new Error("Culture Points must include Session ID and Player ID columns.");
+  const matches=[];for(let i=1;i<data.length;i++){if(String(data[i][sessionCol])===String(sessionId)&&String(data[i][playerCol])===String(playerId)&&String(data[i][notesCol])===UNEXCUSED_ATTENDANCE_MARKER)matches.push(i+1);}
+  if(status!=="Unexcused"||Number(policy.unexcusedPoints)>=0){matches.reverse().forEach(function(row){sheet.deleteRow(row);});return;}
+  const row=new Array(sheet.getLastColumn()).fill("");row[0]=matches.length?sheet.getRange(matches[0],1).getValue():getNextPointId();row[1]=playerId;row[2]="ATTENDANCE_UNEXCUSED";row[3]="Unexcused Absence";row[4]=Number(policy.unexcusedPoints);row[5]=(getCurrentStaffAccess_().name||"");row[6]=new Date();row[notesCol]=UNEXCUSED_ATTENDANCE_MARKER;if(sessionCol>=0)row[sessionCol]=sessionId;
+  if(matches.length){sheet.getRange(matches[0],1,1,row.length).setValues([row]);matches.slice(1).reverse().forEach(function(number){sheet.deleteRow(number);});}else sheet.appendRow(row);
+  }finally{lock.releaseLock();}
+}
 /**
  * Returns one point category.
  */
