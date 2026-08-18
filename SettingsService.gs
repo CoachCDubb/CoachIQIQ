@@ -57,6 +57,7 @@ positions: splitSettingList_(settings["Positions"]),
 statuses: splitSettingList_(settings["Player Statuses"]),
 cultureCategories: splitSettingList_(settings["Culture Categories"]),
 staff: splitSettingList_(settings["Staff"]),
+sessionPolicies: typeof getSessionPolicies_ === "function" ? getSessionPolicies_().filter(function(policy){ return policy.active; }) : [],
 rewards: getActiveRewards()
 };
 
@@ -128,6 +129,8 @@ return {
     cultureCategories: splitSettingList_(settings["Culture Categories"]),
 
    staff: splitSettingList_(settings["Staff"]),
+
+sessionPolicies: typeof getSessionPolicies_ === "function" ? getSessionPolicies_() : [],
 
 rewards: getPointAwards(),
 
@@ -417,6 +420,20 @@ function getCurrentStaffAccess_() {
   if (!profile) return {configured: true, email: email, role: "Unassigned", teams: [], positions: [], capabilities: []};
   const capabilities = profile.role === "Head Coach" ? allCapabilities : (profile.capabilities || []);
   return {configured: true, email: email, name: profile.name, role: profile.role, teams: profile.teams || [], positions: profile.positions || [], capabilities: capabilities};
+}
+
+/** Returns the signed-in staff identity needed by browser UI controls. */
+function getCurrentStaffAccessForUI() {
+  const access = getCurrentStaffAccess_();
+  return {
+    configured: access.configured === true,
+    email: access.email || "",
+    name: access.name || "",
+    role: access.role || "",
+    teams: access.teams || [],
+    positions: access.positions || [],
+    capabilities: access.capabilities || []
+  };
 }
 
 function filterPlayersForCurrentStaff_(players) {
