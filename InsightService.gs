@@ -210,7 +210,7 @@ const categories = settings.cultureCategories;
 
     average: "-",
 
-    trend: "Stable",
+    trend: "No trend yet",
 
     icon: "➖",
 
@@ -226,26 +226,28 @@ const categories = settings.cultureCategories;
     const average =
       scores.reduce((a,b)=>a+b,0) / scores.length;
 
- // Calculate movement
-let movement = 0;
+// Compare the oldest and newest scores in the displayed window. Scores use a
+// five-point scale, so a one-point change is meaningful; the previous
+// two-point threshold mislabeled ordinary improvement or decline as Stable.
+const movement = scores.length > 1
+  ? scores[scores.length - 1] - scores[0]
+  : 0;
 
-for(let i = 1; i < scores.length; i++){
+let trend = scores.length === 1
+  ? "Baseline"
+  : average >= 4
+    ? "Consistently Strong"
+    : "Holding Steady";
+let icon = scores.length === 1 ? "●" : "→";
+let color = scores.length === 1 ? "#3B82F6" : "#F59E0B";
 
-  movement += scores[i] - scores[i-1];
-
-}
-
-let trend = "Stable";
-let icon = "→";
-let color = "#F59E0B";
-
-if(movement >= 2){
+if(scores.length > 1 && movement >= 0.5){
 
   trend = "Improving";
   icon = "↗";
   color = "#22C55E";
 
-}else if(movement <= -2){
+}else if(scores.length > 1 && movement <= -0.5){
 
   trend = "Needs Attention";
   icon = "↘";
