@@ -237,9 +237,15 @@ let trend = scores.length === 1
   ? "Baseline"
   : average >= 4
     ? "Consistently Strong"
-    : "Holding Steady";
+    : average < 3
+      ? "Needs Attention"
+      : "Holding Steady";
 let icon = scores.length === 1 ? "●" : "→";
-let color = scores.length === 1 ? "#3B82F6" : "#F59E0B";
+let color = scores.length === 1
+  ? "#3B82F6"
+  : average < 3
+    ? "#EF4444"
+    : "#F59E0B";
 
 if(scores.length > 1 && movement >= 0.5){
 
@@ -249,9 +255,16 @@ if(scores.length > 1 && movement >= 0.5){
 
 }else if(scores.length > 1 && movement <= -0.5){
 
-  trend = "Needs Attention";
+  // A strong current average should not be presented as a problem merely
+  // because its latest score dipped. Preserve the level and describe the
+  // direction separately; reserve Needs Attention for lower performance.
+  trend = average >= 4
+    ? "Strong — Trending Down"
+    : average >= 3
+      ? "Trending Down"
+      : "Needs Attention";
   icon = "↘";
-  color = "#EF4444";
+  color = average >= 3 ? "#F59E0B" : "#EF4444";
 
 }
 
