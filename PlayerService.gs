@@ -552,6 +552,10 @@ const maxScore =
   5;
 
 const overallScore = calculateOverallPlayerGrade(playerId);
+const culturePointTotal = getPlayerPoints(playerId);
+const evaluationPoints = Number(
+  getLeaderboardEvaluationPoints_()[String(playerId)] || 0
+);
 
 return {
 
@@ -593,9 +597,11 @@ Math.round(overallScore),
 maxScore: maxScore,
 
   points: {
-    total: getPlayerPoints(playerId),
-    positive: getPositivePoints(playerId),
+    total: culturePointTotal + evaluationPoints,
+    positive: getPositivePoints(playerId) + evaluationPoints,
     negative: getNegativePoints(playerId),
+    culturePoints: culturePointTotal,
+    evaluationPoints: evaluationPoints,
     breakdown: getPointBreakdown(playerId),
     history: getPointHistory(playerId)
   }
