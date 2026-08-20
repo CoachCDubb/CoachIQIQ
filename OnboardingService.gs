@@ -11,8 +11,9 @@ function getCoachIQBootstrap() {
 
   return {
     setupRequired: !configured,
-    settings: getCoachIQSettings(),
-    access: getCurrentStaffAccess_()
+    settings: getCoachIQSettings(settings),
+    access: getCurrentStaffAccess_(settings),
+    dashboardHtml: configured ? HtmlService.createHtmlOutputFromFile("Dashboard").getContent() : ""
   };
 }
 
