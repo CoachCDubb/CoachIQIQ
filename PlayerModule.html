@@ -259,6 +259,13 @@ const overallLabel = profile.overallLabel;
 
   Object.entries(profile.trend).forEach(([pillar,data])=>{
 
+    const averageValue = data && data.average;
+    const average = Number(averageValue);
+    const hasAverage = averageValue !== null &&
+      averageValue !== "" &&
+      averageValue !== "-" &&
+      Number.isFinite(average);
+
     pillarsHTML += `
 
       <div style="
@@ -282,14 +289,14 @@ const overallLabel = profile.overallLabel;
   margin-bottom:10px;
 ">
 
-  ${getStars(data.average)}
+  ${hasAverage ? getStars(average) : "☆☆☆☆☆"}
 
   <div style="
       margin-top:8px;
       font-weight:bold;
       font-size:20px;
   ">
-      ${data.average.toFixed(1)} / 5.0
+      ${hasAverage ? average.toFixed(1) + " / 5.0" : "No scores yet"}
   </div>
 
 </div>
