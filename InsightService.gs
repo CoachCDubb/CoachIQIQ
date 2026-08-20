@@ -87,9 +87,6 @@ function getRecentSessionIds(limit){
  * from the most recent completed sessions.
  */
 function getPlayerHistory(playerId, limit){
-
-  const sessionIds = getRecentSessionIds(limit);
-
   const sheet = SpreadsheetApp
     .getActive()
     .getSheetByName("Practice Evaluations");
@@ -110,7 +107,10 @@ const categories = settings.cultureCategories;
 
   const history = [];
 
-  for(let i = 1; i < data.length; i++){
+  // Evaluation rows are appended when sessions are created. Reading from the
+  // bottom keeps the newest completed evaluations first without depending on
+  // a matching Sessions row, which may be missing for imported/legacy data.
+  for(let i = data.length - 1; i >= 1 && history.length < limit; i--){
 
     const row = data[i];
 
@@ -118,12 +118,9 @@ const categories = settings.cultureCategories;
       continue;
     }
 
-   if(!sessionIds.includes(row[cols["Session ID"] - 1])){
-  continue;
-}
-
 // Ignore evaluations that aren't complete
-if(row[cols["Complete"] - 1] !== true){
+const completeValue = row[cols["Complete"] - 1];
+if(completeValue !== true && String(completeValue).toUpperCase() !== "TRUE"){
   continue;
 }
 
