@@ -82,5 +82,11 @@
       <div id="sessionPoliciesContainer" class="session-policy-list"></div>
       <div class="settings-actions"><button class="btn" type="button" onclick="addSessionPolicyEditor()">+ Add session type</button><button id="saveSessionPoliciesButton" class="btn btn-primary" type="button" onclick="saveSessionPolicySettings()">Save session types</button></div>
     </div>
+    <div class="settings-section settings-health-section">
+      <div class="settings-section-heading"><span class="settings-section-number">10</span><div><h3>System health</h3><p>Verify the release, data structure, staff security, and backup protection.</p></div></div>
+      <div id="systemHealthSummary" class="system-health-summary" aria-live="polite">Running CoachIQ diagnostics…</div>
+      <div id="systemHealthChecks" class="system-health-checks"></div>
+      <div class="settings-actions"><button id="refreshSystemHealthButton" class="btn btn-primary" type="button" onclick="loadCoachIQSystemHealth(PageNavigation.requestId)">Run diagnostics</button></div>
+    </div>
   </div>
 </section>

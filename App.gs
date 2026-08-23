@@ -13,15 +13,25 @@ function onOpen() {
 
 function launchCoachIQ() {
 
-  const html = HtmlService
-    .createTemplateFromFile("Index")
-    .evaluate()
-    .setTitle("CoachIQ")
+  const html = buildCoachIQHtml_()
     .setWidth(1600)
     .setHeight(900);
 
   SpreadsheetApp.getUi().showModalDialog(html, "CoachIQ");
 
+}
+
+/** Serves the same CoachIQ build to the deployed iPad/web-app URL. */
+function doGet() {
+  return buildCoachIQHtml_();
+}
+
+/** Keeps dialog and web deployments on one source-controlled entry point. */
+function buildCoachIQHtml_() {
+  return HtmlService
+    .createTemplateFromFile("Index")
+    .evaluate()
+    .setTitle("CoachIQ");
 }
 
 /**
