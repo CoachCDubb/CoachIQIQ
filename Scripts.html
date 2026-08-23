@@ -1271,6 +1271,40 @@ function loadSettings(requestId){
     .withFailureHandler(function(error){ if(isCurrentPage("Settings", requestId)){ renderCoachIQBackupError(error); } })
     .getCoachIQBackupStatusForUI();
 
+  loadCoachIQSystemHealth(requestId);
+
+}
+
+function loadCoachIQSystemHealth(requestId){
+  const button=document.getElementById("refreshSystemHealthButton");
+  if(button){button.disabled=true;button.textContent="Checking…";}
+  google.script.run
+    .withSuccessHandler(function(health){
+      if(isCurrentPage("Settings",requestId)){renderCoachIQSystemHealth(health);}
+    })
+    .withFailureHandler(function(error){
+      if(!isCurrentPage("Settings",requestId)){return;}
+      const summary=document.getElementById("systemHealthSummary");
+      if(summary){summary.className="system-health-summary error";summary.textContent=error.message||"System diagnostics are unavailable.";}
+      if(button){button.disabled=false;button.textContent="Run diagnostics";}
+    })
+    .getCoachIQSystemHealth();
+}
+
+function renderCoachIQSystemHealth(health){
+  health=health||{};
+  const summary=document.getElementById("systemHealthSummary");
+  const checks=document.getElementById("systemHealthChecks");
+  const button=document.getElementById("refreshSystemHealthButton");
+  if(button){button.disabled=false;button.textContent="Run diagnostics";}
+  if(!summary||!checks){return;}
+  const counts=health.counts||{};
+  summary.className="system-health-summary "+(health.status||"warning");
+  summary.innerHTML=`<strong>${health.status==="healthy"?"CoachIQ is ready":health.status==="error"?"CoachIQ needs repair":"CoachIQ needs attention"}</strong><span>Build ${escapeHtmlValue(health.buildVersion||"Unknown")} · Schema ${Number(health.schemaVersion||0)}</span><span>${Number(counts.pass||0)} passed · ${Number(counts.warning||0)} warnings · ${Number(counts.error||0)} errors</span>`;
+  checks.innerHTML=(health.checks||[]).map(function(check){
+    const status=["pass","warning","error"].indexOf(check.status)>=0?check.status:"warning";
+    return `<article class="system-health-check ${status}"><span class="system-health-icon">${status==="pass"?"✓":status==="error"?"!":"•"}</span><div><strong>${escapeHtmlValue(check.label||"Diagnostic")}</strong><p>${escapeHtmlValue(check.detail||"")}</p></div></article>`;
+  }).join("");
 }
 
 function renderCoachIQBackupStatus(status){
