@@ -1271,6 +1271,67 @@ function loadSettings(requestId){
     .withFailureHandler(function(error){ if(isCurrentPage("Settings", requestId)){ renderCoachIQBackupError(error); } })
     .getCoachIQBackupStatusForUI();
 
+  loadCoachIQSystemHealth(requestId);
+
+}
+
+function loadCoachIQSystemHealth(requestId){
+  const button=document.getElementById("refreshSystemHealthButton");
+  if(button){button.disabled=true;button.textContent="Checking…";}
+  google.script.run
+    .withSuccessHandler(function(health){
+      if(isCurrentPage("Settings",requestId)){renderCoachIQSystemHealth(health);}
+    })
+    .withFailureHandler(function(error){
+      if(!isCurrentPage("Settings",requestId)){return;}
+      const summary=document.getElementById("systemHealthSummary");
+      if(summary){summary.className="system-health-summary error";summary.textContent=error.message||"System diagnostics are unavailable.";}
+      if(button){button.disabled=false;button.textContent="Run diagnostics";}
+    })
+    .getCoachIQSystemHealth();
+}
+
+function renderCoachIQSystemHealth(health){
+  health=health||{};
+  const summary=document.getElementById("systemHealthSummary");
+  const checks=document.getElementById("systemHealthChecks");
+  const button=document.getElementById("refreshSystemHealthButton");
+  if(button){button.disabled=false;button.textContent="Run diagnostics";}
+  if(!summary||!checks){return;}
+  const counts=health.counts||{};
+  summary.className="system-health-summary "+(health.status||"warning");
+  summary.innerHTML=`<strong>${health.status==="healthy"?"CoachIQ is ready":health.status==="error"?"CoachIQ needs repair":"CoachIQ needs attention"}</strong><span>Build ${escapeHtmlValue(health.buildVersion||"Unknown")} · Schema ${Number(health.schemaVersion||0)}</span><span>${Number(counts.pass||0)} passed · ${Number(counts.warning||0)} warnings · ${Number(counts.error||0)} errors</span>`;
+  checks.innerHTML=(health.checks||[]).map(function(check){
+    const status=["pass","warning","error"].indexOf(check.status)>=0?check.status:"warning";
+    return `<article class="system-health-check ${status}"><span class="system-health-icon">${status==="pass"?"✓":status==="error"?"!":"•"}</span><div><strong>${escapeHtmlValue(check.label||"Diagnostic")}</strong><p>${escapeHtmlValue(check.detail||"")}</p></div></article>`;
+  }).join("");
+}
+
+function previewCoachIQSeasonRollover(){
+  const button=document.getElementById("previewSeasonRolloverButton");
+  const output=document.getElementById("seasonRolloverPreview");
+  const request={
+    nextSeason:document.getElementById("rolloverNextSeason").value,
+    promoteGrades:document.getElementById("rolloverPromoteGrades").checked,
+    archiveSeniors:document.getElementById("rolloverArchiveSeniors").checked
+  };
+  button.disabled=true;button.textContent="Building preview…";
+  output.className="season-rollover-preview loading";output.textContent="Reviewing roster, history, schema, and backup readiness…";
+  google.script.run
+    .withSuccessHandler(function(preview){button.disabled=false;button.textContent="Build rollover preview";renderCoachIQSeasonRolloverPreview(preview);})
+    .withFailureHandler(function(error){button.disabled=false;button.textContent="Build rollover preview";output.className="season-rollover-preview error";output.textContent=error.message||"Unable to build the rollover preview.";})
+    .getCoachIQSeasonRolloverPreview(request);
+}
+
+function renderCoachIQSeasonRolloverPreview(preview){
+  preview=preview||{};
+  const output=document.getElementById("seasonRolloverPreview");if(!output){return;}
+  const summary=preview.playerSummary||{};
+  const blockers=preview.blockers||[];
+  const schemaRows=(preview.schemaPlan||[]).map(function(item){return `<tr><td>${escapeHtmlValue(item.sheet)}</td><td>${Number(item.rows||0)}</td><td>${item.hasSeasonColumn?"Ready":escapeHtmlValue(item.action)}</td></tr>`;}).join("");
+  const playerRows=(preview.playerPlan||[]).filter(function(item){return item.action!=="Keep";}).slice(0,50).map(function(item){return `<tr><td>${escapeHtmlValue(item.name||item.playerId)}</td><td>${escapeHtmlValue(item.currentGrade||"—")}</td><td>${escapeHtmlValue(item.nextGrade||"—")}</td><td>${escapeHtmlValue(item.action)}</td></tr>`;}).join("");
+  output.className="season-rollover-preview "+(blockers.length?"warning":"ready");
+  output.innerHTML=`<div class="rollover-preview-header"><strong>${escapeHtmlValue(preview.currentSeason||"Not configured")} → ${escapeHtmlValue(preview.nextSeason||"")}</strong><span>Schema ${Number(preview.currentSchemaVersion||0)} → ${Number(preview.targetSchemaVersion||0)} · Preview only</span></div>${blockers.length?`<div class="rollover-blockers"><strong>Resolve before migration</strong><ul>${blockers.map(function(item){return `<li>${escapeHtmlValue(item)}</li>`;}).join("")}</ul></div>`:'<div class="rollover-ready">Ready for a protected schema migration.</div>'}<div class="rollover-metrics"><span><strong>${Number(summary.activePlayers||0)}</strong> active</span><span><strong>${Number(summary.promoted||0)}</strong> promoted</span><span><strong>${Number(summary.archived||0)}</strong> archived</span><span><strong>${Number(summary.unchanged||0)}</strong> unchanged</span></div><h4>Season data readiness</h4><div class="rollover-table-wrap"><table><thead><tr><th>Sheet</th><th>Rows preserved</th><th>Schema action</th></tr></thead><tbody>${schemaRows}</tbody></table></div><h4>Proposed roster changes</h4>${playerRows?`<div class="rollover-table-wrap"><table><thead><tr><th>Player</th><th>Current</th><th>Next</th><th>Action</th></tr></thead><tbody>${playerRows}</tbody></table></div>`:'<p>No player grade or status changes are proposed.</p>'}<p class="rollover-preview-footer">${escapeHtmlValue(preview.message||"Preview only.")}</p>`;
 }
 
 function renderCoachIQBackupStatus(status){
