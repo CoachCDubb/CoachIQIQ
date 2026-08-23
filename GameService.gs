@@ -166,13 +166,17 @@ function createLiveGameSetup(data) {
   const lock = LockService.getScriptLock();
   lock.waitLock(10000);
   try {
-    sheet.appendRow([
+    const headers=sheet.getRange(1,1,1,sheet.getLastColumn()).getDisplayValues()[0];
+    const row=[
       gameId, safeLiveGameValue_(gameDate), safeLiveGameValue_(team), safeLiveGameValue_(opponent),
       location, format, periodLength, "Setup", 1, 0, 0,
       JSON.stringify(allRosterIds), JSON.stringify(selectedStats), userEmail, now, now,
       gameType, JSON.stringify(customStats), JSON.stringify(trackingPlan), "", "",
       JSON.stringify(trackingPlan), JSON.stringify([]), sport, JSON.stringify(guestPlayers)
-    ]);
+    ];
+    while(row.length<sheet.getLastColumn())row.push("");
+    setCoachIQSeasonOnRow_(headers,row,getCoachIQCurrentSeason_());
+    sheet.appendRow(row);
   } finally {
     lock.releaseLock();
   }

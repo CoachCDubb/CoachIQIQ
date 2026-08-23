@@ -94,7 +94,13 @@ if(culturePointSheet&&culturePointSheet.getLastRow()>1){
 }
 let leader=null;
 activePlayerRows.forEach(function(row){
-  const playerId=String(row[0]||""),points=(culturePointTotals[playerId]||0)+(evaluationPointTotals[playerId]||0);
+  const playerId=String(row[0]||"");
+  const points=combinePlayerPointTotals_(
+    culturePointTotals[playerId],
+    0,
+    0,
+    evaluationPointTotals[playerId]
+  ).total;
   if(!leader||points>leader.points){leader={name:String(row[1]||"")+" "+String(row[2]||""),points:points};}
 });
 

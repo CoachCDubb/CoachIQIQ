@@ -43,6 +43,7 @@ if(cols["Attendance Status"]) row[cols["Attendance Status"] - 1] = "Present";
 row[cols["Created"] - 1] = new Date();
 row[cols["Last Updated"] - 1] = new Date();
 row[cols["Complete"] - 1] = false;
+if(cols["Season"]) row[cols["Season"] - 1] = getCoachIQCurrentSeason_();
 
 rows.push(row);
 

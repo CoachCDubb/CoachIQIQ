@@ -15,7 +15,7 @@ function syncUnexcusedAttendancePoints_(sessionId,playerId,status,policy){
   if(sessionCol<0||playerCol<0)throw new Error("Culture Points must include Session ID and Player ID columns.");
   const matches=[];for(let i=1;i<data.length;i++){if(String(data[i][sessionCol])===String(sessionId)&&String(data[i][playerCol])===String(playerId)&&String(data[i][notesCol])===UNEXCUSED_ATTENDANCE_MARKER)matches.push(i+1);}
   if(status!=="Unexcused"||Number(policy.unexcusedPoints)>=0){matches.reverse().forEach(function(row){sheet.deleteRow(row);});return;}
-  const row=new Array(sheet.getLastColumn()).fill("");row[0]=matches.length?sheet.getRange(matches[0],1).getValue():getNextPointId();row[1]=playerId;row[2]="ATTENDANCE_UNEXCUSED";row[3]="Unexcused Absence";row[4]=Number(policy.unexcusedPoints);row[5]=(getCurrentStaffAccess_().name||"");row[6]=new Date();row[notesCol]=UNEXCUSED_ATTENDANCE_MARKER;if(sessionCol>=0)row[sessionCol]=sessionId;
+  const row=new Array(sheet.getLastColumn()).fill("");row[0]=matches.length?sheet.getRange(matches[0],1).getValue():getNextPointId();row[1]=playerId;row[2]="ATTENDANCE_UNEXCUSED";row[3]="Unexcused Absence";row[4]=Number(policy.unexcusedPoints);row[5]=(getCurrentStaffAccess_().name||"");row[6]=new Date();row[notesCol]=UNEXCUSED_ATTENDANCE_MARKER;if(sessionCol>=0)row[sessionCol]=sessionId;setCoachIQSeasonOnRow_(headers,row,getCoachIQCurrentSeason_());
   if(matches.length){sheet.getRange(matches[0],1,1,row.length).setValues([row]);matches.slice(1).reverse().forEach(function(number){sheet.deleteRow(number);});}else sheet.appendRow(row);
   }finally{lock.releaseLock();}
 }
@@ -123,6 +123,7 @@ function setSessionRewardPoints_(sessionId, playerId, rewardId, coach, previousR
   row[6] = new Date();
   row[7] = "Session evaluation reward";
   row[8] = sessionId;
+  setCoachIQSeasonOnRow_(headers, row, getCoachIQCurrentSeason_());
 
   if(existingRow > 0){
     sheet.getRange(existingRow, 1, 1, row.length).setValues([row]);
@@ -170,8 +171,10 @@ if(!reward || !(reward.Active === true || reward.Active === "TRUE")){
 }
 
 const pointId = getNextPointId();
+const headers = sheet.getRange(1,1,1,sheet.getLastColumn()).getDisplayValues()[0];
+const row = new Array(sheet.getLastColumn()).fill("");
 
-sheet.appendRow([
+[
 
   pointId,
 
@@ -191,7 +194,9 @@ sheet.appendRow([
 
   data.sessionId || ""
 
-]);
+].forEach(function(value,index){row[index]=value;});
+setCoachIQSeasonOnRow_(headers,row,getCoachIQCurrentSeason_());
+sheet.appendRow(row);
 
 }
 /**
@@ -541,7 +546,12 @@ function getLeaderboard(options){
       positive:0,
       negative:0
     };
-    const evaluationPoints = Number(evaluationPointTotals[playerId] || 0);
+    const pointSummary = combinePlayerPointTotals_(
+      totals.total,
+      totals.positive,
+      totals.negative,
+      evaluationPointTotals[playerId]
+    );
 
     leaderboard.push({
 
@@ -557,15 +567,15 @@ function getLeaderboard(options){
 
       team: player[5],
 
-      points: totals.total + evaluationPoints,
+      points: pointSummary.total,
 
-      positive: totals.positive + evaluationPoints,
+      positive: pointSummary.positive,
 
-      negative: totals.negative,
+      negative: pointSummary.negative,
 
-      evaluationPoints: evaluationPoints,
+      evaluationPoints: pointSummary.evaluationPoints,
 
-      culturePoints: totals.total
+      culturePoints: pointSummary.culturePoints
 
     });
 
@@ -600,6 +610,24 @@ function getLeaderboard(options){
 
   return leaderboard;
 
+}
+
+/**
+ * Combines ledger and evaluation points for every UI that reports Panther
+ * Points. This is pure so Dashboard/Profile/Leaderboard parity can be tested.
+ */
+function combinePlayerPointTotals_(cultureTotal, positiveCulture, negativeCulture, evaluationPoints) {
+  const culture = Number(cultureTotal) || 0;
+  const positive = Math.max(0, Number(positiveCulture) || 0);
+  const negative = Math.max(0, Number(negativeCulture) || 0);
+  const evaluations = Math.max(0, Number(evaluationPoints) || 0);
+  return {
+    total: culture + evaluations,
+    positive: positive + evaluations,
+    negative: negative,
+    culturePoints: culture,
+    evaluationPoints: evaluations
+  };
 }
 
 function getLeaderboardEvaluationPoints_(){
