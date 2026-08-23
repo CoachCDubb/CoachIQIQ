@@ -1,6 +1,7 @@
 /** CoachIQ release and schema metadata shown in Settings and diagnostics. */
-const COACHIQ_BUILD_VERSION = "2026.08.23.1";
+const COACHIQ_BUILD_VERSION = "2026.08.23.2";
 const COACHIQ_SCHEMA_VERSION = 1;
+const COACHIQ_NEXT_SCHEMA_VERSION = 2;
 const COACHIQ_AUDIT_REQUIRED_HEADERS = [
   "Audit ID", "Timestamp", "User Email", "Staff Name", "Staff Role",
   "Action", "Entity Type", "Entity ID", "Program", "Team",

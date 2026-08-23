@@ -88,5 +88,16 @@
       <div id="systemHealthChecks" class="system-health-checks"></div>
       <div class="settings-actions"><button id="refreshSystemHealthButton" class="btn btn-primary" type="button" onclick="loadCoachIQSystemHealth(PageNavigation.requestId)">Run diagnostics</button></div>
     </div>
+    <div class="settings-section settings-rollover-section">
+      <div class="settings-section-heading"><span class="settings-section-number">11</span><div><h3>Season rollover preview</h3><p>Review the next-season plan without changing production data.</p></div></div>
+      <div class="rollover-preview-controls">
+        <label>New season<input id="rolloverNextSeason" maxlength="40" placeholder="2027-2028"></label>
+        <label class="rollover-option"><input id="rolloverPromoteGrades" type="checkbox" checked> Promote grades 9–11</label>
+        <label class="rollover-option"><input id="rolloverArchiveSeniors" type="checkbox"> Archive Grade 12 players</label>
+      </div>
+      <p class="rollover-safety-note"><strong>Preview only:</strong> this section cannot change players, settings, sheets, points, sessions, games, or backups.</p>
+      <div id="seasonRolloverPreview" class="season-rollover-preview" aria-live="polite">Enter the next season and build a preview.</div>
+      <div class="settings-actions"><button id="previewSeasonRolloverButton" class="btn btn-primary" type="button" onclick="previewCoachIQSeasonRollover()">Build rollover preview</button></div>
+    </div>
   </div>
 </section>
