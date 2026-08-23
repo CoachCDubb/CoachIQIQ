@@ -204,27 +204,34 @@ const categories = settings.cultureCategories;
 
   });
 
-  if(scores.length === 0){
+    result[category] = buildPlayerTrendSummary_(scores);
 
-  result[category] = {
+  });
 
-    average: "-",
-
-    trend: "No trend yet",
-
-    icon: "➖",
-
-    history: []
-
-  };
-
-  return;
+  return result;
 
 }
 
-    // Average
-    const average =
-      scores.reduce((a,b)=>a+b,0) / scores.length;
+/**
+ * Builds the display contract for one pillar from scores ordered oldest to
+ * newest. Kept pure so profile language and thresholds can be regression
+ * tested without a spreadsheet runtime.
+ */
+function buildPlayerTrendSummary_(scores) {
+  scores = Array.isArray(scores) ? scores : [];
+  if (!scores.length) {
+    return {
+      average: "-",
+      trend: "No trend yet",
+      icon: "➖",
+      color: "#6B7280",
+      movement: null,
+      sampleSize: 0,
+      history: []
+    };
+  }
+
+const average = scores.reduce((a,b)=>a+b,0) / scores.length;
 
 // Compare the oldest and newest scores in the displayed window. Scores use a
 // five-point scale, so a one-point change is meaningful; the previous
@@ -268,24 +275,15 @@ if(scores.length > 1 && movement >= 0.5){
 
 }
 
-result[category] = {
-
+return {
   average: Number(average.toFixed(2)),
-
   trend: trend,
-
   icon: icon,
-
   color: color,
-
-  history: scores
-
+  movement: Number(movement.toFixed(2)),
+  sampleSize: scores.length,
+  history: scores.slice()
 };
-
-  });
-
-  return result;
-
 }
 /**
  * Returns complete player intelligence.

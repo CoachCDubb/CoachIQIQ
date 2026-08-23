@@ -541,7 +541,12 @@ function getLeaderboard(options){
       positive:0,
       negative:0
     };
-    const evaluationPoints = Number(evaluationPointTotals[playerId] || 0);
+    const pointSummary = combinePlayerPointTotals_(
+      totals.total,
+      totals.positive,
+      totals.negative,
+      evaluationPointTotals[playerId]
+    );
 
     leaderboard.push({
 
@@ -557,15 +562,15 @@ function getLeaderboard(options){
 
       team: player[5],
 
-      points: totals.total + evaluationPoints,
+      points: pointSummary.total,
 
-      positive: totals.positive + evaluationPoints,
+      positive: pointSummary.positive,
 
-      negative: totals.negative,
+      negative: pointSummary.negative,
 
-      evaluationPoints: evaluationPoints,
+      evaluationPoints: pointSummary.evaluationPoints,
 
-      culturePoints: totals.total
+      culturePoints: pointSummary.culturePoints
 
     });
 
@@ -600,6 +605,24 @@ function getLeaderboard(options){
 
   return leaderboard;
 
+}
+
+/**
+ * Combines ledger and evaluation points for every UI that reports Panther
+ * Points. This is pure so Dashboard/Profile/Leaderboard parity can be tested.
+ */
+function combinePlayerPointTotals_(cultureTotal, positiveCulture, negativeCulture, evaluationPoints) {
+  const culture = Number(cultureTotal) || 0;
+  const positive = Math.max(0, Number(positiveCulture) || 0);
+  const negative = Math.max(0, Number(negativeCulture) || 0);
+  const evaluations = Math.max(0, Number(evaluationPoints) || 0);
+  return {
+    total: culture + evaluations,
+    positive: positive + evaluations,
+    negative: negative,
+    culturePoints: culture,
+    evaluationPoints: evaluations
+  };
 }
 
 function getLeaderboardEvaluationPoints_(){
