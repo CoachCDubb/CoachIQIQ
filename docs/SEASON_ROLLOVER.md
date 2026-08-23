@@ -37,7 +37,12 @@ Schema version 2 will add and backfill `Season` ownership for:
 - Player Season Stats; and
 - Games.
 
-The eventual migration must be idempotent, permission-protected, locked against
+The protected migration is idempotent, permission-protected, locked against
 concurrent writes, preceded by a successful safety backup, audited, and blocked
-when System Health reports an error. The final rollover action must use the saved
-preview rules and must never delete historical operational rows.
+when System Health reports an error. It adds a missing `Season` column and fills
+only blank season values with Current Season. Existing populated season values are
+never overwritten.
+
+The schema migration does not change Current Season, apply grade promotions,
+archive players, reset totals, or delete operational rows. Those actions belong to
+the later final rollover workflow and must use an approved preview.

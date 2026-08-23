@@ -1,7 +1,6 @@
 /** CoachIQ release and schema metadata shown in Settings and diagnostics. */
-const COACHIQ_BUILD_VERSION = "2026.08.23.2";
-const COACHIQ_SCHEMA_VERSION = 1;
-const COACHIQ_NEXT_SCHEMA_VERSION = 2;
+const COACHIQ_BUILD_VERSION = "2026.08.23.3";
+const COACHIQ_SCHEMA_VERSION = 2;
 const COACHIQ_AUDIT_REQUIRED_HEADERS = [
   "Audit ID", "Timestamp", "User Email", "Staff Name", "Staff Role",
   "Action", "Entity Type", "Entity ID", "Program", "Team",
@@ -21,7 +20,8 @@ const COACHIQ_REQUIRED_SCHEMA = {
 function getCoachIQSystemHealth() {
   requireStaffCapability_("manage_settings");
   const spreadsheet = getCoachIQSpreadsheet_();
-  const checks = evaluateCoachIQSchema_(spreadsheet);
+  const installedSchemaVersion = getInstalledCoachIQSchemaVersion_();
+  const checks = evaluateCoachIQSchema_(spreadsheet, installedSchemaVersion);
   const properties = PropertiesService.getScriptProperties();
   const access = getCurrentStaffAccess_();
   let profiles = [];
@@ -34,7 +34,15 @@ function getCoachIQSystemHealth() {
     id: "release",
     label: "Application release",
     status: "pass",
-    detail: "Build " + COACHIQ_BUILD_VERSION + " · Schema " + COACHIQ_SCHEMA_VERSION
+    detail: "Build " + COACHIQ_BUILD_VERSION + " · Installed schema " + installedSchemaVersion + " · Target " + COACHIQ_SCHEMA_VERSION
+  });
+  checks.push({
+    id: "schema-version",
+    label: "Season schema version",
+    status: installedSchemaVersion >= COACHIQ_SCHEMA_VERSION ? "pass" : "warning",
+    detail: installedSchemaVersion >= COACHIQ_SCHEMA_VERSION
+      ? "Season-aware schema is installed."
+      : "Protected migration to schema " + COACHIQ_SCHEMA_VERSION + " is available in Season rollover preview."
   });
   checks.push({
     id: "web-entry",
@@ -81,7 +89,8 @@ function getCoachIQSystemHealth() {
   return {
     status: counts.error ? "error" : counts.warning ? "warning" : "healthy",
     buildVersion: COACHIQ_BUILD_VERSION,
-    schemaVersion: COACHIQ_SCHEMA_VERSION,
+    schemaVersion: installedSchemaVersion,
+    targetSchemaVersion: COACHIQ_SCHEMA_VERSION,
     checkedAt: new Date().toISOString(),
     spreadsheetName: spreadsheet.getName(),
     counts: counts,
@@ -89,16 +98,32 @@ function getCoachIQSystemHealth() {
   };
 }
 
+function getInstalledCoachIQSchemaVersion_() {
+  const value = Number(getSetting("CoachIQ Schema Version") || 1);
+  return Number.isInteger(value) && value > 0 ? value : 1;
+}
+
 /** Pure schema inspection helper used by production diagnostics and tests. */
-function evaluateCoachIQSchema_(spreadsheet) {
+function evaluateCoachIQSchema_(spreadsheet, schemaVersion) {
   const checks = [];
+  schemaVersion = Number(schemaVersion || 1);
+  const requiredSchema = {};
   Object.keys(COACHIQ_REQUIRED_SCHEMA).forEach(function(sheetName) {
+    requiredSchema[sheetName] = COACHIQ_REQUIRED_SCHEMA[sheetName].slice();
+  });
+  if (schemaVersion >= 2) {
+    requiredSchema["Player Season Stats"] = ["Player ID", "Stat", "Value"];
+    requiredSchema["Games"] = ["Game ID"];
+  }
+  const seasonScoped = ["Sessions", "Practice Evaluations", "Culture Points", "Player Season Stats", "Games"];
+  Object.keys(requiredSchema).forEach(function(sheetName) {
     const sheet = spreadsheet.getSheetByName(sheetName);
     if (!sheet) {
       checks.push({id: "sheet-" + sheetName, label: sheetName, status: "error", detail: "Required sheet is missing."});
       return;
     }
-    const requiredHeaders = COACHIQ_REQUIRED_SCHEMA[sheetName];
+    const requiredHeaders = requiredSchema[sheetName].slice();
+    if (schemaVersion >= 2 && seasonScoped.indexOf(sheetName) >= 0) requiredHeaders.push("Season");
     if (!requiredHeaders.length) {
       checks.push({id: "sheet-" + sheetName, label: sheetName, status: "pass", detail: "Required sheet is available."});
       return;

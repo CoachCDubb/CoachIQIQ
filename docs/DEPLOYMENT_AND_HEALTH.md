@@ -41,7 +41,8 @@ triggers, or repair production automatically.
 
 ## Current schema scope
 
-Schema diagnostics validate the operational minimum for Players, Sessions,
-Practice Evaluations, Culture Points, Settings, and Audit Log. Live Game sheets are
-created lazily when an authorized coach opens Live Game, so their absence is not a
-core-health failure.
+Schema 1 diagnostics validate the operational minimum for Players, Sessions,
+Practice Evaluations, Culture Points, Settings, and Audit Log. After schema 2 is
+installed, diagnostics also require season ownership on Player Season Stats and
+Games. Live Game sheets may be created lazily before migration, but Games must exist
+before CoachIQ can prepare season history.

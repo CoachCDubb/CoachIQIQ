@@ -62,6 +62,25 @@ test("schema diagnostics pass a valid core workbook", () => {
   assert.ok(checks.every((check) => check.status === "pass"));
 });
 
+test("schema version 2 requires Season on season-scoped core sheets", () => {
+  const service = load("SystemHealthService.gs");
+  const sheets = {
+    Players: sheet(["Player ID", "First Name", "Last Name", "Team", "Position", "Status"]),
+    Sessions: sheet(["Session ID", "Session Type", "Date", "Teams", "Evaluators", "Status"]),
+    "Practice Evaluations": sheet(["Session ID", "Player ID", "Attendance", "Complete", "Season"]),
+    "Culture Points": sheet(["Player ID", "Points", "Season"]),
+    Settings: sheet(["Setting", "Value"]),
+    "Audit Log": sheet([
+      "Audit ID", "Timestamp", "User Email", "Staff Name", "Staff Role", "Action", "Entity Type",
+      "Entity ID", "Program", "Team", "Before Value", "After Value", "Success", "Error"
+    ])
+  };
+  const checks = service.evaluateCoachIQSchema_({getSheetByName: (name) => sheets[name] || null}, 2);
+  const sessions = checks.find((check) => check.label === "Sessions");
+  assert.equal(sessions.status, "error");
+  assert.match(sessions.detail, /Season/);
+});
+
 test("dialog and web entry points render the same Index template", () => {
   const renders = [];
   const output = {

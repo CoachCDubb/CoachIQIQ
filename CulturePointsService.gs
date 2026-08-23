@@ -15,7 +15,7 @@ function syncUnexcusedAttendancePoints_(sessionId,playerId,status,policy){
   if(sessionCol<0||playerCol<0)throw new Error("Culture Points must include Session ID and Player ID columns.");
   const matches=[];for(let i=1;i<data.length;i++){if(String(data[i][sessionCol])===String(sessionId)&&String(data[i][playerCol])===String(playerId)&&String(data[i][notesCol])===UNEXCUSED_ATTENDANCE_MARKER)matches.push(i+1);}
   if(status!=="Unexcused"||Number(policy.unexcusedPoints)>=0){matches.reverse().forEach(function(row){sheet.deleteRow(row);});return;}
-  const row=new Array(sheet.getLastColumn()).fill("");row[0]=matches.length?sheet.getRange(matches[0],1).getValue():getNextPointId();row[1]=playerId;row[2]="ATTENDANCE_UNEXCUSED";row[3]="Unexcused Absence";row[4]=Number(policy.unexcusedPoints);row[5]=(getCurrentStaffAccess_().name||"");row[6]=new Date();row[notesCol]=UNEXCUSED_ATTENDANCE_MARKER;if(sessionCol>=0)row[sessionCol]=sessionId;
+  const row=new Array(sheet.getLastColumn()).fill("");row[0]=matches.length?sheet.getRange(matches[0],1).getValue():getNextPointId();row[1]=playerId;row[2]="ATTENDANCE_UNEXCUSED";row[3]="Unexcused Absence";row[4]=Number(policy.unexcusedPoints);row[5]=(getCurrentStaffAccess_().name||"");row[6]=new Date();row[notesCol]=UNEXCUSED_ATTENDANCE_MARKER;if(sessionCol>=0)row[sessionCol]=sessionId;setCoachIQSeasonOnRow_(headers,row,getCoachIQCurrentSeason_());
   if(matches.length){sheet.getRange(matches[0],1,1,row.length).setValues([row]);matches.slice(1).reverse().forEach(function(number){sheet.deleteRow(number);});}else sheet.appendRow(row);
   }finally{lock.releaseLock();}
 }
@@ -123,6 +123,7 @@ function setSessionRewardPoints_(sessionId, playerId, rewardId, coach, previousR
   row[6] = new Date();
   row[7] = "Session evaluation reward";
   row[8] = sessionId;
+  setCoachIQSeasonOnRow_(headers, row, getCoachIQCurrentSeason_());
 
   if(existingRow > 0){
     sheet.getRange(existingRow, 1, 1, row.length).setValues([row]);
@@ -170,8 +171,10 @@ if(!reward || !(reward.Active === true || reward.Active === "TRUE")){
 }
 
 const pointId = getNextPointId();
+const headers = sheet.getRange(1,1,1,sheet.getLastColumn()).getDisplayValues()[0];
+const row = new Array(sheet.getLastColumn()).fill("");
 
-sheet.appendRow([
+[
 
   pointId,
 
@@ -191,7 +194,9 @@ sheet.appendRow([
 
   data.sessionId || ""
 
-]);
+].forEach(function(value,index){row[index]=value;});
+setCoachIQSeasonOnRow_(headers,row,getCoachIQCurrentSeason_());
+sheet.appendRow(row);
 
 }
 /**

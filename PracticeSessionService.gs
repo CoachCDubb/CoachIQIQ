@@ -48,6 +48,9 @@ function createPracticeSession_(data){
 
   ]);
 
+  const seasonColumn = getColumnMap(SESSION_SHEET)["Season"];
+  if(seasonColumn){sheet.getRange(sheet.getLastRow(),seasonColumn).setValue(getCoachIQCurrentSeason_());}
+
   if(data.sessionPolicy){
     const headers=sheet.getRange(1,1,1,sheet.getLastColumn()).getValues()[0];
     let policyColumn=headers.indexOf("Session Policy")+1;

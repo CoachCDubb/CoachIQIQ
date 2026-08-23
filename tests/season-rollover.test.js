@@ -31,6 +31,17 @@ test("rollover roster plan promotes grades and archives seniors only when select
   assert.ok(noPromotion.every((item) => item.action === "Keep"));
 });
 
+test("new schema-v2 rows receive Current Season without shifting existing columns", () => {
+  const service = load();
+  const row = ["ID-1", "Existing value", ""];
+  const result = service.setCoachIQSeasonOnRow_(["ID", "Value", "Season"], row, "2027-2028");
+  assert.equal(result, row);
+  assert.deepEqual(Array.from(result), ["ID-1", "Existing value", "2027-2028"]);
+  const legacy = ["ID-2", "Existing value"];
+  service.setCoachIQSeasonOnRow_(["ID", "Value"], legacy, "2027-2028");
+  assert.deepEqual(Array.from(legacy), ["ID-2", "Existing value"]);
+});
+
 test("rollover preview is read-only and reports schema-v2 preparation", () => {
   let writes = 0;
   const headers = {
@@ -47,7 +58,7 @@ test("rollover preview is read-only and reports schema-v2 preparation", () => {
   }]));
   const service = load({
     COACHIQ_SCHEMA_VERSION: 1,
-    COACHIQ_NEXT_SCHEMA_VERSION: 2,
+    getInstalledCoachIQSchemaVersion_: () => 1,
     requireStaffCapability_: () => {},
     getCoachIQSettings: () => ({currentSeason: "2026-2027"}),
     getCoachIQSpreadsheet_: () => ({getSheetByName: (name) => sheets[name] || null}),
@@ -63,4 +74,58 @@ test("rollover preview is read-only and reports schema-v2 preparation", () => {
   assert.equal(preview.playerSummary.promoted, 1);
   assert.equal(preview.schemaPlan.length, 5);
   assert.equal(writes, 0);
+});
+
+function migrationSheet(initialHeaders, initialSeasonValues) {
+  const state = {headers: initialHeaders.slice(), seasons: initialSeasonValues.slice()};
+  return {
+    state,
+    getLastColumn: () => state.headers.length,
+    getLastRow: () => state.seasons.length + 1,
+    getRange(row, column, rowCount) {
+      return {
+        getDisplayValues: () => row === 1 ? [state.headers.slice()] : [],
+        setValue(value) {
+          if (row === 1) state.headers[column - 1] = value;
+        },
+        getValues: () => Array.from({length: rowCount}, (_, index) => [state.seasons[index] || ""]),
+        setValues(values) {
+          values.forEach((value, index) => { state.seasons[index] = value[0]; });
+        }
+      };
+    }
+  };
+}
+
+test("protected schema migration is blank-only and idempotent", () => {
+  const sheetNames = ["Sessions", "Practice Evaluations", "Culture Points", "Player Season Stats", "Games"];
+  const sheets = Object.fromEntries(sheetNames.map((name) => [name, migrationSheet(["ID"], ["", "2025-2026"])]));
+  let backups = 0;
+  let schemaSetting = "1";
+  const service = load({
+    COACHIQ_SCHEMA_VERSION: 2,
+    requireStaffCapability_: () => {},
+    getCoachIQSettings: () => ({currentSeason: "2026-2027"}),
+    getCoachIQBackupTriggers_: () => [{}],
+    LockService: {getScriptLock: () => ({waitLock: () => {}, releaseLock: () => {}})},
+    getInstalledCoachIQSchemaVersion_: () => Number(schemaSetting),
+    getCoachIQSpreadsheet_: () => ({getSheetByName: (name) => sheets[name] || null}),
+    evaluateCoachIQSchema_: () => [],
+    createCoachIQSafetyBackup_: () => ({id: "backup-" + (++backups)}),
+    setSettingValues_: (updates) => { schemaSetting = updates["CoachIQ Schema Version"]; },
+    logCoachIQAudit: () => "AUD-1"
+  });
+  const request = {expectedCurrentSeason: "2026-2027", confirmation: "PREPARE SEASON HISTORY"};
+  const first = service.migrateCoachIQSeasonSchema(request);
+  assert.equal(first.schemaVersion, 2);
+  assert.ok(first.report.every((item) => item.addedSeasonColumn && item.backfilled === 1));
+  sheetNames.forEach((name) => {
+    assert.deepEqual(sheets[name].state.headers, ["ID", "Season"]);
+    assert.deepEqual(sheets[name].state.seasons, ["2026-2027", "2025-2026"]);
+  });
+
+  const second = service.migrateCoachIQSeasonSchema(request);
+  assert.ok(second.report.every((item) => !item.addedSeasonColumn && item.backfilled === 0));
+  assert.equal(backups, 2);
+  assert.equal(schemaSetting, "2");
 });

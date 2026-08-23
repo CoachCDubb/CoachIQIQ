@@ -48,7 +48,7 @@ function getCoachIQSeasonRolloverPreview(request) {
     };
   });
 
-  const coreErrors = evaluateCoachIQSchema_(spreadsheet).filter(function(check) {
+  const coreErrors = evaluateCoachIQSchema_(spreadsheet, getInstalledCoachIQSchemaVersion_()).filter(function(check) {
     return check.status === "error";
   });
   const backupTriggers = typeof getCoachIQBackupTriggers_ === "function"
@@ -67,8 +67,8 @@ function getCoachIQSeasonRolloverPreview(request) {
     readOnly: true,
     currentSeason: currentSeason,
     nextSeason: nextSeason,
-    currentSchemaVersion: COACHIQ_SCHEMA_VERSION,
-    targetSchemaVersion: COACHIQ_NEXT_SCHEMA_VERSION,
+    currentSchemaVersion: getInstalledCoachIQSchemaVersion_(),
+    targetSchemaVersion: COACHIQ_SCHEMA_VERSION,
     migrationRequired: schemaPlan.some(function(item) { return !item.hasSeasonColumn; }),
     readyForMigration: blockers.length === 0,
     blockers: blockers,
@@ -87,6 +87,95 @@ function getCoachIQSeasonRolloverPreview(request) {
     schemaPlan: schemaPlan,
     message: "Preview only. CoachIQ did not change production data."
   };
+}
+
+/**
+ * Applies schema version 2 only. It does not change Current Season, promote or
+ * archive players, reset totals, or delete historical rows.
+ */
+function migrateCoachIQSeasonSchema(request) {
+  requireStaffCapability_("manage_settings");
+  request = request || {};
+  const settings = getCoachIQSettings();
+  const currentSeason = String(settings.currentSeason || "").trim();
+  if (!currentSeason) throw new Error("Current Season is required before migration.");
+  if (String(request.expectedCurrentSeason || "").trim() !== currentSeason) {
+    throw new Error("Current Season changed after the preview. Build a new preview before migrating.");
+  }
+  if (String(request.confirmation || "") !== "PREPARE SEASON HISTORY") {
+    throw new Error("Migration confirmation was not accepted.");
+  }
+  if (!getCoachIQBackupTriggers_().length) {
+    throw new Error("Enable daily protected backups before migration.");
+  }
+
+  const lock = LockService.getScriptLock();
+  lock.waitLock(30000);
+  try {
+    const installedSchemaVersion = getInstalledCoachIQSchemaVersion_();
+    const spreadsheet = getCoachIQSpreadsheet_();
+    const healthErrors = evaluateCoachIQSchema_(spreadsheet, installedSchemaVersion).filter(function(check) {
+      return check.status === "error";
+    });
+    if (healthErrors.length) throw new Error("Repair System Health errors before migration.");
+
+    const backup = createCoachIQSafetyBackup_("Before season schema migration");
+    const report = [];
+    COACHIQ_SEASON_SCOPED_SHEETS.forEach(function(sheetName) {
+      const sheet = spreadsheet.getSheetByName(sheetName);
+      if (!sheet) throw new Error(sheetName + " is required for season migration.");
+      let headers = sheet.getRange(1, 1, 1, Math.max(sheet.getLastColumn(), 1))
+        .getDisplayValues()[0]
+        .map(function(header) { return String(header || "").trim(); });
+      let seasonColumn = headers.indexOf("Season") + 1;
+      let addedColumn = false;
+      if (!seasonColumn) {
+        seasonColumn = sheet.getLastColumn() + 1;
+        sheet.getRange(1, seasonColumn).setValue("Season");
+        addedColumn = true;
+      }
+      const rowCount = Math.max(sheet.getLastRow() - 1, 0);
+      let backfilled = 0;
+      if (rowCount) {
+        const range = sheet.getRange(2, seasonColumn, rowCount, 1);
+        const values = range.getValues();
+        values.forEach(function(row) {
+          if (!String(row[0] || "").trim()) {
+            row[0] = currentSeason;
+            backfilled++;
+          }
+        });
+        if (backfilled) range.setValues(values);
+      }
+      report.push({sheet: sheetName, addedSeasonColumn: addedColumn, rows: rowCount, backfilled: backfilled});
+    });
+
+    setSettingValues_({"CoachIQ Schema Version": String(COACHIQ_SCHEMA_VERSION)});
+    try {
+      logCoachIQAudit({
+        action: "MIGRATE_SEASON_SCHEMA",
+        entityType: "System Schema",
+        entityId: "SCHEMA-" + COACHIQ_SCHEMA_VERSION,
+        team: "",
+        beforeValue: {schemaVersion: installedSchemaVersion, season: currentSeason},
+        afterValue: {schemaVersion: COACHIQ_SCHEMA_VERSION, season: currentSeason, report: report, backupId: backup.id},
+        success: true,
+        error: ""
+      });
+    } catch (auditError) {
+      console.error("Schema migrated, but audit logging failed: " + auditError.message);
+    }
+    return {
+      migrated: true,
+      schemaVersion: COACHIQ_SCHEMA_VERSION,
+      currentSeason: currentSeason,
+      backup: backup,
+      report: report,
+      message: "Season history is prepared. Current Season and player records were not changed."
+    };
+  } finally {
+    lock.releaseLock();
+  }
 }
 
 /** Pure roster projection used by preview and regression tests. */
@@ -118,4 +207,15 @@ function buildSeasonPlayerPlan_(players, options) {
       action: action
     };
   });
+}
+
+function getCoachIQCurrentSeason_() {
+  return String(getCoachIQSettings().currentSeason || "").trim();
+}
+
+/** Adds Current Season to a pending row only when the schema has that column. */
+function setCoachIQSeasonOnRow_(headers, row, season) {
+  const seasonIndex = (headers || []).indexOf("Season");
+  if (seasonIndex >= 0) row[seasonIndex] = String(season || "").trim();
+  return row;
 }
