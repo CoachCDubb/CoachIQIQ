@@ -15,7 +15,7 @@ function getAllSessions() {
     return sessionCache;
   }
 
-  const ss = SpreadsheetApp.getActive();
+  const ss = getCoachIQSpreadsheet_();
   const sheet = ss.getSheetByName("Sessions");
 
   const data = sheet.getDataRange().getValues();
@@ -177,7 +177,7 @@ function testGetAllSessions(){
  */
 function deleteSession(sessionId){
 
-  const ss = SpreadsheetApp.getActive();
+  const ss = getCoachIQSpreadsheet_();
 
   // -----------------------------
   // Delete Session
