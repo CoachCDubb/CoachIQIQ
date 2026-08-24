@@ -18,7 +18,7 @@ function getRecentSessions(limit){
 
   const headers = data.shift();
 
-  const sessions = data
+  const sessions = filterCoachIQRowsForCurrentSeason_(headers,data)
     .map(row => rowToObject(headers, row))
     .filter(session => session.Status === "Completed")
     .sort(function(a, b){
@@ -46,9 +46,11 @@ function getProgramIntelligence() {
   const summaries = {}, categoryTotals = {};
   categories.forEach(function(category){categoryTotals[category]={sum:0,count:0};});
   let present=0,absent=0;
-  data.slice(1).forEach(function(row){
+  filterCoachIQRowsForCurrentSeason_(headers,data.slice(1)).forEach(function(row){
     const player=playerMap[String(row[columns["Player ID"]])];
-    if(!player || recentIds.indexOf(row[columns["Session ID"]])<0 || row[columns["Complete"]]!==true)return;
+    const completeValue=row[columns["Complete"]];
+    const complete=completeValue===true||String(completeValue).toUpperCase()==="TRUE";
+    if(!player || recentIds.indexOf(row[columns["Session ID"]])<0 || !complete)return;
     const summary=summaries[player.id]||(summaries[player.id]={player:player,sum:0,count:0,sessions:0}); summary.sessions++;
     if(row[columns["Attendance"]]===true)present++; else if(row[columns["Attendance"]]===false)absent++;
     categories.forEach(function(category){const value=Number(row[columns[category]]);if(isFinite(value)&&value>0){summary.sum+=value;summary.count++;categoryTotals[category].sum+=value;categoryTotals[category].count++;}});
@@ -87,9 +89,6 @@ function getRecentSessionIds(limit){
  * from the most recent completed sessions.
  */
 function getPlayerHistory(playerId, limit){
-
-  const sessionIds = getRecentSessionIds(limit);
-
   const sheet = SpreadsheetApp
     .getActive()
     .getSheetByName("Practice Evaluations");
@@ -107,23 +106,28 @@ function getPlayerHistory(playerId, limit){
   const settings = getCoachIQSettings();
 
 const categories = settings.cultureCategories;
+  const currentSeason = getCoachIQCurrentSeason_();
 
   const history = [];
 
-  for(let i = 1; i < data.length; i++){
+  // Evaluation rows are appended when sessions are created. Reading from the
+  // bottom keeps the newest completed evaluations first without depending on
+  // a matching Sessions row, which may be missing for imported/legacy data.
+  for(let i = data.length - 1; i >= 1 && history.length < limit; i--){
 
     const row = data[i];
+
+    if(!isCoachIQRowInSeason_(headers,row,currentSeason)){
+      continue;
+    }
 
     if(row[cols["Player ID"] - 1] != playerId){
       continue;
     }
 
-   if(!sessionIds.includes(row[cols["Session ID"] - 1])){
-  continue;
-}
-
 // Ignore evaluations that aren't complete
-if(row[cols["Complete"] - 1] !== true){
+const completeValue = row[cols["Complete"] - 1];
+if(completeValue !== true && String(completeValue).toUpperCase() !== "TRUE"){
   continue;
 }
 
@@ -207,73 +211,86 @@ const categories = settings.cultureCategories;
 
   });
 
-  if(scores.length === 0){
-
-  result[category] = {
-
-    average: "-",
-
-    trend: "Stable",
-
-    icon: "➖",
-
-    history: []
-
-  };
-
-  return;
-
-}
-
-    // Average
-    const average =
-      scores.reduce((a,b)=>a+b,0) / scores.length;
-
- // Calculate movement
-let movement = 0;
-
-for(let i = 1; i < scores.length; i++){
-
-  movement += scores[i] - scores[i-1];
-
-}
-
-let trend = "Stable";
-let icon = "→";
-let color = "#F59E0B";
-
-if(movement >= 2){
-
-  trend = "Improving";
-  icon = "↗";
-  color = "#22C55E";
-
-}else if(movement <= -2){
-
-  trend = "Needs Attention";
-  icon = "↘";
-  color = "#EF4444";
-
-}
-
-result[category] = {
-
-  average: Number(average.toFixed(2)),
-
-  trend: trend,
-
-  icon: icon,
-
-  color: color,
-
-  history: scores
-
-};
+    result[category] = buildPlayerTrendSummary_(scores);
 
   });
 
   return result;
 
+}
+
+/**
+ * Builds the display contract for one pillar from scores ordered oldest to
+ * newest. Kept pure so profile language and thresholds can be regression
+ * tested without a spreadsheet runtime.
+ */
+function buildPlayerTrendSummary_(scores) {
+  scores = Array.isArray(scores) ? scores : [];
+  if (!scores.length) {
+    return {
+      average: "-",
+      trend: "No trend yet",
+      icon: "➖",
+      color: "#6B7280",
+      movement: null,
+      sampleSize: 0,
+      history: []
+    };
+  }
+
+const average = scores.reduce((a,b)=>a+b,0) / scores.length;
+
+// Compare the oldest and newest scores in the displayed window. Scores use a
+// five-point scale, so a one-point change is meaningful; the previous
+// two-point threshold mislabeled ordinary improvement or decline as Stable.
+const movement = scores.length > 1
+  ? scores[scores.length - 1] - scores[0]
+  : 0;
+
+let trend = scores.length === 1
+  ? "Baseline"
+  : average >= 4
+    ? "Consistently Strong"
+    : average < 3
+      ? "Needs Attention"
+      : "Holding Steady";
+let icon = scores.length === 1 ? "●" : "→";
+let color = scores.length === 1
+  ? "#3B82F6"
+  : average < 3
+    ? "#EF4444"
+    : "#F59E0B";
+
+if(scores.length > 1 && movement >= 0.5){
+
+  trend = "Improving";
+  icon = "↗";
+  color = "#22C55E";
+
+}else if(scores.length > 1 && movement <= -0.5){
+
+  // A strong current average should not be presented as a problem merely
+  // because its latest score dipped. Preserve the level and describe the
+  // direction separately; reserve Needs Attention for lower performance.
+  trend = average >= 4
+    ? "Strong — Trending Down"
+    : average >= 3
+      ? "Trending Down"
+      : "Needs Attention";
+  icon = "↘";
+  color = average >= 3 ? "#F59E0B" : "#EF4444";
+
+}
+
+return {
+  average: Number(average.toFixed(2)),
+  trend: trend,
+  icon: icon,
+  color: color,
+  movement: Number(movement.toFixed(2)),
+  sampleSize: scores.length,
+  history: scores.slice()
+};
 }
 /**
  * Returns complete player intelligence.

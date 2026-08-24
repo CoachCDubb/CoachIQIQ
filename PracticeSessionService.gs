@@ -48,6 +48,9 @@ function createPracticeSession_(data){
 
   ]);
 
+  const seasonColumn = getColumnMap(SESSION_SHEET)["Season"];
+  if(seasonColumn){sheet.getRange(sheet.getLastRow(),seasonColumn).setValue(getCoachIQCurrentSeason_());}
+
   if(data.sessionPolicy){
     const headers=sheet.getRange(1,1,1,sheet.getLastColumn()).getValues()[0];
     let policyColumn=headers.indexOf("Session Policy")+1;
@@ -259,10 +262,12 @@ function getActiveSession(){
   const cols = getColumnMap("Sessions");
 
   const data = sheet.getDataRange().getValues();
+  const headers = data[0] || [];
+  const currentSeason = getCoachIQCurrentSeason_();
 
   for(let i = data.length - 1; i >= 1; i--){
 
-    if(data[i][cols["Status"] - 1] === "In Progress"){
+    if(data[i][cols["Status"] - 1] === "In Progress" && isCoachIQRowInSeason_(headers,data[i],currentSeason)){
 
       return {
 

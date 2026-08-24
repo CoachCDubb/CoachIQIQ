@@ -1,0 +1,8 @@
+{
+  "name": "coachiq-regression-tests",
+  "private": true,
+  "scripts": {
+    "test": "node --test tests/*.test.js",
+    "check:syntax": "node tests/syntax-check.js"
+  }
+}

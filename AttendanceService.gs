@@ -18,6 +18,8 @@ function getPlayerAttendance(playerId){
   const data = sheet
     .getDataRange()
     .getValues();
+  const headers = data[0] || [];
+  const currentSeason = getCoachIQCurrentSeason_();
 
   let present = 0;
   let absent = 0;
@@ -27,6 +29,10 @@ function getPlayerAttendance(playerId){
   for(let i = 1; i < data.length; i++){
 
     const row = data[i];
+
+    if(!isCoachIQRowInSeason_(headers,row,currentSeason)){
+      continue;
+    }
 
     if (row[cols["Player ID"] - 1] !== playerId) {
       continue;

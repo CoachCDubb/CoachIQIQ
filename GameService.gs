@@ -166,13 +166,17 @@ function createLiveGameSetup(data) {
   const lock = LockService.getScriptLock();
   lock.waitLock(10000);
   try {
-    sheet.appendRow([
+    const headers=sheet.getRange(1,1,1,sheet.getLastColumn()).getDisplayValues()[0];
+    const row=[
       gameId, safeLiveGameValue_(gameDate), safeLiveGameValue_(team), safeLiveGameValue_(opponent),
       location, format, periodLength, "Setup", 1, 0, 0,
       JSON.stringify(allRosterIds), JSON.stringify(selectedStats), userEmail, now, now,
       gameType, JSON.stringify(customStats), JSON.stringify(trackingPlan), "", "",
       JSON.stringify(trackingPlan), JSON.stringify([]), sport, JSON.stringify(guestPlayers)
-    ]);
+    ];
+    while(row.length<sheet.getLastColumn())row.push("");
+    setCoachIQSeasonOnRow_(headers,row,getCoachIQCurrentSeason_());
+    sheet.appendRow(row);
   } finally {
     lock.releaseLock();
   }
@@ -329,7 +333,7 @@ function getLastLiveGamePlans_() {
   if (!sheet || sheet.getLastRow() < 2) return {};
   const values = sheet.getDataRange().getValues(); const headers = values.shift(); const cols = liveGameHeaderMap_(headers);
   const access = getCurrentStaffAccess_(); const plans = {};
-  values.forEach(function(row) {
+  filterCoachIQRowsForCurrentSeason_(headers,values).forEach(function(row) {
     const team = String(row[cols.Team] || ""); const plan = parseLiveGameJson_(row[cols["Tracking Plan"]], []);
     if (!team || !plan.length) return;
     if (access.configured && access.role !== "Head Coach" && access.teams.length && access.teams.indexOf(team) < 0) return;
@@ -378,7 +382,7 @@ function getRecentLiveGames_() {
   const headers = values.shift();
   const cols = liveGameHeaderMap_(headers);
   const access = getCurrentStaffAccess_();
-  return values.map(function(row) {
+  return filterCoachIQRowsForCurrentSeason_(headers,values).map(function(row) {
     return {
       gameId:String(row[cols["Game ID"]] || ""),
       gameDate:formatLiveGameDate_(row[cols["Game Date"]]),
@@ -403,7 +407,7 @@ function getCompletedLiveGames_() {
   const headers = values.shift();
   const cols = liveGameHeaderMap_(headers);
   const access = getCurrentStaffAccess_();
-  return values.map(function(row) {
+  return filterCoachIQRowsForCurrentSeason_(headers,values).map(function(row) {
     return {gameId:String(row[cols["Game ID"]] || ""), gameDate:formatLiveGameDate_(row[cols["Game Date"]]),
       team:String(row[cols.Team] || ""), opponent:String(row[cols.Opponent] || ""),
       gameType:String(row[cols["Game Type"]] || "Official Game"), status:String(row[cols.Status] || ""),
@@ -809,7 +813,7 @@ function getPreviousCompletedReports_(team) {
   const sheet = SpreadsheetApp.getActive().getSheetByName(LIVE_GAMES_SHEET);
   if (!sheet || sheet.getLastRow() < 2) return [];
   const values = sheet.getDataRange().getValues(); const headers = values.shift(); const cols = liveGameHeaderMap_(headers);
-  return values.filter(function(row) { return String(row[cols.Status] || "") === "Completed" && String(row[cols.Team] || "") === String(team); })
+  return filterCoachIQRowsForCurrentSeason_(headers,values).filter(function(row) { return String(row[cols.Status] || "") === "Completed" && String(row[cols.Team] || "") === String(team); })
     .map(function(row) { return parseLiveGameObject_(row[cols["Final Report"]], null); }).filter(Boolean).slice(-10).reverse();
 }
 
@@ -837,7 +841,7 @@ function getLiveGameProgramTrends_(teamFilter) {
   if (!sheet || sheet.getLastRow() < 2) return {gamesAnalyzed:0,categories:[],alerts:[]};
   const values = sheet.getDataRange().getValues(); const headers = values.shift(); const cols = liveGameHeaderMap_(headers);
   const access = getCurrentStaffAccess_();
-  const reports = values.filter(function(row) {
+  const reports = filterCoachIQRowsForCurrentSeason_(headers,values).filter(function(row) {
     const team = String(row[cols.Team] || "");
     return String(row[cols.Status] || "") === "Completed" && (!teamFilter || team === String(teamFilter)) && (!access.configured || access.role === "Head Coach" ||
       !access.teams.length || access.teams.indexOf(team) >= 0);

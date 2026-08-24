@@ -30,7 +30,12 @@ function getPlayerSeasonStats() {
     )
     .getValues();
 
-  return data.map(function(row){
+  const seasonIndex = headers.indexOf("Season");
+  const currentSeason = getCoachIQCurrentSeason_();
+
+  return data.filter(function(row){
+    return seasonIndex < 0 || String(row[seasonIndex] || "") === currentSeason;
+  }).map(function(row){
     return rowToObject(headers,row);
   });
 
@@ -61,12 +66,16 @@ function setPlayerStat(playerId, stat, value){
     .getSheetByName(PLAYER_SEASON_STATS_SHEET);
 
   const data = sheet.getDataRange().getValues();
+  const headers = data[0] || [];
+  const seasonIndex = headers.indexOf("Season");
+  const currentSeason = getCoachIQCurrentSeason_();
 
   for(let i = 1; i < data.length; i++){
 
     if(
       data[i][0] == playerId &&
-      data[i][1] == stat
+      data[i][1] == stat &&
+      (seasonIndex < 0 || String(data[i][seasonIndex] || "") === currentSeason)
     ){
 
       sheet
@@ -79,11 +88,10 @@ function setPlayerStat(playerId, stat, value){
 
   }
 
-  sheet.appendRow([
-    playerId,
-    stat,
-    value
-  ]);
+  const row=new Array(sheet.getLastColumn()).fill("");
+  row[0]=playerId;row[1]=stat;row[2]=value;
+  setCoachIQSeasonOnRow_(headers,row,currentSeason);
+  sheet.appendRow(row);
 
 }
 /**

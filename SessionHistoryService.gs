@@ -26,6 +26,7 @@ function getAllSessions() {
   }
 
   const headers = data.shift();
+  const currentSessionRows = filterCoachIQRowsForCurrentSeason_(headers,data);
   const playerSheet = ss.getSheetByName("Players");
   const evaluationSheet = ss.getSheetByName("Practice Evaluations");
   const playerData = playerSheet.getDataRange().getValues();
@@ -47,7 +48,7 @@ function getAllSessions() {
     activePlayersByTeam[team] = (activePlayersByTeam[team] || 0) + 1;
   });
 
-  evaluationData.forEach(function(row){
+  filterCoachIQRowsForCurrentSeason_(evaluationHeaders,evaluationData).forEach(function(row){
     const sessionId = row[0];
     const playerId = row[1];
 
@@ -59,7 +60,7 @@ function getAllSessions() {
     evaluationRowsBySession[sessionId][playerId] = row;
   });
 
-sessionCache = data.map(function(row){
+sessionCache = currentSessionRows.map(function(row){
 
   const obj = rowToObject(headers, row);
 
