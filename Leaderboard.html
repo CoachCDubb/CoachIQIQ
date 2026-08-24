@@ -1,45 +1,33 @@
-<section>
-
-    <div class="page-header">
-
-        <div>
-            <h2>🏆 Panther Leaderboard</h2>
-            <p>Recognizing the players who consistently build our culture.</p>
-        </div>
-
-        <button class="btn btn-primary" onclick="downloadLeaderboardPdf(this)">
-            Download PDF
-        </button>
-
+<section class="leaderboard-page">
+  <div class="page-header leaderboard-page-header">
+    <div>
+      <span class="page-kicker">Program recognition</span>
+      <h2>Culture Leaderboard</h2>
+      <p class="page-subtitle">Celebrate the players who consistently build your program standards.</p>
     </div>
+    <button class="btn btn-primary" type="button" onclick="downloadLeaderboardPdf(this)">Download PDF</button>
+  </div>
 
-    <div class="card">
-
-        <div class="leaderboard-toolbar">
-
-            <input
-                id="leaderboardSearch"
-                class="input"
-                placeholder="Search player..."
-                oninput="filterLeaderboard()">
-
-            <select
-                id="leaderboardTeam"
-                class="input"
-                onchange="filterLeaderboard()">
-
-                <option value="">All Teams</option>
-
-            </select>
-
-        </div>
-
-        <div id="leaderboardContent">
-
-            Loading Leaderboard...
-
-        </div>
-
+  <div class="leaderboard-hero">
+    <div class="leaderboard-hero-copy">
+      <span>Current leader</span>
+      <strong id="leaderboardLeaderName">Loading…</strong>
+      <small id="leaderboardLeaderDetail">Calculating program standings</small>
     </div>
+    <div class="leaderboard-hero-stat">
+      <strong id="leaderboardPlayerCount">--</strong>
+      <span>Players ranked</span>
+    </div>
+    <div class="leaderboard-hero-mark" aria-hidden="true">#1</div>
+  </div>
 
+  <div class="card leaderboard-board">
+    <div class="leaderboard-toolbar">
+      <label class="leaderboard-search"><span>Search</span><input id="leaderboardSearch" class="input" placeholder="Find a player…" oninput="filterLeaderboard()"></label>
+      <label><span>Team</span><select id="leaderboardTeam" class="input" onchange="filterLeaderboard()"><option value="">All Teams</option></select></label>
+    </div>
+    <div id="leaderboardContent" class="leaderboard-list" aria-live="polite">
+      <div class="leaderboard-empty">Loading leaderboard…</div>
+    </div>
+  </div>
 </section>
