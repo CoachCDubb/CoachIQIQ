@@ -42,6 +42,18 @@ test("new schema-v2 rows receive Current Season without shifting existing column
   assert.deepEqual(Array.from(legacy), ["ID-2", "Existing value"]);
 });
 
+test("season filtering isolates current records and remains legacy compatible", () => {
+  const service = load({getCoachIQSettings: () => ({currentSeason: "2027-2028"})});
+  const headers = ["ID", "Season"];
+  const rows = [["current", "2027-2028"], ["old", "2026-2027"], ["blank", ""]];
+  assert.deepEqual(
+    Array.from(service.filterCoachIQRowsForCurrentSeason_(headers, rows), (row) => row[0]),
+    ["current"]
+  );
+  assert.equal(service.isCoachIQRowInSeason_(["ID"], ["legacy"], "2027-2028"), true);
+  assert.equal(service.isCoachIQRowInSeason_(headers, rows[1], "2027-2028"), false);
+});
+
 test("rollover preview is read-only and reports schema-v2 preparation", () => {
   let writes = 0;
   const headers = {

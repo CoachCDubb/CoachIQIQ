@@ -219,3 +219,14 @@ function setCoachIQSeasonOnRow_(headers, row, season) {
   if (seasonIndex >= 0) row[seasonIndex] = String(season || "").trim();
   return row;
 }
+
+/** Legacy-compatible season test. Schema-1 sheets without Season remain usable. */
+function isCoachIQRowInSeason_(headers, row, season) {
+  const seasonIndex = (headers || []).indexOf("Season");
+  return seasonIndex < 0 || String((row || [])[seasonIndex] || "").trim() === String(season || "").trim();
+}
+
+function filterCoachIQRowsForCurrentSeason_(headers, rows) {
+  const season = getCoachIQCurrentSeason_();
+  return (rows || []).filter(function(row) { return isCoachIQRowInSeason_(headers, row, season); });
+}

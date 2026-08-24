@@ -16,6 +16,9 @@ release note.
   evaluations per pillar.
 - Blank, null, undefined, and non-numeric pillar values do not participate in an
   average.
+- After schema version 2 is installed, Dashboard, Leaderboard, profiles,
+  attendance, sessions, Intelligence, and Live Game history use Current Season
+  rows only. Legacy schema-1 sheets without a `Season` column remain readable.
 
 ## Pillar averages and trends
 

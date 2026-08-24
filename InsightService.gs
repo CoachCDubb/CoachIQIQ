@@ -18,7 +18,7 @@ function getRecentSessions(limit){
 
   const headers = data.shift();
 
-  const sessions = data
+  const sessions = filterCoachIQRowsForCurrentSeason_(headers,data)
     .map(row => rowToObject(headers, row))
     .filter(session => session.Status === "Completed")
     .sort(function(a, b){
@@ -46,9 +46,11 @@ function getProgramIntelligence() {
   const summaries = {}, categoryTotals = {};
   categories.forEach(function(category){categoryTotals[category]={sum:0,count:0};});
   let present=0,absent=0;
-  data.slice(1).forEach(function(row){
+  filterCoachIQRowsForCurrentSeason_(headers,data.slice(1)).forEach(function(row){
     const player=playerMap[String(row[columns["Player ID"]])];
-    if(!player || recentIds.indexOf(row[columns["Session ID"]])<0 || row[columns["Complete"]]!==true)return;
+    const completeValue=row[columns["Complete"]];
+    const complete=completeValue===true||String(completeValue).toUpperCase()==="TRUE";
+    if(!player || recentIds.indexOf(row[columns["Session ID"]])<0 || !complete)return;
     const summary=summaries[player.id]||(summaries[player.id]={player:player,sum:0,count:0,sessions:0}); summary.sessions++;
     if(row[columns["Attendance"]]===true)present++; else if(row[columns["Attendance"]]===false)absent++;
     categories.forEach(function(category){const value=Number(row[columns[category]]);if(isFinite(value)&&value>0){summary.sum+=value;summary.count++;categoryTotals[category].sum+=value;categoryTotals[category].count++;}});
@@ -104,6 +106,7 @@ function getPlayerHistory(playerId, limit){
   const settings = getCoachIQSettings();
 
 const categories = settings.cultureCategories;
+  const currentSeason = getCoachIQCurrentSeason_();
 
   const history = [];
 
@@ -113,6 +116,10 @@ const categories = settings.cultureCategories;
   for(let i = data.length - 1; i >= 1 && history.length < limit; i--){
 
     const row = data[i];
+
+    if(!isCoachIQRowInSeason_(headers,row,currentSeason)){
+      continue;
+    }
 
     if(row[cols["Player ID"] - 1] != playerId){
       continue;

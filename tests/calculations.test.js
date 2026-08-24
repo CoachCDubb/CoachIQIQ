@@ -57,7 +57,9 @@ test("player history uses the newest completed rows for that player", () => {
       "Session ID": 1, "Player ID": 2, Complete: 3,
       Leadership: 4, Effort: 5, Attendance: 6
     }),
-    getCoachIQSettings: () => ({cultureCategories: ["Leadership", "Effort"]})
+    getCoachIQSettings: () => ({cultureCategories: ["Leadership", "Effort"]}),
+    getCoachIQCurrentSeason_: () => "2026-2027",
+    isCoachIQRowInSeason_: () => true
   });
 
   const history = service.getPlayerHistory("P100", 2);

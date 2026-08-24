@@ -475,7 +475,7 @@ function getPracticeEvaluations(){
 
   const allowedPlayers = {};
   filterPlayersForCurrentStaff_(getPlayers()).forEach(function(player){ allowedPlayers[String(player[0])] = true; });
-  practiceEvaluationCache = data.filter(function(row){
+  practiceEvaluationCache = filterCoachIQRowsForCurrentSeason_(headers,data).filter(function(row){
     return allowedPlayers[String(row[1])];
   }).map(function(row){
     return rowToObject(headers,row);

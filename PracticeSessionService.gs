@@ -262,10 +262,12 @@ function getActiveSession(){
   const cols = getColumnMap("Sessions");
 
   const data = sheet.getDataRange().getValues();
+  const headers = data[0] || [];
+  const currentSeason = getCoachIQCurrentSeason_();
 
   for(let i = data.length - 1; i >= 1; i--){
 
-    if(data[i][cols["Status"] - 1] === "In Progress"){
+    if(data[i][cols["Status"] - 1] === "In Progress" && isCoachIQRowInSeason_(headers,data[i],currentSeason)){
 
       return {
 

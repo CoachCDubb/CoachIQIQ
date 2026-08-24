@@ -260,7 +260,7 @@ function getPlayerPoints(playerId){
     .getRange(2,1,sheet.getLastRow()-1,sheet.getLastColumn())
     .getValues();
 
-  return data
+  return filterCoachIQRowsForCurrentSeason_(headers,data)
 
     .map(row => rowToObject(headers,row))
 
@@ -334,7 +334,7 @@ function getPointHistory(playerId){
     .getRange(2,1,sheet.getLastRow()-1,sheet.getLastColumn())
     .getValues();
 
-  return data
+  return filterCoachIQRowsForCurrentSeason_(headers,data)
 
     .map(row => {
 
@@ -520,7 +520,7 @@ function getLeaderboard(options){
     const playerIdIndex = pointHeaders.indexOf("Player ID");
     const pointsIndex = pointHeaders.indexOf("Points");
 
-    pointValues.forEach(function(row){
+    filterCoachIQRowsForCurrentSeason_(pointHeaders,pointValues).forEach(function(row){
       const playerId = row[playerIdIndex];
       const points = Number(row[pointsIndex]) || 0;
       if(!pointTotals[playerId]){
@@ -648,7 +648,7 @@ function getLeaderboardEvaluationPoints_(){
     return index >= 0;
   });
 
-  data.forEach(function(row){
+  filterCoachIQRowsForCurrentSeason_(headers,data).forEach(function(row){
     const complete = completeIndex < 0 || row[completeIndex] === true || String(row[completeIndex]).toUpperCase() === "TRUE";
     if(!complete){ return; }
     const playerId = String(row[playerIndex] || "");

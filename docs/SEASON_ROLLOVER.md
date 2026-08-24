@@ -46,3 +46,15 @@ never overwritten.
 The schema migration does not change Current Season, apply grade promotions,
 archive players, reset totals, or delete operational rows. Those actions belong to
 the later final rollover workflow and must use an approved preview.
+
+## Current-season isolation
+
+After schema version 2, normal operational views use Current Season records by
+default. This includes Dashboard metrics, Panther Points and Leaderboard,
+attendance, player evaluation history and trends, session lists and the active
+session, Program Intelligence, and Live Game plans/reports/trends. Player Season
+Stats are also read and updated within Current Season.
+
+Schema-1 workbooks without a `Season` column remain readable until migration. In a
+migrated workbook, a blank or different Season value is not treated as current.
+Historical records remain stored for a future explicit season-history selector.
