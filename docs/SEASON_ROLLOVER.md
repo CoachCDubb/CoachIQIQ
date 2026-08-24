@@ -1,8 +1,8 @@
 # CoachIQ season rollover
 
 CoachIQ preserves historical program records and prepares a new current-season
-view instead of deleting the prior season. The first release of this workflow is
-deliberately preview-only.
+view instead of deleting the prior season. The workflow requires a read-only
+preview before its protected final action.
 
 ## Preview behavior
 
@@ -44,8 +44,20 @@ only blank season values with Current Season. Existing populated season values a
 never overwritten.
 
 The schema migration does not change Current Season, apply grade promotions,
-archive players, reset totals, or delete operational rows. Those actions belong to
-the later final rollover workflow and must use an approved preview.
+archive players, reset totals, or delete operational rows.
+
+## Protected final rollover
+
+After schema version 2 is ready, the preview exposes **Start new season**. The
+server verifies settings permission, the preview's Current Season, schema health,
+required `Season` columns, and daily backup protection again. It then acquires a
+script lock and creates a safety backup before making any roster change.
+
+The final action applies only the previewed grade/status rules, changes Current
+Season, clears short-lived server snapshots, and writes an audit entry. Sessions,
+evaluations, points, games, and season-stat history are never deleted or reset.
+Submitting the same request again is rejected because its expected Current Season
+no longer matches.
 
 ## Current-season isolation
 

@@ -1328,12 +1328,15 @@ function renderCoachIQSeasonRolloverPreview(preview){
   const output=document.getElementById("seasonRolloverPreview");if(!output){return;}
   const migrateButton=document.getElementById("prepareSeasonSchemaButton");
   if(migrateButton){migrateButton.hidden=!(preview.readyForMigration&&preview.migrationRequired);}
+  const startButton=document.getElementById("startNewSeasonButton");
+  if(startButton){startButton.hidden=!preview.readyForRollover;}
   const summary=preview.playerSummary||{};
   const blockers=preview.blockers||[];
   const schemaRows=(preview.schemaPlan||[]).map(function(item){return `<tr><td>${escapeHtmlValue(item.sheet)}</td><td>${Number(item.rows||0)}</td><td>${item.hasSeasonColumn?"Ready":escapeHtmlValue(item.action)}</td></tr>`;}).join("");
   const playerRows=(preview.playerPlan||[]).filter(function(item){return item.action!=="Keep";}).slice(0,50).map(function(item){return `<tr><td>${escapeHtmlValue(item.name||item.playerId)}</td><td>${escapeHtmlValue(item.currentGrade||"—")}</td><td>${escapeHtmlValue(item.nextGrade||"—")}</td><td>${escapeHtmlValue(item.action)}</td></tr>`;}).join("");
   output.className="season-rollover-preview "+(blockers.length?"warning":"ready");
-  output.innerHTML=`<div class="rollover-preview-header"><strong>${escapeHtmlValue(preview.currentSeason||"Not configured")} → ${escapeHtmlValue(preview.nextSeason||"")}</strong><span>Schema ${Number(preview.currentSchemaVersion||0)} → ${Number(preview.targetSchemaVersion||0)} · Preview only</span></div>${blockers.length?`<div class="rollover-blockers"><strong>Resolve before migration</strong><ul>${blockers.map(function(item){return `<li>${escapeHtmlValue(item)}</li>`;}).join("")}</ul></div>`:'<div class="rollover-ready">Ready for a protected schema migration.</div>'}<div class="rollover-metrics"><span><strong>${Number(summary.activePlayers||0)}</strong> active</span><span><strong>${Number(summary.promoted||0)}</strong> promoted</span><span><strong>${Number(summary.archived||0)}</strong> archived</span><span><strong>${Number(summary.unchanged||0)}</strong> unchanged</span></div><h4>Season data readiness</h4><div class="rollover-table-wrap"><table><thead><tr><th>Sheet</th><th>Rows preserved</th><th>Schema action</th></tr></thead><tbody>${schemaRows}</tbody></table></div><h4>Proposed roster changes</h4>${playerRows?`<div class="rollover-table-wrap"><table><thead><tr><th>Player</th><th>Current</th><th>Next</th><th>Action</th></tr></thead><tbody>${playerRows}</tbody></table></div>`:'<p>No player grade or status changes are proposed.</p>'}<p class="rollover-preview-footer">${escapeHtmlValue(preview.message||"Preview only.")}</p>`;
+  const readiness=blockers.length?`<div class="rollover-blockers"><strong>Resolve before rollover</strong><ul>${blockers.map(function(item){return `<li>${escapeHtmlValue(item)}</li>`;}).join("")}</ul></div>`:preview.readyForRollover?'<div class="rollover-ready">Ready to start the new season with a safety backup.</div>':'<div class="rollover-ready">Ready for a protected schema migration.</div>';
+  output.innerHTML=`<div class="rollover-preview-header"><strong>${escapeHtmlValue(preview.currentSeason||"Not configured")} → ${escapeHtmlValue(preview.nextSeason||"")}</strong><span>Schema ${Number(preview.currentSchemaVersion||0)} → ${Number(preview.targetSchemaVersion||0)} · Preview</span></div>${readiness}<div class="rollover-metrics"><span><strong>${Number(summary.activePlayers||0)}</strong> active</span><span><strong>${Number(summary.promoted||0)}</strong> promoted</span><span><strong>${Number(summary.archived||0)}</strong> archived</span><span><strong>${Number(summary.unchanged||0)}</strong> unchanged</span></div><h4>Season data readiness</h4><div class="rollover-table-wrap"><table><thead><tr><th>Sheet</th><th>Rows preserved</th><th>Schema action</th></tr></thead><tbody>${schemaRows}</tbody></table></div><h4>Proposed roster changes</h4>${playerRows?`<div class="rollover-table-wrap"><table><thead><tr><th>Player</th><th>Current</th><th>Next</th><th>Action</th></tr></thead><tbody>${playerRows}</tbody></table></div>`:'<p>No player grade or status changes are proposed.</p>'}<p class="rollover-preview-footer">${escapeHtmlValue(preview.message||"Preview only.")}</p>`;
 }
 
 function confirmCoachIQSeasonSchemaMigration(){
@@ -1358,6 +1361,30 @@ function runCoachIQSeasonSchemaMigration_(preview){
       showToast(error.message||"Unable to prepare season history.","error");
     })
     .migrateCoachIQSeasonSchema({expectedCurrentSeason:preview.currentSeason,confirmation:"PREPARE SEASON HISTORY"});
+}
+
+function confirmCoachIQNewSeason(){
+  const preview=CoachIQ.seasonRolloverPreview;
+  if(!preview||!preview.readyForRollover){showToast("Build a ready rollover preview first.","error");return;}
+  const summary=preview.playerSummary||{};
+  showConfirmModal("Start "+preview.nextSeason+"?","CoachIQ will create a safety backup, promote "+Number(summary.promoted||0)+" player(s), archive "+Number(summary.archived||0)+" senior(s), and make "+preview.nextSeason+" the Current Season. Historical records will remain stored.","Start New Season",function(){runCoachIQNewSeason_(preview);});
+}
+
+function runCoachIQNewSeason_(preview){
+  const button=document.getElementById("startNewSeasonButton");
+  if(button){button.disabled=true;button.textContent="Starting season…";}
+  google.script.run
+    .withSuccessHandler(function(result){
+      CoachIQ.seasonRolloverPreview=null;
+      if(button){button.disabled=false;button.hidden=true;button.textContent="Start new season";}
+      showToast(result.message||"New season started.");
+      loadPage("Settings");
+    })
+    .withFailureHandler(function(error){
+      if(button){button.disabled=false;button.textContent="Start new season";}
+      showToast(error.message||"Unable to start the new season.","error");
+    })
+    .startCoachIQNewSeason({expectedCurrentSeason:preview.currentSeason,nextSeason:preview.nextSeason,promoteGrades:preview.options.promoteGrades,archiveSeniors:preview.options.archiveSeniors,confirmation:"START NEW SEASON"});
 }
 
 function renderCoachIQBackupStatus(status){

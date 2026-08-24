@@ -71,6 +71,9 @@ function getCoachIQSeasonRolloverPreview(request) {
     targetSchemaVersion: COACHIQ_SCHEMA_VERSION,
     migrationRequired: schemaPlan.some(function(item) { return !item.hasSeasonColumn; }),
     readyForMigration: blockers.length === 0,
+    readyForRollover: blockers.length === 0 &&
+      getInstalledCoachIQSchemaVersion_() >= COACHIQ_SCHEMA_VERSION &&
+      schemaPlan.every(function(item) { return item.hasSeasonColumn; }),
     blockers: blockers,
     backup: {
       enabled: backupTriggers.length > 0,
@@ -176,6 +179,111 @@ function migrateCoachIQSeasonSchema(request) {
   } finally {
     lock.releaseLock();
   }
+}
+
+/** Starts an approved new season while preserving historical operational rows. */
+function startCoachIQNewSeason(request) {
+  requireStaffCapability_("manage_settings");
+  request = request || {};
+  const expectedCurrentSeason = String(request.expectedCurrentSeason || "").trim();
+  const nextSeason = String(request.nextSeason || "").trim();
+  if (!nextSeason || nextSeason.length > 40) throw new Error("Enter a valid new season of 40 characters or fewer.");
+  if (String(request.confirmation || "") !== "START NEW SEASON") throw new Error("Start-new-season confirmation was not accepted.");
+  if (!getCoachIQBackupTriggers_().length) throw new Error("Enable daily protected backups before rollover.");
+
+  const lock = LockService.getScriptLock();
+  lock.waitLock(30000);
+  try {
+    const currentSeason = getCoachIQCurrentSeason_();
+    if (!currentSeason || expectedCurrentSeason !== currentSeason) {
+      throw new Error("Current Season changed after the preview. Build a new preview before starting the season.");
+    }
+    if (nextSeason === currentSeason) throw new Error("The new season must be different from the current season.");
+    if (getInstalledCoachIQSchemaVersion_() < COACHIQ_SCHEMA_VERSION) throw new Error("Prepare season history before starting the new season.");
+
+    const spreadsheet = getCoachIQSpreadsheet_();
+    const healthErrors = evaluateCoachIQSchema_(spreadsheet, getInstalledCoachIQSchemaVersion_()).filter(function(check) {
+      return check.status === "error";
+    });
+    if (healthErrors.length) throw new Error("Repair System Health errors before rollover.");
+    COACHIQ_SEASON_SCOPED_SHEETS.forEach(function(sheetName) {
+      const sheet = spreadsheet.getSheetByName(sheetName);
+      if (!sheet) throw new Error(sheetName + " is required for season rollover.");
+      const headers = sheet.getRange(1, 1, 1, Math.max(sheet.getLastColumn(), 1)).getDisplayValues()[0]
+        .map(function(value) { return String(value || "").trim(); });
+      if (headers.indexOf("Season") < 0) throw new Error(sheetName + " must have a Season column before rollover.");
+    });
+
+    const playersSheet = spreadsheet.getSheetByName(PLAYER_SHEET);
+    if (!playersSheet) throw new Error("The Players sheet was not found.");
+    const playerValues = playersSheet.getDataRange().getValues();
+    const headers = playerValues[0] || [];
+    const gradeIndex = headers.indexOf("Grade");
+    const statusIndex = headers.indexOf("Status");
+    if (headers.indexOf("Player ID") < 0 || gradeIndex < 0 || statusIndex < 0) {
+      throw new Error("Players must include Player ID, Grade, and Status columns.");
+    }
+    const rows = playerValues.slice(1);
+    const activeRows = rows.filter(function(row) { return String(row[statusIndex] || "") !== "Archived"; });
+    const plan = buildSeasonPlayerPlan_(activeRows, {
+      promoteGrades: request.promoteGrades !== false,
+      archiveSeniors: request.archiveSeniors === true
+    });
+    const updatedRows = applySeasonPlayerPlanToRows_(rows, headers, plan);
+    const backup = createCoachIQSafetyBackup_("Before season rollover " + currentSeason + " to " + nextSeason);
+    if (updatedRows.length) playersSheet.getRange(2, 1, updatedRows.length, headers.length).setValues(updatedRows);
+    setSettingValues_({"Current Season": nextSeason});
+    sessionCache = null;
+    practiceEvaluationCache = null;
+
+    const summary = {
+      promoted: plan.filter(function(item) { return item.action === "Promote"; }).length,
+      archived: plan.filter(function(item) { return item.action === "Archive"; }).length,
+      unchanged: plan.filter(function(item) { return item.action === "Keep"; }).length
+    };
+    try {
+      logCoachIQAudit({
+        action: "START_NEW_SEASON",
+        entityType: "Program Season",
+        entityId: currentSeason + "->" + nextSeason,
+        team: "",
+        beforeValue: {season: currentSeason},
+        afterValue: {season: nextSeason, roster: summary, backupId: backup.id},
+        success: true,
+        error: ""
+      });
+    } catch (auditError) {
+      console.error("Season started, but audit logging failed: " + auditError.message);
+    }
+    return {
+      started: true,
+      previousSeason: currentSeason,
+      currentSeason: nextSeason,
+      backup: backup,
+      playerSummary: summary,
+      message: "The " + nextSeason + " season is ready. Historical records were preserved."
+    };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+/** Pure roster update used by the protected rollover and regression tests. */
+function applySeasonPlayerPlanToRows_(rows, headers, plan) {
+  const idIndex = headers.indexOf("Player ID");
+  const gradeIndex = headers.indexOf("Grade");
+  const statusIndex = headers.indexOf("Status");
+  const actions = {};
+  (plan || []).forEach(function(item) { actions[String(item.playerId || "")] = item; });
+  return (rows || []).map(function(sourceRow) {
+    const row = sourceRow.slice();
+    const item = actions[String(row[idIndex] || "")];
+    if (item) {
+      row[gradeIndex] = item.nextGrade;
+      row[statusIndex] = item.nextStatus;
+    }
+    return row;
+  });
 }
 
 /** Pure roster projection used by preview and regression tests. */

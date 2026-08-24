@@ -42,6 +42,21 @@ test("new schema-v2 rows receive Current Season without shifting existing column
   assert.deepEqual(Array.from(legacy), ["ID-2", "Existing value"]);
 });
 
+test("roster plan application changes only planned grade and status fields", () => {
+  const service = load();
+  const headers = ["Player ID", "First Name", "Last Name", "Jersey", "Grade", "Team", "Position", "Status"];
+  const rows = [
+    ["P1", "A", "Junior", "1", 11, "Varsity", "G", "Active"],
+    ["P2", "B", "Senior", "2", 12, "Varsity", "F", "Active"],
+    ["P3", "C", "Alum", "3", 12, "Varsity", "C", "Archived"]
+  ];
+  const plan = service.buildSeasonPlayerPlan_(rows.slice(0, 2), {promoteGrades: true, archiveSeniors: true});
+  const updated = service.applySeasonPlayerPlanToRows_(rows, headers, plan);
+  assert.deepEqual(Array.from(updated[0]), ["P1", "A", "Junior", "1", "12", "Varsity", "G", "Active"]);
+  assert.deepEqual(Array.from(updated[1]), ["P2", "B", "Senior", "2", "12", "Varsity", "F", "Archived"]);
+  assert.deepEqual(Array.from(updated[2]), rows[2]);
+});
+
 test("season filtering isolates current records and remains legacy compatible", () => {
   const service = load({getCoachIQSettings: () => ({currentSeason: "2027-2028"})});
   const headers = ["ID", "Season"];
@@ -140,4 +155,42 @@ test("protected schema migration is blank-only and idempotent", () => {
   assert.ok(second.report.every((item) => !item.addedSeasonColumn && item.backfilled === 0));
   assert.equal(backups, 2);
   assert.equal(schemaSetting, "2");
+});
+
+test("protected final rollover backs up, updates roster and season, and prevents replay", () => {
+  const scopedNames = ["Sessions", "Practice Evaluations", "Culture Points", "Player Season Stats", "Games"];
+  const scopedSheets = Object.fromEntries(scopedNames.map((name) => [name, {getLastColumn: () => 2, getRange: () => ({getDisplayValues: () => [["ID", "Season"]]})}]));
+  const playerState = {values: [
+    ["Player ID", "First Name", "Last Name", "Jersey", "Grade", "Team", "Position", "Status"],
+    ["P1", "A", "Junior", "1", 11, "Varsity", "G", "Active"],
+    ["P2", "B", "Senior", "2", 12, "Varsity", "F", "Active"]
+  ]};
+  const playersSheet = {
+    getDataRange: () => ({getValues: () => playerState.values.map((row) => row.slice())}),
+    getRange: () => ({setValues: (rows) => { playerState.values = [playerState.values[0]].concat(rows); }})
+  };
+  let currentSeason = "2026-2027";
+  let backups = 0;
+  let audits = 0;
+  const service = load({
+    COACHIQ_SCHEMA_VERSION: 2, PLAYER_SHEET: "Players", sessionCache: ["old"], practiceEvaluationCache: ["old"],
+    requireStaffCapability_: () => {}, getCoachIQBackupTriggers_: () => [{}],
+    LockService: {getScriptLock: () => ({waitLock: () => {}, releaseLock: () => {}})},
+    getCoachIQSettings: () => ({currentSeason}), getInstalledCoachIQSchemaVersion_: () => 2,
+    getCoachIQSpreadsheet_: () => ({getSheetByName: (name) => name === "Players" ? playersSheet : scopedSheets[name]}),
+    evaluateCoachIQSchema_: () => [], createCoachIQSafetyBackup_: () => ({id: "backup-" + (++backups)}),
+    setSettingValues_: (updates) => { currentSeason = updates["Current Season"]; }, logCoachIQAudit: () => { audits++; }
+  });
+  const request = {expectedCurrentSeason: "2026-2027", nextSeason: "2027-2028", promoteGrades: true, archiveSeniors: true, confirmation: "START NEW SEASON"};
+  const result = service.startCoachIQNewSeason(request);
+  assert.equal(result.started, true);
+  assert.equal(currentSeason, "2027-2028");
+  assert.equal(playerState.values[1][4], "12");
+  assert.equal(playerState.values[2][7], "Archived");
+  assert.equal(backups, 1);
+  assert.equal(audits, 1);
+  assert.equal(service.sessionCache, null);
+  assert.equal(service.practiceEvaluationCache, null);
+  assert.throws(() => service.startCoachIQNewSeason(request), /Current Season changed after the preview/);
+  assert.equal(backups, 1);
 });
