@@ -26,10 +26,12 @@ activePlayerRows.forEach(function(row){
   // -----------------------------
   const sessionSheet = ss.getSheetByName("Sessions");
   const sessionData = sessionSheet.getDataRange().getValues();
+  const sessionHeaders = sessionData[0] || [];
+  const currentSessionRows = filterCoachIQRowsForCurrentSeason_(sessionHeaders, sessionData.slice(1));
 
   const latest =
-    sessionData.length > 1
-      ? sessionData[sessionData.length - 1]
+    currentSessionRows.length
+      ? currentSessionRows[currentSessionRows.length - 1]
       : null;
 
 // -----------------------------
@@ -50,7 +52,7 @@ const categoryIndexes = getSettingList("Culture Categories").map(function(catego
   return evaluationHeaders.indexOf(category);
 }).filter(function(index){ return index >= 0; });
 
-evaluationData.slice(1).forEach(function(row){
+filterCoachIQRowsForCurrentSeason_(evaluationHeaders,evaluationData.slice(1)).forEach(function(row){
   if(evaluationPlayerIndex < 0 || attendanceIndex < 0){
     return;
   }
@@ -90,11 +92,17 @@ const culturePointSheet=ss.getSheetByName("Culture Points");
 if(culturePointSheet&&culturePointSheet.getLastRow()>1){
   const cultureRows=culturePointSheet.getDataRange().getValues(),cultureHeaders=cultureRows.shift();
   const culturePlayerIndex=cultureHeaders.indexOf("Player ID"),pointsIndex=cultureHeaders.indexOf("Points");
-  if(culturePlayerIndex>=0&&pointsIndex>=0){cultureRows.forEach(function(row){const playerId=String(row[culturePlayerIndex]||"");culturePointTotals[playerId]=(culturePointTotals[playerId]||0)+(Number(row[pointsIndex])||0);});}
+  if(culturePlayerIndex>=0&&pointsIndex>=0){filterCoachIQRowsForCurrentSeason_(cultureHeaders,cultureRows).forEach(function(row){const playerId=String(row[culturePlayerIndex]||"");culturePointTotals[playerId]=(culturePointTotals[playerId]||0)+(Number(row[pointsIndex])||0);});}
 }
 let leader=null;
 activePlayerRows.forEach(function(row){
-  const playerId=String(row[0]||""),points=(culturePointTotals[playerId]||0)+(evaluationPointTotals[playerId]||0);
+  const playerId=String(row[0]||"");
+  const points=combinePlayerPointTotals_(
+    culturePointTotals[playerId],
+    0,
+    0,
+    evaluationPointTotals[playerId]
+  ).total;
   if(!leader||points>leader.points){leader={name:String(row[1]||"")+" "+String(row[2]||""),points:points};}
 });
 
@@ -117,7 +125,7 @@ activePlayerRows.forEach(function(row){
       : 0,
 
     totalSessions:
-      Math.max(sessionData.length - 1, 0),
+      currentSessionRows.length,
 
     leader: leader
 

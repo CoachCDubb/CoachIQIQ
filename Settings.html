@@ -82,5 +82,22 @@
       <div id="sessionPoliciesContainer" class="session-policy-list"></div>
       <div class="settings-actions"><button class="btn" type="button" onclick="addSessionPolicyEditor()">+ Add session type</button><button id="saveSessionPoliciesButton" class="btn btn-primary" type="button" onclick="saveSessionPolicySettings()">Save session types</button></div>
     </div>
+    <div class="settings-section settings-health-section">
+      <div class="settings-section-heading"><span class="settings-section-number">10</span><div><h3>System health</h3><p>Verify the release, data structure, staff security, and backup protection.</p></div></div>
+      <div id="systemHealthSummary" class="system-health-summary" aria-live="polite">Running CoachIQ diagnostics…</div>
+      <div id="systemHealthChecks" class="system-health-checks"></div>
+      <div class="settings-actions"><button id="refreshSystemHealthButton" class="btn btn-primary" type="button" onclick="loadCoachIQSystemHealth(PageNavigation.requestId)">Run diagnostics</button></div>
+    </div>
+    <div class="settings-section settings-rollover-section">
+      <div class="settings-section-heading"><span class="settings-section-number">11</span><div><h3>Season rollover preview</h3><p>Review the next-season plan without changing production data.</p></div></div>
+      <div class="rollover-preview-controls">
+        <label>New season<input id="rolloverNextSeason" maxlength="40" placeholder="2027-2028"></label>
+        <label class="rollover-option"><input id="rolloverPromoteGrades" type="checkbox" checked> Promote grades 9–11</label>
+        <label class="rollover-option"><input id="rolloverArchiveSeniors" type="checkbox"> Archive Grade 12 players</label>
+      </div>
+      <p class="rollover-safety-note"><strong>Safety first:</strong> previewing makes no changes. Starting a season requires a ready schema, protected backups, and a separate confirmation.</p>
+      <div id="seasonRolloverPreview" class="season-rollover-preview" aria-live="polite">Enter the next season and build a preview.</div>
+      <div class="settings-actions"><button id="prepareSeasonSchemaButton" class="btn" type="button" onclick="confirmCoachIQSeasonSchemaMigration()" hidden>Prepare season history</button><button id="startNewSeasonButton" class="btn btn-danger" type="button" onclick="confirmCoachIQNewSeason()" hidden>Start new season</button><button id="previewSeasonRolloverButton" class="btn btn-primary" type="button" onclick="previewCoachIQSeasonRollover()">Build rollover preview</button></div>
+    </div>
   </div>
 </section>
