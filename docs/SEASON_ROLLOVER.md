@@ -70,3 +70,10 @@ Stats are also read and updated within Current Season.
 Schema-1 workbooks without a `Season` column remain readable until migration. In a
 migrated workbook, a blank or different Season value is not treated as current.
 Historical records remain stored for a future explicit season-history selector.
+
+## Read-only season history
+
+Staff with **Manage settings** can use **Settings → Season history** to select any
+season found in season-owned records. The viewer reports preserved row counts for
+sessions, evaluations, culture points, player season stats, and games. It returns
+summaries rather than record rows and provides no edit, delete, or restore action.
