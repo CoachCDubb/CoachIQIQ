@@ -1300,9 +1300,18 @@ function renderCoachIQSeasonHistory(history){
   const seasons=history.availableSeasons||[];
   select.disabled=!seasons.length;
   select.innerHTML=seasons.length?seasons.map(function(season){return `<option value="${escapeHtmlValue(season)}"${season===history.selectedSeason?" selected":""}>${escapeHtmlValue(season)}${season===history.currentSeason?" (current)":""}</option>`;}).join(""):'<option value="">No seasons available</option>';
-  const rows=(history.sources||[]).map(function(source){return `<tr><td>${escapeHtmlValue(source.sheet||"")}</td><td>${Number(source.count||0)}</td><td>${source.seasonTagged?"Season tagged":"Legacy current-season data"}</td></tr>`;}).join("");
+  const rows=(history.sources||[]).map(function(source){return `<tr><td>${escapeHtmlValue(source.sheet||"")}</td><td>${Number(source.count||0)}</td><td>${source.seasonTagged?"Season tagged":"Legacy summary only"}</td></tr>`;}).join("");
+  const details=(history.sources||[]).map(function(source){
+    const columns=source.columns||[],records=source.records||[];
+    const heading=`<div class="season-history-detail-heading"><h4>${escapeHtmlValue(source.sheet||"")}</h4><span>${records.length} detailed record${records.length===1?"":"s"}</span></div>`;
+    if(!source.seasonTagged){return `<section class="season-history-detail">${heading}<p>Legacy rows without explicit season ownership are not available for drill-down.</p></section>`;}
+    if(!records.length||!columns.length){return `<section class="season-history-detail">${heading}<p>No display-safe records for this season.</p></section>`;}
+    const header=columns.map(function(column){return `<th>${escapeHtmlValue(column)}</th>`;}).join("");
+    const body=records.map(function(record){return `<tr>${columns.map(function(column){return `<td>${escapeHtmlValue(record[column])}</td>`;}).join("")}</tr>`;}).join("");
+    return `<section class="season-history-detail">${heading}<div class="season-history-table-wrap"><table><thead><tr>${header}</tr></thead><tbody>${body}</tbody></table></div></section>`;
+  }).join("");
   output.className="season-history-viewer "+(history.selectedSeason?"ready":"empty");
-  output.innerHTML=history.selectedSeason?`<div class="season-history-summary"><div><span>Selected season</span><strong>${escapeHtmlValue(history.selectedSeason)}</strong></div><div><span>Preserved records</span><strong>${Number(history.totalRecords||0)}</strong></div></div><div class="season-history-table-wrap"><table><thead><tr><th>Record type</th><th>Records</th><th>Ownership</th></tr></thead><tbody>${rows}</tbody></table></div><p>${escapeHtmlValue(history.message||"")}</p>`:`<p>${escapeHtmlValue(history.message||"No season history is available yet.")}</p>`;
+  output.innerHTML=history.selectedSeason?`<div class="season-history-summary"><div><span>Selected season</span><strong>${escapeHtmlValue(history.selectedSeason)}</strong></div><div><span>Preserved records</span><strong>${Number(history.totalRecords||0)}</strong></div></div><div class="season-history-table-wrap"><table><thead><tr><th>Record type</th><th>Records</th><th>Ownership</th></tr></thead><tbody>${rows}</tbody></table></div><div class="season-history-details">${details}</div><p>${escapeHtmlValue(history.message||"")}</p>`:`<p>${escapeHtmlValue(history.message||"No season history is available yet.")}</p>`;
 }
 
 function loadCoachIQSystemHealth(requestId){
