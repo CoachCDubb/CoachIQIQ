@@ -99,11 +99,5 @@
       <div id="seasonRolloverPreview" class="season-rollover-preview" aria-live="polite">Enter the next season and build a preview.</div>
       <div class="settings-actions"><button id="prepareSeasonSchemaButton" class="btn" type="button" onclick="confirmCoachIQSeasonSchemaMigration()" hidden>Prepare season history</button><button id="startNewSeasonButton" class="btn btn-danger" type="button" onclick="confirmCoachIQNewSeason()" hidden>Start new season</button><button id="previewSeasonRolloverButton" class="btn btn-primary" type="button" onclick="previewCoachIQSeasonRollover()">Build rollover preview</button></div>
     </div>
-    <div class="settings-section settings-season-history-section">
-      <div class="settings-section-heading"><span class="settings-section-number">12</span><div><h3>Season history</h3><p>Review preserved program activity without changing historical records.</p></div></div>
-      <div class="season-history-toolbar"><label>Season<select id="seasonHistorySeason" onchange="loadCoachIQSeasonHistory(PageNavigation.requestId,this.value)"><option>Loading seasons…</option></select></label><span class="season-history-readonly">Read only</span></div>
-      <div id="seasonHistoryViewer" class="season-history-viewer" aria-live="polite">Loading season history…</div>
-      <div class="settings-actions"><button id="refreshSeasonHistoryButton" class="btn btn-primary" type="button" onclick="loadCoachIQSeasonHistory(PageNavigation.requestId,document.getElementById('seasonHistorySeason').value)">Refresh history</button></div>
-    </div>
   </div>
 </section>
