@@ -46,3 +46,9 @@ The Apps Script deployment should still be exercised with two authorized test de
 before release: submit simultaneous taps, force one request to retry, refresh with an
 unsaved local queue, finish the game, and confirm that a late retry is rejected. Also
 confirm that sheet headers match the constants before testing against production data.
+
+## Game-Day Confidence release (2026-08-27)
+
+The follow-up audit added visible, persistent sync state (protected count and last-sync time), immediate optimistic tap feedback, same-control double-tap suppression, and warnings before leaving with pending events. Undo now requires confirmation, can void only the latest active event under the script lock, and emits its own audit record. Finish explicitly describes its irreversible effect and builds the final report while holding the same lock used by event writers, preventing a concurrent device from slipping an event behind the official report.
+
+The setup remains objective-focused and now summarizes only the three game-day essentials: matchup, available roster, and winning objectives. Existing client event IDs, local recovery, server deduplication, team/capability checks, completed-game write rejection, and action audit records remain in place. The production acceptance procedure is documented in `docs/LIVE_GAME_TWO_DEVICE_SMOKE_TEST.md`.
