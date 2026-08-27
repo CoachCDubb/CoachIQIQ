@@ -116,7 +116,7 @@ function renderCoachIQPage_(page, html, requestId, callback){
     requestAnimationFrame(function(){
         if(!isCurrentPage(page,requestId)){return;}
         const loaders={Dashboard:loadDashboard,Players:loadPlayers,Sessions:loadSessions,Game:loadLiveGameSetup,
-          Evaluations:initializeEvaluationsPage,Leaderboard:loadLeaderboard,Settings:loadSettings,Staff:loadStaff,AI:loadIntelligence};
+          Evaluations:initializeEvaluationsPage,Leaderboard:loadLeaderboard,Settings:loadSettings,SeasonHistory:loadCoachIQSeasonHistoryPage,Staff:loadStaff,AI:loadIntelligence};
         if(loaders[page]){loaders[page](requestId);}else if(page==="PlayerProfile"){loadPlayerProfile();}
         if(typeof callback==="function"){callback();}
     });
@@ -1272,8 +1272,12 @@ function loadSettings(requestId){
     .getCoachIQBackupStatusForUI();
 
   loadCoachIQSystemHealth(requestId);
-  loadCoachIQSeasonHistory(requestId,"");
+}
 
+const CoachIQSeasonHistoryView={source:"",page:1,pageSize:10,history:null};
+function loadCoachIQSeasonHistoryPage(requestId){
+  CoachIQSeasonHistoryView.source="";CoachIQSeasonHistoryView.page=1;
+  loadCoachIQSeasonHistory(requestId,"");
 }
 
 function loadCoachIQSeasonHistory(requestId,season){
@@ -1282,9 +1286,9 @@ function loadCoachIQSeasonHistory(requestId,season){
   if(output){output.className="season-history-viewer loading";output.textContent="Loading preserved season records…";}
   if(button){button.disabled=true;button.textContent="Loading…";}
   google.script.run.withSuccessHandler(function(history){
-    if(isCurrentPage("Settings",requestId)){renderCoachIQSeasonHistory(history);}
+    if(isCurrentPage("SeasonHistory",requestId)){renderCoachIQSeasonHistory(history);}
   }).withFailureHandler(function(error){
-    if(!isCurrentPage("Settings",requestId)){return;}
+    if(!isCurrentPage("SeasonHistory",requestId)){return;}
     if(button){button.disabled=false;button.textContent="Refresh history";}
     if(output){output.className="season-history-viewer error";output.textContent=error.message||"Season history is unavailable.";}
   }).getCoachIQSeasonHistoryViewer({season:season||""});
@@ -1300,9 +1304,25 @@ function renderCoachIQSeasonHistory(history){
   const seasons=history.availableSeasons||[];
   select.disabled=!seasons.length;
   select.innerHTML=seasons.length?seasons.map(function(season){return `<option value="${escapeHtmlValue(season)}"${season===history.selectedSeason?" selected":""}>${escapeHtmlValue(season)}${season===history.currentSeason?" (current)":""}</option>`;}).join(""):'<option value="">No seasons available</option>';
-  const rows=(history.sources||[]).map(function(source){return `<tr><td>${escapeHtmlValue(source.sheet||"")}</td><td>${Number(source.count||0)}</td><td>${source.seasonTagged?"Season tagged":"Legacy current-season data"}</td></tr>`;}).join("");
+  CoachIQSeasonHistoryView.history=history;
+  const sources=history.sources||[];
+  if(!sources.some(function(source){return source.sheet===CoachIQSeasonHistoryView.source;})){CoachIQSeasonHistoryView.source=(sources[0]||{}).sheet||"";CoachIQSeasonHistoryView.page=1;}
+  const tabs=sources.map(function(source){return `<button type="button" class="season-history-tab${source.sheet===CoachIQSeasonHistoryView.source?" active":""}" onclick="selectCoachIQSeasonHistorySource('${escapeHtmlValue(source.sheet)}')">${escapeHtmlValue(source.sheet)} <span>${Number(source.count||0)}</span></button>`;}).join("");
   output.className="season-history-viewer "+(history.selectedSeason?"ready":"empty");
-  output.innerHTML=history.selectedSeason?`<div class="season-history-summary"><div><span>Selected season</span><strong>${escapeHtmlValue(history.selectedSeason)}</strong></div><div><span>Preserved records</span><strong>${Number(history.totalRecords||0)}</strong></div></div><div class="season-history-table-wrap"><table><thead><tr><th>Record type</th><th>Records</th><th>Ownership</th></tr></thead><tbody>${rows}</tbody></table></div><p>${escapeHtmlValue(history.message||"")}</p>`:`<p>${escapeHtmlValue(history.message||"No season history is available yet.")}</p>`;
+  output.innerHTML=history.selectedSeason?`<div class="season-history-summary"><div><span>Selected season</span><strong>${escapeHtmlValue(history.selectedSeason)}</strong></div><div><span>Preserved records</span><strong>${Number(history.totalRecords||0)}</strong></div></div><div class="season-history-tabs" role="tablist">${tabs}</div><div id="seasonHistoryDetail"></div><p>${escapeHtmlValue(history.message||"")}</p>`:`<p>${escapeHtmlValue(history.message||"No season history is available yet.")}</p>`;
+  renderCoachIQSeasonHistorySource();
+}
+
+function selectCoachIQSeasonHistorySource(source){CoachIQSeasonHistoryView.source=source;CoachIQSeasonHistoryView.page=1;renderCoachIQSeasonHistory(CoachIQSeasonHistoryView.history);}
+function changeCoachIQSeasonHistoryPage(change){CoachIQSeasonHistoryView.page+=change;renderCoachIQSeasonHistorySource();}
+function renderCoachIQSeasonHistorySource(){
+  const target=document.getElementById("seasonHistoryDetail"),history=CoachIQSeasonHistoryView.history||{};
+  if(!target){return;}const source=(history.sources||[]).filter(function(item){return item.sheet===CoachIQSeasonHistoryView.source;})[0];if(!source){target.innerHTML="";return;}
+  const columns=source.columns||[],records=source.records||[],size=CoachIQSeasonHistoryView.pageSize,totalPages=Math.max(Math.ceil(records.length/size),1);CoachIQSeasonHistoryView.page=Math.min(Math.max(CoachIQSeasonHistoryView.page,1),totalPages);
+  if(!source.seasonTagged){target.innerHTML='<p class="season-history-empty">Legacy rows without explicit season ownership are not available for drill-down.</p>';return;}
+  if(!records.length||!columns.length){target.innerHTML='<p class="season-history-empty">No display-safe records for this season.</p>';return;}
+  const start=(CoachIQSeasonHistoryView.page-1)*size,pageRecords=records.slice(start,start+size),header=columns.map(function(column){return `<th>${escapeHtmlValue(column)}</th>`;}).join(""),body=pageRecords.map(function(record){return `<tr>${columns.map(function(column){return `<td>${escapeHtmlValue(record[column])}</td>`;}).join("")}</tr>`;}).join("");
+  target.innerHTML=`<div class="season-history-detail-heading"><h3>${escapeHtmlValue(source.sheet)}</h3><span>Showing ${start+1}–${Math.min(start+size,records.length)} of ${records.length}</span></div><div class="season-history-table-wrap"><table><thead><tr>${header}</tr></thead><tbody>${body}</tbody></table></div><div class="season-history-pagination"><button class="btn" type="button" onclick="changeCoachIQSeasonHistoryPage(-1)"${CoachIQSeasonHistoryView.page===1?" disabled":""}>Previous</button><span>Page ${CoachIQSeasonHistoryView.page} of ${totalPages}</span><button class="btn" type="button" onclick="changeCoachIQSeasonHistoryPage(1)"${CoachIQSeasonHistoryView.page===totalPages?" disabled":""}>Next</button></div>`;
 }
 
 function loadCoachIQSystemHealth(requestId){

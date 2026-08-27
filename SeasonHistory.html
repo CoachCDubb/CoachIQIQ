@@ -1,0 +1,17 @@
+<section class="season-history-page">
+  <div class="page-header">
+    <div>
+      <span class="page-kicker">Program archive</span>
+      <h2>Season History</h2>
+      <p class="page-subtitle">Review preserved program activity in a dedicated read-only workspace.</p>
+    </div>
+    <span class="season-history-readonly">Read only</span>
+  </div>
+  <div class="season-history-card">
+    <div class="season-history-toolbar">
+      <label>Season<select id="seasonHistorySeason" onchange="loadCoachIQSeasonHistory(PageNavigation.requestId,this.value)"><option>Loading seasons…</option></select></label>
+      <button id="refreshSeasonHistoryButton" class="btn btn-primary" type="button" onclick="loadCoachIQSeasonHistory(PageNavigation.requestId,document.getElementById('seasonHistorySeason').value)">Refresh history</button>
+    </div>
+    <div id="seasonHistoryViewer" class="season-history-viewer" aria-live="polite">Loading season history…</div>
+  </div>
+</section>

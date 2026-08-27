@@ -43,7 +43,7 @@ function include(filename) {
     .getContent();
 }
 function getPage(pageName) {
-  if (pageName === "Staff" || pageName === "Settings") {
+  if (pageName === "Staff" || pageName === "Settings" || pageName === "SeasonHistory") {
     requireStaffCapability_("manage_settings");
   }
   if (pageName === "AI") requireStaffCapability_("view_intelligence");
@@ -66,6 +66,7 @@ function getCoachIQPageBundle() {
     Evaluations:capabilities.indexOf("evaluate_players") >= 0,
     Staff:capabilities.indexOf("manage_settings") >= 0,
     Settings:capabilities.indexOf("manage_settings") >= 0,
+    SeasonHistory:capabilities.indexOf("manage_settings") >= 0,
     AI:capabilities.indexOf("view_intelligence") >= 0
   };
   const pages = {};
