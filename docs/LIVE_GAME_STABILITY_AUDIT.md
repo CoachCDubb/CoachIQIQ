@@ -46,3 +46,21 @@ The Apps Script deployment should still be exercised with two authorized test de
 before release: submit simultaneous taps, force one request to retry, refresh with an
 unsaved local queue, finish the game, and confirm that a late retry is rejected. Also
 confirm that sheet headers match the constants before testing against production data.
+
+## Game-Day Confidence release (2026-08-27)
+
+The follow-up audit added visible, persistent sync state (protected count and last-sync time), immediate optimistic tap feedback, same-control double-tap suppression, and warnings before leaving with pending events. Undo now requires confirmation, can void only the latest active event under the script lock, and emits its own audit record. Finish explicitly describes its irreversible effect and builds the final report while holding the same lock used by event writers, preventing a concurrent device from slipping an event behind the official report.
+
+The setup remains objective-focused and now summarizes only the three game-day essentials: matchup, available roster, and winning objectives. Existing client event IDs, local recovery, server deduplication, team/capability checks, completed-game write rejection, and action audit records remain in place. The production acceptance procedure is documented in `docs/LIVE_GAME_TWO_DEVICE_SMOKE_TEST.md`.
+
+## Coach convenience follow-up (2026-08-27)
+
+The tracker now asks supported mobile browsers to keep the screen awake, provides subtle haptic confirmation, shows online/offline state, retries protected activity when connectivity returns, and refreshes the shared server view when a coach returns to the app. A manual **Refresh shared view** action gives staff a simple way to reconcile two-device activity without leaving the focused tracker. These are progressive enhancements: unsupported wake-lock or vibration APIs do not block tracking.
+
+### Recommended next validation and product work
+
+1. Run the production two-device test across the actual iOS Safari, Android Chrome, and managed-tablet versions used by staff, including screen lock, app switching, low-power mode, and captive-portal Wi-Fi.
+2. Add an Apps Script integration harness backed by a disposable spreadsheet. Current Node coverage verifies client decisions and source contracts, but cannot prove Google lock timing, sheet writes, or active-user authorization.
+3. Measure real game tap cadence before changing the 350 ms accidental-tap window. Rapid scoring workflows may need a coach-configurable threshold or a per-objective exception.
+4. Observe sync latency and Apps Script quota/error rates during a full game. If batches regularly exceed the current interaction window, add exponential retry backoff and lightweight operational telemetry without adding tracker clutter.
+5. Conduct an accessibility pass with VoiceOver/TalkBack and an outdoor/bright-gym usability check, especially for status colors, touch targets, and confirmation language.
