@@ -22,7 +22,7 @@ test("protected taps survive failure, refresh, and navigation warnings", () => {
 
 test("taps receive immediate feedback and duplicate-tap suppression", () => {
   assert.match(client, /tap-confirmed/);
-  assert.match(client, /now-CoachIQ\.liveGame\.lastTapAt<350/);
+  assert.match(client, /shouldBlockLiveGameTap_/);
   assert.match(client, /tap-blocked/);
 });
 

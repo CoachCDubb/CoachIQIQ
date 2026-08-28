@@ -158,7 +158,7 @@ const CoachIQ = {
 
   dataCacheAt: {},
 
-  liveGame: {setup:null, objectives:[], manualRoster:[], tracker:null, saving:false, lastGameId:"", tapQueue:[], protectedTaps:[], tapTimer:null, syncing:false, lastSyncAt:"", lastTapKey:"", lastTapAt:0, adjustmentDraft:[], adjustmentType:"Live Adjustment"}
+  liveGame: {setup:null, objectives:[], manualRoster:[], tracker:null, saving:false, lastGameId:"", tapQueue:[], protectedTaps:[], tapTimer:null, syncing:false, lastSyncAt:"", lastTapKey:"", lastTapAt:0, wakeLock:null, adjustmentDraft:[], adjustmentType:"Live Adjustment"}
 
 };
 
@@ -493,6 +493,7 @@ function openLiveGameTracker(gameId){
   CoachIQ.liveGame.tapQueue=[];
   CoachIQ.liveGame.syncing=false;
   CoachIQ.liveGame.lastSyncAt="";
+  requestLiveGameWakeLock_();
   document.body.classList.add("live-game-mode");
   const content = document.getElementById("content");
   if(content){ content.scrollTop = 0; }
@@ -517,6 +518,7 @@ function exitLiveGameTracker(){
   performLiveGameExit_();
 }
 function performLiveGameExit_(){
+  releaseLiveGameWakeLock_();
   document.body.classList.remove("live-game-mode");
   CoachIQ.liveGame.tracker = null;
   CoachIQ.liveGame.selectedPlayerId = "";
@@ -576,9 +578,10 @@ function renderLiveTrackerObjectives(data){
 function recordLiveObjectiveChange(objectiveId,side,delta,component,button){
   if(!CoachIQ.liveGame.tracker){return;}
   const tapKey=[objectiveId,side,delta,component||""].join("|");const now=Date.now();
-  if(CoachIQ.liveGame.lastTapKey===tapKey&&now-CoachIQ.liveGame.lastTapAt<350){if(button){button.classList.add("tap-blocked");setTimeout(function(){button.classList.remove("tap-blocked");},300);}return;}
+  if(shouldBlockLiveGameTap_(tapKey,now,CoachIQ.liveGame.lastTapKey,CoachIQ.liveGame.lastTapAt)){if(button){button.classList.add("tap-blocked");setTimeout(function(){button.classList.remove("tap-blocked");},300);}return;}
   CoachIQ.liveGame.lastTapKey=tapKey;CoachIQ.liveGame.lastTapAt=now;
   if(button){button.classList.remove("tap-confirmed");void button.offsetWidth;button.classList.add("tap-confirmed");setTimeout(function(){button.classList.remove("tap-confirmed");},350);}
+  if(navigator.vibrate){navigator.vibrate(18);}
   const eventId="CEVT-"+Date.now().toString(36)+"-"+Math.random().toString(36).slice(2,8);
   const event={eventId:eventId,objectiveId:objectiveId,side:side,delta:delta,component:component||"",period:CoachIQ.liveGame.tracker.game.currentPeriod};
   applyOptimisticLiveObjectiveTap(event);
@@ -589,6 +592,7 @@ function recordLiveObjectiveChange(objectiveId,side,delta,component,button){
   clearTimeout(CoachIQ.liveGame.tapTimer);
   CoachIQ.liveGame.tapTimer=setTimeout(function(){flushLiveObjectiveQueue();},180);
 }
+function shouldBlockLiveGameTap_(tapKey,now,lastTapKey,lastTapAt){return tapKey===lastTapKey&&now-lastTapAt<350;}
 function applyOptimisticLiveObjectiveTap(event){
   const tracker=CoachIQ.liveGame.tracker; if(!tracker){return;}
   const total=tracker.objectiveTotals[event.objectiveId]||(tracker.objectiveTotals[event.objectiveId]={our:0,opponent:0});
@@ -636,7 +640,7 @@ function persistProtectedLiveGameTaps(){
   const tracker=CoachIQ.liveGame.tracker;if(!tracker){return;}
   try{const key=liveGameRecoveryKey(tracker.game.gameId);if(CoachIQ.liveGame.protectedTaps.length){localStorage.setItem(key,JSON.stringify({gameId:tracker.game.gameId,savedAt:new Date().toISOString(),taps:CoachIQ.liveGame.protectedTaps}));}else{localStorage.removeItem(key);}}catch(error){console.error("CoachIQ could not protect live taps locally: "+error.message);}
 }
-function liveGamePendingTapCount(){const state=CoachIQ.liveGame;return Math.max(state.tapQueue.length,state.protectedTaps.length);}
+function liveGamePendingTapCount(coachIQ){const state=(coachIQ||CoachIQ).liveGame;return Math.max(state.tapQueue.length,state.protectedTaps.length);}
 function recoverProtectedLiveGameTaps(data){
   let recovered=[];try{const stored=JSON.parse(localStorage.getItem(liveGameRecoveryKey(data.game.gameId))||"null");recovered=stored&&Array.isArray(stored.taps)?stored.taps:[];}catch(error){recovered=[];}
   if(!recovered.length){CoachIQ.liveGame.protectedTaps=[];hideLiveGameRecovery();return;}
@@ -649,6 +653,17 @@ function recoverProtectedLiveGameTaps(data){
 function showLiveGameRecovery(count,message){const banner=document.getElementById("liveTrackerRecovery");if(!banner){return;}document.getElementById("liveTrackerRecoveryTitle").textContent=count+" protected tap"+(count===1?"":"s");document.getElementById("liveTrackerRecoveryMessage").textContent=message;banner.hidden=false;}
 function hideLiveGameRecovery(){const banner=document.getElementById("liveTrackerRecovery");if(banner){banner.hidden=true;}}
 function retryProtectedLiveGameTaps(){if(!CoachIQ.liveGame.tapQueue.length&&CoachIQ.liveGame.protectedTaps.length){CoachIQ.liveGame.tapQueue=CoachIQ.liveGame.protectedTaps.slice();}flushLiveObjectiveQueue();}
+function refreshLiveGameSharedView(silent){
+  const tracker=CoachIQ.liveGame.tracker;if(!tracker||CoachIQ.liveGame.syncing||liveGamePendingTapCount()){showToast("Finish syncing protected taps before refreshing.","error");return;}
+  setLiveTrackerSaveState("Refreshing shared activity…","saving");
+  google.script.run.withSuccessHandler(function(data){renderLiveGameTracker(data);if(!silent){showToast("Shared game view refreshed.");}}).withFailureHandler(function(error){setLiveTrackerSaveState("Refresh unavailable","error");if(!silent){showToast(error.message||"Unable to refresh shared activity.","error");}}).getLiveGameTracker(tracker.game.gameId);
+}
+function requestLiveGameWakeLock_(){
+  if(!navigator.wakeLock||!navigator.wakeLock.request){updateLiveGameWakeState_(false,"Screen wake unavailable");return;}
+  navigator.wakeLock.request("screen").then(function(lock){CoachIQ.liveGame.wakeLock=lock;updateLiveGameWakeState_(true,"Screen awake");lock.addEventListener("release",function(){if(CoachIQ.liveGame.tracker){updateLiveGameWakeState_(false,"Tap to keep awake");}});}).catch(function(){updateLiveGameWakeState_(false,"Tap to keep awake");});
+}
+function releaseLiveGameWakeLock_(){const lock=CoachIQ.liveGame.wakeLock;CoachIQ.liveGame.wakeLock=null;if(lock&&lock.release){lock.release();}}
+function updateLiveGameWakeState_(awake,label){const element=document.getElementById("liveTrackerWakeState");if(element){element.textContent=label;element.classList.toggle("attention",!awake);element.onclick=awake?null:requestLiveGameWakeLock_;}}
 function renderLiveTrackerEvents(data){
   const container=document.getElementById("liveTrackerEvents"); if(!container){return;} const labels={}; (data.objectives||[]).forEach(function(item){labels[item.id]=item.label;});
   container.innerHTML=(data.events||[]).slice(0,8).map(function(event,index){const side=String(event.side||"");const percentageLabel=side.indexOf(" Made")>0?"Success":side.indexOf(" Attempt")>0?"Miss":"";const eventLabel=percentageLabel||((event.value>0?"+":"")+event.value);return `<div class="live-tracker-event"><span><strong>${escapeHtmlValue(eventLabel)} ${escapeHtmlValue(labels[event.eventType]||event.eventType)}</strong><small>${escapeHtmlValue(side.indexOf("Opponent")===0?data.game.opponent:data.game.team)} · ${escapeHtmlValue(liveGamePeriodName(data.game.format,event.period))}</small></span>${index===0?`<button type="button" onclick="undoLatestLiveTrackerEvent()">Undo</button>`:""}</div>`;}).join("")||'<div class="live-tracker-empty">No taps yet. The screen is ready.</div>';
@@ -726,11 +741,15 @@ function setLiveTrackerSaveState(message, state){
   element.className = "live-tracker-save-state " + (state || "");
   const messageElement=document.getElementById("liveTrackerSaveMessage");if(messageElement){messageElement.textContent=message;}
   const count=CoachIQ.liveGame.protectedTaps.length;const countElement=document.getElementById("liveTrackerProtectedCount");if(countElement){countElement.textContent=count+" protected";}
+  const connection=document.getElementById("liveTrackerConnection");if(connection){const online=navigator.onLine!==false;connection.textContent=online?"Online":"Offline";connection.classList.toggle("attention",!online);}
   const syncElement=document.getElementById("liveTrackerLastSync");if(syncElement){syncElement.textContent=CoachIQ.liveGame.lastSyncAt?"Last sync "+new Date(CoachIQ.liveGame.lastSyncAt).toLocaleTimeString([], {hour:"numeric",minute:"2-digit",second:"2-digit"}):"Not synced yet";}
   try{if(CoachIQ.liveGame.tracker){localStorage.setItem("coachiq_live_game_status_"+CoachIQ.liveGame.tracker.game.gameId,JSON.stringify({message:message,state:state||"",protectedCount:count,lastSyncAt:CoachIQ.liveGame.lastSyncAt,updatedAt:new Date().toISOString()}));}}catch(error){console.error("CoachIQ could not persist sync status: "+error.message);}
 }
 
 window.addEventListener("beforeunload",function(event){if(liveGamePendingTapCount()){event.preventDefault();event.returnValue="";}});
+window.addEventListener("online",function(){if(CoachIQ.liveGame.tracker){setLiveTrackerSaveState("Connection restored — syncing…","saving");if(liveGamePendingTapCount()){retryProtectedLiveGameTaps();}else{refreshLiveGameSharedView(true);}}});
+window.addEventListener("offline",function(){if(CoachIQ.liveGame.tracker){setLiveTrackerSaveState("Offline protection active","error");}});
+document.addEventListener("visibilitychange",function(){if(document.visibilityState!=="visible"||!CoachIQ.liveGame.tracker){return;}requestLiveGameWakeLock_();if(!liveGamePendingTapCount()&&!CoachIQ.liveGame.syncing){refreshLiveGameSharedView(true);}});
 
 function resetLiveGameSetup(){
   document.body.classList.remove("live-game-mode");
