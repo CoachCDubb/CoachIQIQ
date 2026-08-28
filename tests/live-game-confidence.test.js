@@ -5,6 +5,7 @@ const fs = require("node:fs");
 const client = fs.readFileSync("Scripts.html", "utf8");
 const server = fs.readFileSync("GameService.gs", "utf8");
 const view = fs.readFileSync("Game.html", "utf8");
+const styles = fs.readFileSync("Styles.html", "utf8");
 
 test("tracker exposes persistent sync confidence details", () => {
   assert.match(view, /liveTrackerProtectedCount/);
@@ -22,7 +23,7 @@ test("protected taps survive failure, refresh, and navigation warnings", () => {
 
 test("taps receive immediate feedback and duplicate-tap suppression", () => {
   assert.match(client, /tap-confirmed/);
-  assert.match(client, /now-CoachIQ\.liveGame\.lastTapAt<350/);
+  assert.match(client, /shouldBlockLiveGameTap_/);
   assert.match(client, /tap-blocked/);
 });
 
@@ -51,4 +52,13 @@ test("pregame readiness stays focused on matchup, roster, and objectives", () =>
   assert.match(view, /liveGameReadiness/);
   assert.match(client, /Pregame readiness/);
   assert.match(client, /Focused plan/);
+});
+
+test("game-day layout keeps controls compact and tap targets inside each card", () => {
+  assert.match(view, /objective-tracker-game-tools/);
+  assert.match(view, /objective-tracker-session-tools/);
+  assert.match(view, /↻ Refresh/);
+  assert.match(styles, /grid-template-columns:repeat\(4,minmax\(0,1fr\)\)/);
+  assert.match(styles, /\.objective-comparison \.objective-tap-buttons button\{min-width:0;width:100%/);
+  assert.match(styles, /#liveTrackerWakeState:not\(\.attention\)\{display:none\}/);
 });
