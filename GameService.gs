@@ -709,28 +709,38 @@ function saveLiveGamePlanAdjustment(gameId, data) {
   const gameRecord = findLiveGameRecord_(gameId);
   requireLiveGameTeamAccess_(gameRecord.game.Team);
   if (String(gameRecord.game.Status || "") === "Completed") throw new Error("A completed game plan cannot be changed.");
-  const previousPlan = parseLiveGameJson_(gameRecord.game["Active Tracking Plan"],
-    parseLiveGameJson_(gameRecord.game["Tracking Plan"], []));
-  const nextPlan = cleanLiveGameTrackingPlan_(data.objectives).map(function(objective, index) {
-    objective.order = index;
-    objective.addedDuringGame = objective.addedDuringGame === true || !previousPlan.some(function(item) { return item.id === objective.id; });
-    return objective;
-  });
-  if (!nextPlan.some(function(objective) { return objective.active !== false; })) throw new Error("Keep at least one objective active.");
-  const adjustmentType = ["Timeout", "End Quarter", "Live Adjustment"].indexOf(data.adjustmentType) >= 0
-    ? data.adjustmentType : "Live Adjustment";
-  const adjustments = parseLiveGameJson_(gameRecord.game["Plan Adjustments"], []);
-  const adjustment = {adjustmentId:"ADJ-" + Utilities.getUuid().slice(0, 10).toUpperCase(),
-    adjustmentType:adjustmentType, period:Number(gameRecord.game["Current Period"] || 1),
-    reason:String(data.reason || "").trim().slice(0, 240), changedBy:Session.getActiveUser().getEmail() || "",
-    changedAt:formatLiveGameTimestamp_(new Date()), before:previousPlan, after:nextPlan};
-  adjustments.push(adjustment);
-  gameRecord.sheet.getRange(gameRecord.rowNumber, gameRecord.cols["Active Tracking Plan"] + 1).setValue(JSON.stringify(nextPlan));
-  gameRecord.sheet.getRange(gameRecord.rowNumber, gameRecord.cols["Plan Adjustments"] + 1).setValue(JSON.stringify(adjustments));
-  gameRecord.sheet.getRange(gameRecord.rowNumber, gameRecord.cols["Updated At"] + 1).setValue(new Date());
+  let previousPlan;
+  let adjustment;
+  let team;
+  const lock=LockService.getScriptLock();lock.waitLock(10000);
+  try{
+    const current=findLiveGameRecord_(gameId);
+    requireLiveGameTeamAccess_(current.game.Team);
+    if(String(current.game.Status||"")==="Completed")throw new Error("A completed game plan cannot be changed.");
+    team=String(current.game.Team||"");
+    previousPlan = parseLiveGameJson_(current.game["Active Tracking Plan"],
+      parseLiveGameJson_(current.game["Tracking Plan"], []));
+    const nextPlan = cleanLiveGameTrackingPlan_(data.objectives).map(function(objective, index) {
+      objective.order = index;
+      objective.addedDuringGame = objective.addedDuringGame === true || !previousPlan.some(function(item) { return item.id === objective.id; });
+      return objective;
+    });
+    if (!nextPlan.some(function(objective) { return objective.active !== false; })) throw new Error("Keep at least one objective active.");
+    const adjustmentType = ["Timeout", "End Quarter", "Live Adjustment"].indexOf(data.adjustmentType) >= 0
+      ? data.adjustmentType : "Live Adjustment";
+    const adjustments = parseLiveGameJson_(current.game["Plan Adjustments"], []);
+    adjustment = {adjustmentId:"ADJ-" + Utilities.getUuid().slice(0, 10).toUpperCase(),
+      adjustmentType:adjustmentType, period:Number(current.game["Current Period"] || 1),
+      reason:String(data.reason || "").trim().slice(0, 240), changedBy:Session.getActiveUser().getEmail() || "",
+      changedAt:formatLiveGameTimestamp_(new Date()), before:previousPlan, after:nextPlan};
+    adjustments.push(adjustment);
+    current.sheet.getRange(current.rowNumber, current.cols["Active Tracking Plan"] + 1).setValue(JSON.stringify(nextPlan));
+    current.sheet.getRange(current.rowNumber, current.cols["Plan Adjustments"] + 1).setValue(JSON.stringify(adjustments));
+    current.sheet.getRange(current.rowNumber, current.cols["Updated At"] + 1).setValue(new Date());
+  }finally{lock.releaseLock();}
   try {
     logCoachIQAudit({action:"ADJUST_LIVE_GAME_PLAN", entityType:"Game", entityId:String(gameId),
-      team:String(gameRecord.game.Team || ""), beforeValue:previousPlan, afterValue:adjustment, success:true, error:""});
+      team:team, beforeValue:previousPlan, afterValue:adjustment, success:true, error:""});
   } catch (auditError) { console.error("Game plan adjusted, but audit logging failed: " + auditError.message); }
   return getLiveGameTracker(gameId);
 }

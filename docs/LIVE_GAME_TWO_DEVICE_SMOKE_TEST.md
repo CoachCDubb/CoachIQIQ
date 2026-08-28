@@ -32,3 +32,9 @@ Use this runbook after deploying the Game-Day Confidence release. Run it against
 ## Release evidence
 
 Capture screenshots of the readiness summary, protected/offline state, last-sync state, stale Undo rejection, completed report, and relevant audit rows. Attach the game ID, event IDs/sequences, device details, timestamps, tester names, and deployment version to the release ticket. Delete or clearly label the disposable production game per program policy.
+
+## Coach convenience checks
+
+1. On each supported mobile browser, open the tracker and confirm **Screen awake** appears and the display does not sleep during the configured system timeout. Background and return to the tracker; confirm the wake request and shared-view refresh recover without duplicating events.
+2. Confirm a tap produces subtle haptic feedback where supported and remains fully usable when vibration or Wake Lock is unavailable.
+3. Toggle airplane mode and confirm **Offline** appears. Restore connectivity and confirm protected taps retry automatically, the badge returns to **Online**, and both devices converge after **Refresh shared view**.
