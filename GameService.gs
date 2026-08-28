@@ -476,7 +476,8 @@ function getLiveGameTracker(gameId) {
       originalObjectives:originalObjectives,
       planAdjustments:parseLiveGameJson_(game["Plan Adjustments"], []),
       objectiveTotals:calculateLiveGameObjectiveTotals_(events, objectives),
-      events:events.slice(-30).reverse()
+      events:events.slice(-30).reverse(),
+      lastSyncAt:events.length ? events[events.length - 1].syncedAt : ""
     };
   }
   const totals = calculateLiveGameScore_(events);
@@ -540,6 +541,9 @@ function recordLiveGameObjectiveEvents(gameId, events) {
   const lock = LockService.getScriptLock();
   lock.waitLock(10000);
   try {
+    if (String(findLiveGameRecord_(gameId).game.Status || "") === "Completed") {
+      throw new Error("A completed game cannot accept more events.");
+    }
     const rows = eventSheet.getLastRow() > 1
       ? eventSheet.getRange(2, 1, eventSheet.getLastRow() - 1, LIVE_GAME_EVENT_HEADERS.length).getValues() : [];
     const knownIds = {};
@@ -633,6 +637,7 @@ function recordLiveGameEvent(gameId, event) {
   const lock = LockService.getScriptLock();
   lock.waitLock(10000);
   try {
+    if(String(findLiveGameRecord_(gameId).game.Status||"")==="Completed")throw new Error("A completed game cannot accept more events.");
     const existing = eventSheet.getLastRow() > 1
       ? eventSheet.getRange(2, 1, eventSheet.getLastRow() - 1, LIVE_GAME_EVENT_HEADERS.length).getValues() : [];
     const duplicate = existing.some(function(row) { return String(row[0] || "") === eventId; });
@@ -655,19 +660,22 @@ function voidLiveGameEvent(gameId, eventId) {
   initializeLiveGameSheets_();
   const gameRecord = findLiveGameRecord_(gameId);
   requireLiveGameTeamAccess_(gameRecord.game.Team);
+  if (String(gameRecord.game.Status || "") === "Completed") throw new Error("A completed game cannot be changed.");
   const sheet = SpreadsheetApp.getActive().getSheetByName(LIVE_GAME_EVENTS_SHEET);
   if (sheet.getLastRow() < 2) throw new Error("No game events were found.");
-  const values = sheet.getRange(2, 1, sheet.getLastRow() - 1, LIVE_GAME_EVENT_HEADERS.length).getValues();
-  const rowIndex = values.findIndex(function(row) {
-    return String(row[0] || "") === String(eventId) && String(row[1] || "") === String(gameId);
-  });
-  if (rowIndex < 0) throw new Error("The event was not found.");
-  sheet.getRange(rowIndex + 2, 12).setValue(true);
-  if (parseLiveGameJson_(gameRecord.game["Tracking Plan"], []).length) {
-    updateLiveGameObjectiveState_(gameRecord, Number(gameRecord.game["Current Period"] || 1));
-  } else {
-    updateLiveGameStateFromEvents_(gameRecord, Number(gameRecord.game["Current Period"] || 1));
-  }
+  const lock=LockService.getScriptLock();lock.waitLock(10000);
+  try {
+    const currentRecord=findLiveGameRecord_(gameId);
+    if(String(currentRecord.game.Status||"")==="Completed")throw new Error("A completed game cannot be changed.");
+    const values = sheet.getRange(2, 1, sheet.getLastRow() - 1, LIVE_GAME_EVENT_HEADERS.length).getValues();
+    const active=values.map(function(row,index){return{row:row,index:index};}).filter(function(item){return String(item.row[1]||"")===String(gameId)&&item.row[11]!==true;});
+    const latest=active.length?active[active.length-1]:null;
+    if(!latest||String(latest.row[0]||"")!==String(eventId))throw new Error("Only the latest active event can be undone. Refresh to see activity from other devices.");
+    sheet.getRange(latest.index + 2, 12).setValue(true);
+    if (parseLiveGameJson_(currentRecord.game["Tracking Plan"], []).length) updateLiveGameObjectiveState_(currentRecord, Number(currentRecord.game["Current Period"] || 1));
+    else updateLiveGameStateFromEvents_(currentRecord, Number(currentRecord.game["Current Period"] || 1));
+  } finally {lock.releaseLock();}
+  try{logCoachIQAudit({action:"UNDO_LIVE_GAME_EVENT",entityType:"Game Event",entityId:String(eventId),team:String(gameRecord.game.Team||""),beforeValue:{gameId:String(gameId),voided:false},afterValue:{gameId:String(gameId),voided:true},success:true,error:""});}catch(auditError){console.error("Game event voided, but audit logging failed: "+auditError.message);}
   return getLiveGameTracker(gameId);
 }
 
@@ -675,17 +683,22 @@ function createLiveGameCheckpoint(gameId, checkpointType) {
   requireStaffCapability_("run_sessions");
   initializeLiveGameSheets_();
   if (["Timeout", "End Quarter"].indexOf(checkpointType) < 0) throw new Error("Choose a valid game checkpoint.");
-  const tracker = getLiveGameTracker(gameId);
-  if (!tracker.objectives || !tracker.objectives.length) throw new Error("This game does not have a tracking plan.");
-  const report = buildLiveGameCheckpointReport_(tracker, checkpointType);
-  const sheet = SpreadsheetApp.getActive().getSheetByName(LIVE_GAME_CHECKPOINTS_SHEET);
-  const checkpointId = "GCHK-" + Utilities.getUuid().slice(0, 12).toUpperCase();
-  sheet.appendRow([checkpointId, String(gameId), checkpointType, tracker.game.currentPeriod, "", new Date(),
-    JSON.stringify(report.objectives), JSON.stringify(report.recommendations)]);
-  if (checkpointType === "End Quarter") {
-    const record = findLiveGameRecord_(gameId);
-    updateLiveGameObjectiveState_(record, Math.min(20, tracker.game.currentPeriod + 1));
-  }
+  let tracker;
+  let report;
+  const lock=LockService.getScriptLock();lock.waitLock(10000);
+  try{
+    const record=findLiveGameRecord_(gameId);
+    requireLiveGameTeamAccess_(record.game.Team);
+    if(String(record.game.Status||"")==="Completed")throw new Error("A completed game cannot create checkpoints.");
+    tracker = getLiveGameTracker(gameId);
+    if (!tracker.objectives || !tracker.objectives.length) throw new Error("This game does not have a tracking plan.");
+    report = buildLiveGameCheckpointReport_(tracker, checkpointType);
+    const sheet = SpreadsheetApp.getActive().getSheetByName(LIVE_GAME_CHECKPOINTS_SHEET);
+    const checkpointId = "GCHK-" + Utilities.getUuid().slice(0, 12).toUpperCase();
+    sheet.appendRow([checkpointId, String(gameId), checkpointType, tracker.game.currentPeriod, "", new Date(),
+      JSON.stringify(report.objectives), JSON.stringify(report.recommendations)]);
+    if (checkpointType === "End Quarter") updateLiveGameObjectiveState_(record, Math.min(20, tracker.game.currentPeriod + 1));
+  }finally{lock.releaseLock();}
   return {report:report, tracker:getLiveGameTracker(gameId)};
 }
 
@@ -696,28 +709,38 @@ function saveLiveGamePlanAdjustment(gameId, data) {
   const gameRecord = findLiveGameRecord_(gameId);
   requireLiveGameTeamAccess_(gameRecord.game.Team);
   if (String(gameRecord.game.Status || "") === "Completed") throw new Error("A completed game plan cannot be changed.");
-  const previousPlan = parseLiveGameJson_(gameRecord.game["Active Tracking Plan"],
-    parseLiveGameJson_(gameRecord.game["Tracking Plan"], []));
-  const nextPlan = cleanLiveGameTrackingPlan_(data.objectives).map(function(objective, index) {
-    objective.order = index;
-    objective.addedDuringGame = objective.addedDuringGame === true || !previousPlan.some(function(item) { return item.id === objective.id; });
-    return objective;
-  });
-  if (!nextPlan.some(function(objective) { return objective.active !== false; })) throw new Error("Keep at least one objective active.");
-  const adjustmentType = ["Timeout", "End Quarter", "Live Adjustment"].indexOf(data.adjustmentType) >= 0
-    ? data.adjustmentType : "Live Adjustment";
-  const adjustments = parseLiveGameJson_(gameRecord.game["Plan Adjustments"], []);
-  const adjustment = {adjustmentId:"ADJ-" + Utilities.getUuid().slice(0, 10).toUpperCase(),
-    adjustmentType:adjustmentType, period:Number(gameRecord.game["Current Period"] || 1),
-    reason:String(data.reason || "").trim().slice(0, 240), changedBy:Session.getActiveUser().getEmail() || "",
-    changedAt:formatLiveGameTimestamp_(new Date()), before:previousPlan, after:nextPlan};
-  adjustments.push(adjustment);
-  gameRecord.sheet.getRange(gameRecord.rowNumber, gameRecord.cols["Active Tracking Plan"] + 1).setValue(JSON.stringify(nextPlan));
-  gameRecord.sheet.getRange(gameRecord.rowNumber, gameRecord.cols["Plan Adjustments"] + 1).setValue(JSON.stringify(adjustments));
-  gameRecord.sheet.getRange(gameRecord.rowNumber, gameRecord.cols["Updated At"] + 1).setValue(new Date());
+  let previousPlan;
+  let adjustment;
+  let team;
+  const lock=LockService.getScriptLock();lock.waitLock(10000);
+  try{
+    const current=findLiveGameRecord_(gameId);
+    requireLiveGameTeamAccess_(current.game.Team);
+    if(String(current.game.Status||"")==="Completed")throw new Error("A completed game plan cannot be changed.");
+    team=String(current.game.Team||"");
+    previousPlan = parseLiveGameJson_(current.game["Active Tracking Plan"],
+      parseLiveGameJson_(current.game["Tracking Plan"], []));
+    const nextPlan = cleanLiveGameTrackingPlan_(data.objectives).map(function(objective, index) {
+      objective.order = index;
+      objective.addedDuringGame = objective.addedDuringGame === true || !previousPlan.some(function(item) { return item.id === objective.id; });
+      return objective;
+    });
+    if (!nextPlan.some(function(objective) { return objective.active !== false; })) throw new Error("Keep at least one objective active.");
+    const adjustmentType = ["Timeout", "End Quarter", "Live Adjustment"].indexOf(data.adjustmentType) >= 0
+      ? data.adjustmentType : "Live Adjustment";
+    const adjustments = parseLiveGameJson_(current.game["Plan Adjustments"], []);
+    adjustment = {adjustmentId:"ADJ-" + Utilities.getUuid().slice(0, 10).toUpperCase(),
+      adjustmentType:adjustmentType, period:Number(current.game["Current Period"] || 1),
+      reason:String(data.reason || "").trim().slice(0, 240), changedBy:Session.getActiveUser().getEmail() || "",
+      changedAt:formatLiveGameTimestamp_(new Date()), before:previousPlan, after:nextPlan};
+    adjustments.push(adjustment);
+    current.sheet.getRange(current.rowNumber, current.cols["Active Tracking Plan"] + 1).setValue(JSON.stringify(nextPlan));
+    current.sheet.getRange(current.rowNumber, current.cols["Plan Adjustments"] + 1).setValue(JSON.stringify(adjustments));
+    current.sheet.getRange(current.rowNumber, current.cols["Updated At"] + 1).setValue(new Date());
+  }finally{lock.releaseLock();}
   try {
     logCoachIQAudit({action:"ADJUST_LIVE_GAME_PLAN", entityType:"Game", entityId:String(gameId),
-      team:String(gameRecord.game.Team || ""), beforeValue:previousPlan, afterValue:adjustment, success:true, error:""});
+      team:team, beforeValue:previousPlan, afterValue:adjustment, success:true, error:""});
   } catch (auditError) { console.error("Game plan adjusted, but audit logging failed: " + auditError.message); }
   return getLiveGameTracker(gameId);
 }
@@ -767,14 +790,21 @@ function finishLiveGame(gameId) {
   const gameRecord = findLiveGameRecord_(gameId);
   requireLiveGameTeamAccess_(gameRecord.game.Team);
   if (String(gameRecord.game.Status || "") === "Completed") return getLiveGamePostgameReport(gameId);
-  const tracker = getLiveGameTracker(gameId);
-  if (!tracker.objectives || !tracker.objectives.length) throw new Error("This game does not have a tracking plan.");
-  const report = buildLiveGamePostgameReport_(tracker, getPreviousCompletedReports_(tracker.game.team));
-  const now = new Date();
-  gameRecord.sheet.getRange(gameRecord.rowNumber, gameRecord.cols.Status + 1).setValue("Completed");
-  gameRecord.sheet.getRange(gameRecord.rowNumber, gameRecord.cols["Final Report"] + 1).setValue(JSON.stringify(report));
-  gameRecord.sheet.getRange(gameRecord.rowNumber, gameRecord.cols["Completed At"] + 1).setValue(now);
-  gameRecord.sheet.getRange(gameRecord.rowNumber, gameRecord.cols["Updated At"] + 1).setValue(now);
+  let tracker;
+  let report;
+  const lock=LockService.getScriptLock();lock.waitLock(10000);
+  try{
+    const current=findLiveGameRecord_(gameId);
+    if(String(current.game.Status||"")==="Completed")return getLiveGamePostgameReport(gameId);
+    tracker = getLiveGameTracker(gameId);
+    if (!tracker.objectives || !tracker.objectives.length) throw new Error("This game does not have a tracking plan.");
+    report = buildLiveGamePostgameReport_(tracker, getPreviousCompletedReports_(tracker.game.team));
+    const now = new Date();
+    current.sheet.getRange(current.rowNumber, current.cols.Status + 1).setValue("Completed");
+    current.sheet.getRange(current.rowNumber, current.cols["Final Report"] + 1).setValue(JSON.stringify(report));
+    current.sheet.getRange(current.rowNumber, current.cols["Completed At"] + 1).setValue(now);
+    current.sheet.getRange(current.rowNumber, current.cols["Updated At"] + 1).setValue(now);
+  }finally{lock.releaseLock();}
   try {
     logCoachIQAudit({action:"FINISH_LIVE_GAME", entityType:"Game", entityId:String(gameId),
       team:tracker.game.team, beforeValue:"Live", afterValue:{status:"Completed",achieved:report.achieved,scored:report.scored}, success:true, error:""});
@@ -923,7 +953,8 @@ function getLiveGameEvents_(gameId) {
     .map(function(row) {
       return {eventId:String(row[0] || ""), sequence:Number(row[2] || 0), timestamp:formatLiveGameTimestamp_(row[3]),
         period:Number(row[4] || 1), gameClock:String(row[5] || ""), side:String(row[6] || "Us"),
-        playerId:String(row[7] || ""), eventType:String(row[8] || ""), value:Number(row[9] || 0)};
+        playerId:String(row[7] || ""), eventType:String(row[8] || ""), value:Number(row[9] || 0),
+        syncedAt:formatLiveGameTimestamp_(row[12])};
     });
 }
 

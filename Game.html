@@ -48,6 +48,7 @@
       <div class="game-plan-template-save"><input id="liveGameTemplateName" maxlength="60" placeholder="Template name, e.g. Our Identity"><button class="btn" type="button" onclick="saveCurrentLiveGameTemplate()">Save Current Plan as Template</button></div>
     </article>
 
+    <aside id="liveGameReadiness" class="live-game-readiness" aria-live="polite"></aside>
     <div class="live-game-launch-bar"><div><strong>Game-plan tracking</strong><p>The live screen will show only the objectives above.</p></div><button id="saveLiveGameSetupButton" class="btn btn-primary" type="submit">Save Game Plan</button></div>
   </form>
 
@@ -56,10 +57,10 @@
   <section id="liveGameTracker" class="live-game-tracker" hidden>
     <header class="objective-tracker-header">
       <div><span class="objective-live-badge">LIVE PLAN</span><h2><span id="liveTrackerTeam">Our Team</span> <small>vs.</small> <span id="liveTrackerOpponent">Opponent</span></h2><p id="liveTrackerPeriodLabel">Quarter 1</p></div>
-      <div class="objective-tracker-actions"><button type="button" onclick="createLiveCheckpoint('Timeout')">Timeout Report</button><button type="button" onclick="createLiveCheckpoint('End Quarter')">End Quarter</button><button type="button" onclick="openLivePlanAdjustment('Live Adjustment')">Adjust Plan</button><button type="button" onclick="undoLatestLiveTrackerEvent()">Undo</button><button class="finish" type="button" onclick="finishLiveGameFromTracker()">Finish Game</button><button class="exit" type="button" onclick="exitLiveGameTracker()">Exit</button></div>
+      <div class="objective-tracker-actions"><div class="objective-tracker-game-tools"><button type="button" onclick="createLiveCheckpoint('Timeout')">Timeout</button><button type="button" onclick="createLiveCheckpoint('End Quarter')">End period</button><button type="button" onclick="openLivePlanAdjustment('Live Adjustment')">Adjust plan</button><button type="button" onclick="undoLatestLiveTrackerEvent()">Undo</button></div><div class="objective-tracker-session-tools"><button class="finish" type="button" onclick="finishLiveGameFromTracker()">Finish game</button><button class="exit" type="button" onclick="exitLiveGameTracker()" aria-label="Exit live game">Exit</button></div></div>
     </header>
     <div id="liveTrackerRecovery" class="live-tracker-recovery" hidden><span><strong id="liveTrackerRecoveryTitle">Protected taps recovered</strong><small id="liveTrackerRecoveryMessage">CoachIQ kept unsynced activity on this device.</small></span><button type="button" onclick="retryProtectedLiveGameTaps()">Retry Sync</button></div>
-    <div id="liveTrackerSaveState" class="live-tracker-save-state">Ready</div>
+    <div id="liveTrackerSaveState" class="live-tracker-save-state" role="status" aria-live="polite"><strong id="liveTrackerSaveMessage"><i aria-hidden="true"></i> Ready</strong><span><b id="liveTrackerConnection">Online</b><b id="liveTrackerProtectedCount">0 protected</b><b id="liveTrackerLastSync">No taps yet</b><b id="liveTrackerWakeState">Screen awake</b><button type="button" onclick="refreshLiveGameSharedView()" aria-label="Refresh activity from other devices">↻ Refresh</button></span></div>
     <div id="liveTrackerObjectives" class="objective-tracker-grid"></div>
     <article class="objective-recent"><div><strong>Recent taps</strong><small>Every tap saves immediately</small></div><div id="liveTrackerEvents" class="live-tracker-events"></div></article>
   </section>
