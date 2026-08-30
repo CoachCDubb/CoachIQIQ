@@ -158,7 +158,7 @@ const CoachIQ = {
 
   dataCacheAt: {},
 
-  liveGame: {setup:null, objectives:[], manualRoster:[], tracker:null, saving:false, lastGameId:"", tapQueue:[], protectedTaps:[], tapTimer:null, syncing:false, lastSyncAt:"", lastTapKey:"", lastTapAt:0, wakeLock:null, adjustmentDraft:[], adjustmentType:"Live Adjustment"}
+  liveGame: {setup:null, objectives:[], manualRoster:[], opponentRoster:[], opponentRosterId:"", tracker:null, saving:false, lastGameId:"", tapQueue:[], protectedTaps:[], tapTimer:null, syncing:false, lastSyncAt:"", lastTapKey:"", lastTapAt:0, wakeLock:null, adjustmentDraft:[], adjustmentType:"Live Adjustment"}
 
 };
 
@@ -176,6 +176,8 @@ function loadLiveGameSetup(requestId){
       if(!isCurrentPage("Game", requestId)){ return; }
       CoachIQ.liveGame.setup = setup;
       CoachIQ.liveGame.objectives = [];
+      CoachIQ.liveGame.opponentRoster = [];
+      CoachIQ.liveGame.opponentRosterId = "";
       populateLiveGameSetup(setup);
     })
     .withFailureHandler(function(error){
@@ -200,6 +202,7 @@ function populateLiveGameSetup(setup){
   document.getElementById("liveGameDate").value = new Date().toISOString().split("T")[0];
   document.getElementById("liveGameType").value = setup.defaults.gameType || "Official Game";
   document.getElementById("liveGameLocation").value = setup.defaults.location || "Home";
+  document.getElementById("liveGameOpponentSeason").value = setup.season || "";
   const sportSelect = document.getElementById("liveGameSport");
   const sportPresets = setup.sportPresets || {};
   sportSelect.innerHTML = Object.keys(sportPresets).map(function(sport){
@@ -213,6 +216,7 @@ function populateLiveGameSetup(setup){
   renderRecentLiveGames(setup.recentGames || []);
   renderCompletedLiveGames(setup.completedGames || []);
   renderLiveGameTemplateOptions();
+  renderLiveGameOpponentRosterOptions();
   updateLiveGameType();
   if(loading){ loading.hidden = true; }
   form.hidden = false;
@@ -282,6 +286,37 @@ function renderLiveGameRoster(){
   renderLiveGameReadiness();
 }
 
+function renderLiveGameOpponentRosterOptions(){
+  const select=document.getElementById("liveGameOpponentRosterSelect");if(!select){return;}const sport=(document.getElementById("liveGameSport")||{}).value;
+  const rosters=((CoachIQ.liveGame.setup||{}).opponentRosters||[]).filter(function(item){return item.sport===sport;});
+  select.innerHTML='<option value="">Choose saved roster</option>'+rosters.map(function(item){return '<option value="'+escapeHtmlValue(item.opponentId)+'">'+escapeHtmlValue(item.name+(item.level?" · "+item.level:"")+(item.season?" · "+item.season:""))+'</option>';}).join("");
+  if(rosters.some(function(item){return item.opponentId===CoachIQ.liveGame.opponentRosterId;}))select.value=CoachIQ.liveGame.opponentRosterId;
+}
+function loadSelectedOpponentRoster(){
+  const select=document.getElementById("liveGameOpponentRosterSelect");const roster=((CoachIQ.liveGame.setup||{}).opponentRosters||[]).find(function(item){return item.opponentId===select.value;});
+  if(!roster){CoachIQ.liveGame.opponentRosterId="";CoachIQ.liveGame.opponentRoster=[];updateLiveGameOpponentRosterCount_();updateObjectiveBuilderFields();return;}
+  CoachIQ.liveGame.opponentRosterId=roster.opponentId;CoachIQ.liveGame.opponentRoster=(roster.players||[]).map(function(item){return Object.assign({},item);});
+  document.getElementById("liveGameOpponent").value=roster.name;document.getElementById("liveGameOpponentLevel").value=roster.level||"";document.getElementById("liveGameOpponentSeason").value=roster.season||"";
+  document.getElementById("liveGameOpponentRosterPaste").value=CoachIQ.liveGame.opponentRoster.map(function(item){return [item.jersey,item.name,item.position,item.grade].join(", ");}).join("\n");
+  updateLiveGameOpponentRosterCount_();updateObjectiveBuilderFields();renderLiveGameReadiness();
+}
+function parseLiveGameOpponentRoster_(text){
+  const seen={};return String(text||"").split(/\r?\n/).map(function(line){return line.trim();}).filter(Boolean).map(function(line,index){
+    let fields=line.indexOf("\t")>=0?line.split("\t"):line.split(",");fields=fields.map(function(item){return item.trim();});
+    if(fields.length===1){const match=fields[0].match(/^#?(\d{1,3}|[A-Za-z]\d{1,2})\s+(.+)$/);fields=match?[match[1],match[2]]:["",fields[0]];}
+    let jersey=fields[0]||"",name=fields[1]||"";if(!name){name=jersey;jersey="";}if(!name)throw new Error("Line "+(index+1)+" needs a player name.");
+    const key=(jersey+"|"+name).toLowerCase();if(seen[key])throw new Error("Line "+(index+1)+" duplicates another player.");seen[key]=true;
+    return{id:"OPP-"+(index+1)+"-"+Date.now().toString(36),jersey:jersey.slice(0,12),name:name.slice(0,80),position:(fields[2]||"").slice(0,40),grade:(fields[3]||"").slice(0,20)};
+  });
+}
+function previewLiveGameOpponentRoster(){try{const players=parseLiveGameOpponentRoster_(document.getElementById("liveGameOpponentRosterPaste").value);if(!players.length){showToast("Paste at least one opponent player.","error");return false;}if(players.length>100){showToast("Opponent rosters can include up to 100 players.","error");return false;}CoachIQ.liveGame.opponentRoster=players;updateLiveGameOpponentRosterCount_();updateObjectiveBuilderFields();showToast(players.length+" opponent players ready for this game.");return true;}catch(error){showToast(error.message||"Unable to read that roster.","error");return false;}}
+function updateLiveGameOpponentRosterCount_(){const element=document.getElementById("liveGameOpponentRosterCount");const count=CoachIQ.liveGame.opponentRoster.length;if(element){element.textContent=count?count+" opponent player"+(count===1?"":"s")+" ready":"No opponent roster loaded";}}
+function saveLiveGameOpponentRoster(){
+  if(!previewLiveGameOpponentRoster()){return;}const name=document.getElementById("liveGameOpponent").value.trim();if(!name){showToast("Enter the opponent name first.","error");return;}
+  const button=document.getElementById("saveLiveGameOpponentRosterButton");button.disabled=true;button.textContent="Saving…";
+  google.script.run.withSuccessHandler(function(result){button.disabled=false;button.textContent="Save for future games";CoachIQ.liveGame.opponentRosterId=result.opponentId;const rows=CoachIQ.liveGame.setup.opponentRosters||[];const index=rows.findIndex(function(item){return item.opponentId===result.opponentId;});if(index>=0)rows[index]=result;else rows.push(result);CoachIQ.liveGame.setup.opponentRosters=rows;renderLiveGameOpponentRosterOptions();showToast("Opponent roster saved for future games.");}).withFailureHandler(function(error){button.disabled=false;button.textContent="Save for future games";showToast(error.message||"Unable to save opponent roster.","error");}).saveLiveGameOpponentRoster({opponentId:CoachIQ.liveGame.opponentRosterId,name:name,sport:document.getElementById("liveGameSport").value,level:document.getElementById("liveGameOpponentLevel").value,season:document.getElementById("liveGameOpponentSeason").value,players:CoachIQ.liveGame.opponentRoster});
+}
+
 function addManualLiveGamePlayer(){
   const nameInput=document.getElementById("liveGameManualPlayerName");
   const jerseyInput=document.getElementById("liveGameManualPlayerJersey");
@@ -349,7 +384,8 @@ function updateObjectiveBuilderFields(){
         .concat((CoachIQ.liveGame.manualRoster||[]).map(function(player){return{id:player.id,name:player.name+" (game only)"};}));
       control.innerHTML = '<select id="objectivePlayer">' + players.map(function(player){ return `<option value="${escapeHtmlValue(player.id)}">${escapeHtmlValue(player.name)}</option>`; }).join("") + '</select>';
     } else {
-      control.innerHTML = '<input id="objectivePlayer" maxlength="60" placeholder="Opponent player name">';
+      const opponents=CoachIQ.liveGame.opponentRoster||[];
+      control.innerHTML = opponents.length?'<select id="objectivePlayer">'+opponents.map(function(player){return '<option value="'+escapeHtmlValue(player.id)+'">'+escapeHtmlValue((player.jersey?"#"+player.jersey+" · ":"")+player.name)+'</option>';}).join("")+'</select>':'<input id="objectivePlayer" maxlength="60" placeholder="Opponent player name">';
     }
   }
   const defaults = {"Transition Points":["points","higher"],"Offensive Rebounds":["count","higher"],"Turnovers":["count","lower"],"Fouls":["count","lower"],"Points":["points","higher"]};
@@ -372,7 +408,7 @@ function addLiveGameObjective(){
   const playerControl = document.getElementById("objectivePlayer");
   let playerId="", playerLabel="";
   if(subject === "our_player" && playerControl){ playerId=playerControl.value; playerLabel=playerControl.options[playerControl.selectedIndex] ? playerControl.options[playerControl.selectedIndex].text : ""; }
-  if(subject === "opponent_player" && playerControl){ playerLabel=playerControl.value.trim(); }
+  if(subject === "opponent_player" && playerControl){if(playerControl.tagName==="SELECT"){playerId=playerControl.value;playerLabel=playerControl.options[playerControl.selectedIndex]?playerControl.options[playerControl.selectedIndex].text:"";}else{playerLabel=playerControl.value.trim();}}
   if((subject === "our_player" || subject === "opponent_player") && !playerId && !playerLabel){ showToast("Choose or name the player.", "error"); return; }
   const slug=label.toLowerCase().replace(/[^a-z0-9]+/g,"_").replace(/^_+|_+$/g,"").slice(0,45)||"item";
   CoachIQ.liveGame.objectives.push({id:"objective_"+slug+"_"+Date.now().toString(36),label:label,goalType:goalType,subject:subject,
@@ -407,6 +443,7 @@ function updateLiveGameSport(){
   const sport=document.getElementById("liveGameSport");
   if(!sport){return;}
   applyLiveGameSportPreset_(sport.value,false);
+  CoachIQ.liveGame.opponentRoster=[];CoachIQ.liveGame.opponentRosterId="";renderLiveGameOpponentRosterOptions();updateLiveGameOpponentRosterCount_();
   showToast(sport.value+" formats and winning objectives loaded.");
 }
 
@@ -456,6 +493,7 @@ function submitLiveGameSetup(event){
     periodLength:Number(document.getElementById("liveGamePeriodLength").value),
     playerIds:playerIds.filter(function(id){return selectedGuestIds.indexOf(id)<0;}),
     guestPlayers:(CoachIQ.liveGame.manualRoster||[]).filter(function(player){return selectedGuestIds.indexOf(player.id)>=0;}),
+    opponentRoster:CoachIQ.liveGame.opponentRoster||[],
     selectedStats:[],
     customStats:[],
     trackingObjectives:CoachIQ.liveGame.objectives
@@ -755,6 +793,8 @@ function resetLiveGameSetup(){
   document.body.classList.remove("live-game-mode");
   CoachIQ.liveGame.setup = null;
   CoachIQ.liveGame.manualRoster = [];
+  CoachIQ.liveGame.opponentRoster = [];
+  CoachIQ.liveGame.opponentRosterId = "";
   loadPage("Game");
 }
 

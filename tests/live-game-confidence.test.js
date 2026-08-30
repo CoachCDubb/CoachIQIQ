@@ -71,3 +71,15 @@ test("game-day layout keeps controls compact and tap targets inside each card", 
   assert.match(styles, /\.objective-comparison \.objective-tap-buttons button\{min-width:0;width:100%/);
   assert.match(styles, /#liveTrackerWakeState:not\(\.attention\)\{display:none\}/);
 });
+
+test("sport-aware opponent rosters are persistent, audited, and snapshotted", () => {
+  assert.match(server, /LIVE_GAME_OPPONENTS_SHEET/);
+  assert.match(server, /saveLiveGameOpponentRoster/);
+  assert.match(server, /SAVE_OPPONENT_ROSTER/);
+  assert.match(server, /Object\.prototype\.hasOwnProperty\.call\(presets/);
+  assert.match(server, /Opponent Roster/);
+  assert.match(client, /renderLiveGameOpponentRosterOptions/);
+  assert.match(client, /opponentRoster:CoachIQ\.liveGame\.opponentRoster/);
+  assert.match(view, /Paste roster/);
+  ["Basketball","Football","Baseball","Soccer","Volleyball","Other"].forEach((sport) => assert.match(server, new RegExp(`"${sport}"`)));
+});
