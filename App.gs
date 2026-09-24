@@ -48,6 +48,7 @@ function getPage(pageName) {
   }
   if (pageName === "AI") requireStaffCapability_("view_intelligence");
   if (pageName === "Game") requireStaffCapability_("run_sessions");
+  if (pageName === "Scouting") requireStaffCapability_("run_sessions");
   if (pageName === "Sessions") requireStaffCapability_("run_sessions");
   if (pageName === "Evaluations") requireStaffCapability_("evaluate_players");
   return HtmlService
@@ -63,6 +64,7 @@ function getCoachIQPageBundle() {
     Dashboard:true, Players:true, Leaderboard:true, GettingStarted:true, PlayerProfile:true,
     Sessions:capabilities.indexOf("run_sessions") >= 0,
     Game:capabilities.indexOf("run_sessions") >= 0,
+    Scouting:capabilities.indexOf("run_sessions") >= 0,
     Evaluations:capabilities.indexOf("evaluate_players") >= 0,
     Staff:capabilities.indexOf("manage_settings") >= 0,
     Settings:capabilities.indexOf("manage_settings") >= 0,
