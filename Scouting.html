@@ -1,0 +1,37 @@
+<section class="scouting-page">
+  <header class="scouting-hero">
+    <div><span class="page-kicker">Pregame workspace</span><h2>Scouting Reports</h2><p>Turn film, personnel, and staff observations into one clear game plan.</p></div>
+    <button class="btn btn-primary" type="button" onclick="newScoutingReport()">+ New report</button>
+  </header>
+
+  <div id="scoutingLoading" class="card scouting-loading">Loading scouting reports…</div>
+  <div id="scoutingWorkspace" class="scouting-workspace" hidden>
+    <aside class="scouting-library">
+      <div class="scouting-library-head"><strong>Report library</strong><input id="scoutingSearch" type="search" placeholder="Search opponent or team" oninput="renderScoutingLibrary()"></div>
+      <div id="scoutingReportList"></div>
+    </aside>
+
+    <form id="scoutingForm" class="scouting-editor" onsubmit="saveScoutingReport(event)">
+      <div class="scouting-editor-bar">
+        <div><span id="scoutingEditorEyebrow">New report</span><h3 id="scoutingEditorTitle">Build the game plan</h3></div>
+        <div class="scouting-editor-actions"><span id="scoutingSaveState">Not saved</span><button class="btn" type="button" onclick="printScoutingReport()">Print</button><button id="deleteScoutingButton" class="btn" type="button" onclick="deleteScoutingReport()" hidden>Delete</button><button id="saveScoutingButton" class="btn btn-primary" type="submit">Save report</button></div>
+      </div>
+
+      <div class="scouting-meta-grid">
+        <label>Our team<select id="scoutingTeam" required></select></label>
+        <label>Opponent<input id="scoutingOpponent" maxlength="80" required placeholder="Opponent name"></label>
+        <label>Game date<input id="scoutingGameDate" type="date"></label>
+        <label>Location<select id="scoutingLocation"><option>Home</option><option>Away</option><option>Neutral</option></select></label>
+        <label>Report status<select id="scoutingStatus"><option>Draft</option><option>Ready</option><option>Archived</option></select></label>
+      </div>
+
+      <section class="scouting-summary-grid">
+        <label><span>Opponent identity</span><textarea id="scoutingIdentity" rows="3" maxlength="1200" placeholder="How do they want to play? What is their overall identity?"></textarea></label>
+        <label><span>Keys to victory</span><textarea id="scoutingKeys" rows="3" maxlength="1200" placeholder="The 3–5 things we must do to win"></textarea></label>
+      </section>
+
+      <div class="scouting-sections-heading"><div><h3>Report sections</h3><p>Use the defaults, reorder them, or add any category your staff needs.</p></div><button class="btn" type="button" onclick="addScoutingSection()">+ Custom section</button></div>
+      <div id="scoutingSections" class="scouting-sections"></div>
+    </form>
+  </div>
+</section>
