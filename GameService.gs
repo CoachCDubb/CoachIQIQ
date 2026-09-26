@@ -94,6 +94,9 @@ function getLiveGameSetupData() {
   return {
     sport: settings.sport || "Basketball",
     season:getCoachIQCurrentSeason_(),
+    schoolName:settings.schoolName || "",
+    programName:settings.programName || "",
+    mascotName:settings.mascotName || "",
     teams: settings.teams || [],
     players: players,
     stats: getBasketballLiveStatCatalog_(),
@@ -837,8 +840,18 @@ function buildLiveGameCheckpointReport_(tracker, checkpointType) {
       opponent:Number(total.opponent || 0), value:value, target:Number(objective.target || 0), margin:margin};
   });
   if (!recommendations.length) recommendations.push("The game plan is on track. Reinforce the habits creating the advantage.");
-  return {checkpointType:checkpointType, period:tracker.game.currentPeriod,
-    headline:checkpointType + " Game Intelligence", objectives:rows, recommendations:recommendations.slice(0, 3)};
+  const format=String(tracker.game.format||"").toLowerCase(),period=Number(tracker.game.currentPeriod||1);
+  const halftime=checkpointType==="End Quarter"&&((format.indexOf("half")>=0&&period===1)||(format.indexOf("quarter")>=0&&period===2));
+  const recent=(tracker.events||[]).slice(0,8),recentCounts={},objectiveLabels={};
+  tracker.objectives.forEach(function(item){objectiveLabels[item.id]=item.label;});
+  recent.forEach(function(event){const label=(event.side==="Opponent"?tracker.game.opponent+" · ":tracker.game.team+" · ")+(objectiveLabels[event.eventType]||event.eventType);recentCounts[label]=(recentCounts[label]||0)+1;});
+  const recentLeader=Object.keys(recentCounts).sort(function(a,b){return recentCounts[b]-recentCounts[a];})[0];
+  const recentPulse=recentLeader?recentLeader+" appeared "+recentCounts[recentLeader]+" time"+(recentCounts[recentLeader]===1?"":"s")+" in the last "+recent.length+" tracked actions.":"No recent actions have been tracked yet.";
+  return {checkpointType:checkpointType,period:period,coachMode:checkpointType==="Timeout"?"timeout":halftime?"halftime":"period",
+    headline:checkpointType==="Timeout"?"Timeout Coach Mode":halftime?"Halftime Coach Mode":"End-of-Period Coach Mode",
+    objectives:rows,recommendations:recommendations.slice(0,3),keepDoing:rows.filter(function(item){return item.status==="winning";}).slice(0,3).map(function(item){return item.summary;}),
+    fixNow:rows.filter(function(item){return item.status==="behind"||item.status==="even";}).slice(0,3).map(function(item){return item.recommendation;}),
+    recentPulse:recentPulse,topAdjustment:recommendations[0]};
 }
 
 function finishLiveGame(gameId) {

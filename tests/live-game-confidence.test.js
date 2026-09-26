@@ -83,3 +83,18 @@ test("sport-aware opponent rosters are persistent, audited, and snapshotted", ()
   assert.match(view, /Paste roster/);
   ["Basketball","Football","Baseball","Soccer","Volleyball","Other"].forEach((sport) => assert.match(server, new RegExp(`"${sport}"`)));
 });
+
+test("timeout and halftime checkpoints provide a focused Coach Mode", () => {
+  assert.match(view, /checkpointCoachMode/);
+  assert.match(view, /checkpointKeepDoing/);
+  assert.match(view, /checkpointFixNow/);
+  assert.match(view, /checkpointRecentPulse/);
+  assert.match(view, /checkpointTopAdjustment/);
+  assert.match(server, /Timeout Coach Mode/);
+  assert.match(server, /Halftime Coach Mode/);
+  assert.match(server, /keepDoing:/);
+  assert.match(server, /fixNow:/);
+  assert.match(server, /recentPulse:/);
+  assert.match(client, /Use for Second Half/);
+  assert.match(styles, /checkpoint-coach-columns/);
+});
