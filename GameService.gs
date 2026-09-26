@@ -94,6 +94,9 @@ function getLiveGameSetupData() {
   return {
     sport: settings.sport || "Basketball",
     season:getCoachIQCurrentSeason_(),
+    schoolName:settings.schoolName || "",
+    programName:settings.programName || "",
+    mascotName:settings.mascotName || "",
     teams: settings.teams || [],
     players: players,
     stats: getBasketballLiveStatCatalog_(),
