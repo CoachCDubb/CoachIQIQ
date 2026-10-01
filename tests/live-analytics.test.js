@@ -32,6 +32,22 @@ test('tracker uses role-specific tags and a single possession outcome', () => {
   assert.match(scripts, /voidLatestLiveAnalyticsPossession/);
 });
 
+test('analytics and objectives are independently optional per game', () => {
+  const game = read('Game.html');
+  const client = read('Scripts.html');
+  const server = read('GameService.gs');
+  assert.match(game, /liveGameEnableAnalytics/);
+  assert.match(game, /liveGameEnableObjectives/);
+  assert.match(game, /Use either tracker, both trackers, or neither/);
+  assert.match(client, /enableAnalytics:enableAnalytics/);
+  assert.match(client, /enableObjectives:enableObjectives/);
+  assert.match(client, /analyticsPanel\.hidden=data\.game\.analyticsEnabled===false/);
+  assert.match(client, /objectiveGrid\.hidden=data\.game\.objectivesEnabled===false/);
+  assert.match(server, /Tracker Mode/);
+  assert.match(server, /buildOptionalTrackerPostgameReport_/);
+  assert.doesNotMatch(server, /if \(!trackingPlan\.length && !selectedStats\.length\) throw new Error/);
+});
+
 test('summary calculates possession-based decision metrics with null zero denominators', () => {
   const service = read('AnalyticsService.gs');
   assert.match(service, /side\.ppp=liveAnalyticsRate_/);
