@@ -4,6 +4,7 @@ const fs = require("node:fs");
 
 const client = fs.readFileSync("Scripts.html", "utf8");
 const server = fs.readFileSync("GameService.gs", "utf8");
+const analytics = fs.readFileSync("AnalyticsService.gs", "utf8");
 const view = fs.readFileSync("Game.html", "utf8");
 const styles = fs.readFileSync("Styles.html", "utf8");
 
@@ -82,4 +83,60 @@ test("sport-aware opponent rosters are persistent, audited, and snapshotted", ()
   assert.match(client, /opponentRoster:CoachIQ\.liveGame\.opponentRoster/);
   assert.match(view, /Paste roster/);
   ["Basketball","Football","Baseball","Soccer","Volleyball","Other"].forEach((sport) => assert.match(server, new RegExp(`"${sport}"`)));
+});
+
+test("timeout and halftime checkpoints provide a focused Coach Mode", () => {
+  assert.match(view, /checkpointCoachMode/);
+  assert.match(view, /checkpointKeepDoing/);
+  assert.match(view, /checkpointFixNow/);
+  assert.match(view, /checkpointRecentPulse/);
+  assert.match(view, /checkpointTopAdjustment/);
+  assert.match(server, /Timeout Coach Mode/);
+  assert.match(server, /Halftime Coach Mode/);
+  assert.match(server, /keepDoing:/);
+  assert.match(server, /fixNow:/);
+  assert.match(server, /recentPulse:/);
+  assert.match(client, /Use for Second Half/);
+  assert.match(styles, /checkpoint-coach-columns/);
+});
+
+test("possession tracking is always available and feeds pace-aware Coach Mode", () => {
+  assert.match(view, /live-analytics/);
+  assert.match(view, /Track Offense/);
+  assert.match(view, /Track Defense/);
+  assert.match(client, /finishLiveAnalyticsPossession/);
+  assert.match(client, /recordLiveAnalyticsPossession/);
+  assert.match(analytics, /buildLiveAnalyticsSummary_/);
+  assert.match(server, /analytics\.offense\.possessions/);
+  assert.match(server, /gameProgress/);
+  assert.match(server, /paceTarget/);
+  assert.match(view, /checkpointPossessionContext/);
+  assert.match(styles, /\.live-analytics/);
+});
+
+test("Coach Mode ignores possession taps when describing recent priority events", () => {
+  assert.match(server, /event\.eventType!==LIVE_GAME_POSSESSION_EVENT/);
+  assert.match(server, /fixNow:rows\.filter\(function\(item\)\{return item\.status==="behind";/);
+  assert.match(server, /Improve shot quality/);
+});
+
+test("Coach Mode describes recent tracked activity without implying a vague game pulse", () => {
+  assert.match(view, /Recent tracked activity/);
+  assert.doesNotMatch(view, /Recent game pulse/);
+  assert.match(server, /Most common recent tag:/);
+  assert.match(server, /at least 3 priority taps are needed/);
+  assert.match(server, /there is not a clear recent trend yet/);
+  assert.match(view, /checkpointRecommendationsWrap/);
+  assert.match(client, /recommendationsWrap\.hidden=isCoachMode/);
+});
+
+test("desktop objective cards resize to keep up to twelve categories on one screen", () => {
+  assert.match(client, /trackerElement\.dataset\.objectiveCount/);
+  assert.match(client, /dense-objectives/);
+  assert.match(styles, /height:calc\(100vh - 28px\)/);
+  assert.match(styles, /data-objective-count="6"/);
+  assert.match(styles, /data-objective-count="12"/);
+  assert.match(styles, /grid-template-columns:repeat\(3,minmax\(0,1fr\)\)/);
+  assert.match(styles, /grid-template-rows:repeat\(4,minmax\(0,1fr\)\)/);
+  assert.match(styles, /dense-objectives \.objective-recent\{display:none\}/);
 });
