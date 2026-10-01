@@ -6,6 +6,7 @@ const LIVE_GAME_EVENTS_SHEET = "Game Events";
 const LIVE_GAME_CHECKPOINTS_SHEET = "Game Checkpoints";
 const LIVE_GAME_TEMPLATES_SHEET = "Game Plan Templates";
 const LIVE_GAME_OPPONENTS_SHEET = "Opponent Rosters";
+const LIVE_GAME_POSSESSION_EVENT = "system_possession";
 
 const LIVE_GAME_HEADERS = [
   "Game ID", "Game Date", "Team", "Opponent", "Location", "Game Format",
@@ -94,6 +95,9 @@ function getLiveGameSetupData() {
   return {
     sport: settings.sport || "Basketball",
     season:getCoachIQCurrentSeason_(),
+    schoolName:settings.schoolName || "",
+    programName:settings.programName || "",
+    mascotName:settings.mascotName || "",
     teams: settings.teams || [],
     players: players,
     stats: getBasketballLiveStatCatalog_(),
@@ -134,9 +138,11 @@ function createLiveGameSetup(data) {
   const rosterIds = Array.isArray(data.playerIds) ? data.playerIds.map(String) : [];
   const guestPlayers = cleanLiveGameGuestPlayers_(data.guestPlayers);
   const allRosterIds = rosterIds.concat(guestPlayers.map(function(player){return player.id;}));
-  const selectedStats = Array.isArray(data.selectedStats) ? data.selectedStats.map(String) : [];
+  const enableAnalytics = data.enableAnalytics === true;
+  const enableObjectives = data.enableObjectives === true;
+  const selectedStats = enableObjectives && Array.isArray(data.selectedStats) ? data.selectedStats.map(String) : [];
   const customStats = cleanLiveGameCustomStats_(data.customStats);
-  const trackingPlan = cleanLiveGameTrackingPlan_(data.trackingObjectives);
+  const trackingPlan = enableObjectives ? cleanLiveGameTrackingPlan_(data.trackingObjectives) : [];
   const opponentRoster = cleanLiveGameOpponentPlayers_(data.opponentRoster);
 
   if (!gameDate) throw new Error("Choose a game date.");
@@ -144,7 +150,7 @@ function createLiveGameSetup(data) {
   if (!opponent) throw new Error("Enter the opponent.");
   if (!Number.isInteger(periodLength) || periodLength < 1 || periodLength > 60) throw new Error("Period length must be between 1 and 60 minutes.");
   if (!allRosterIds.length) throw new Error("Select or manually add at least one available player.");
-  if (!trackingPlan.length && !selectedStats.length) throw new Error("Add at least one game-plan objective.");
+  if (enableObjectives && !trackingPlan.length && !selectedStats.length) throw new Error("Add at least one game-plan objective or turn Game Plan Objectives off.");
   trackingPlan.forEach(function(objective) {
     if (objective.subject === "our_player" && allRosterIds.indexOf(objective.playerId) < 0) {
       throw new Error(objective.playerLabel + " must be included on the available roster.");
@@ -183,6 +189,7 @@ function createLiveGameSetup(data) {
     ];
     while(row.length<sheet.getLastColumn())row.push("");
     row[headers.indexOf("Opponent Roster")]=JSON.stringify(opponentRoster);
+    row[headers.indexOf("Tracker Mode")]=JSON.stringify({analytics:enableAnalytics,objectives:enableObjectives});
     setCoachIQSeasonOnRow_(headers,row,getCoachIQCurrentSeason_());
     sheet.appendRow(row);
   } finally {
@@ -198,7 +205,8 @@ function createLiveGameSetup(data) {
       beforeValue:"Game did not exist",
       afterValue:{gameDate:gameDate, gameType:gameType, opponent:opponent, location:location, sport:sport, format:format,
         periodLength:periodLength, rosterSize:allRosterIds.length, guestRosterSize:guestPlayers.length, selectedStats:selectedStats,
-        customStats:customStats, trackingObjectives:trackingPlan, opponentRosterSize:opponentRoster.length},
+        customStats:customStats, trackingObjectives:trackingPlan, analyticsEnabled:enableAnalytics,
+        objectivesEnabled:enableObjectives, opponentRosterSize:opponentRoster.length},
       success:true,
       error:""
     });
@@ -216,6 +224,7 @@ function initializeLiveGameSheets_() {
   ensureLiveGameSheet_(LIVE_GAME_TEMPLATES_SHEET, LIVE_GAME_TEMPLATE_HEADERS);
   ensureLiveGameSheet_(LIVE_GAME_OPPONENTS_SHEET, LIVE_GAME_OPPONENT_HEADERS);
   ensureLiveGameOptionalColumn_(LIVE_GAMES_SHEET,"Opponent Roster");
+  ensureLiveGameOptionalColumn_(LIVE_GAMES_SHEET,"Tracker Mode");
 }
 
 function ensureLiveGameOptionalColumn_(sheetName,header){const sheet=SpreadsheetApp.getActive().getSheetByName(sheetName);const headers=sheet.getRange(1,1,1,sheet.getLastColumn()).getDisplayValues()[0];if(headers.indexOf(header)<0)sheet.getRange(1,sheet.getLastColumn()+1).setValue(header).setFontWeight("bold");}
@@ -521,18 +530,22 @@ function getLiveGameTracker(gameId) {
     return{id:String(player.id||""),firstName:names.shift()||"",lastName:names.join(" "),jersey:String(player.jersey||""),position:"Game-only player",guest:true};
   }));
   const events = getLiveGameEvents_(gameId);
+  const trackerMode = getLiveGameTrackerMode_(game, objectives, selectedStats);
+  const analytics = buildLiveAnalyticsSummary_(getLiveAnalyticsPossessions_(gameId), Number(game["Current Period"] || 1));
   if (objectives.length) {
     return {
       game:{gameId:String(game["Game ID"] || ""), gameDate:formatLiveGameDate_(game["Game Date"]),
         team:String(game.Team || ""), opponent:String(game.Opponent || ""), location:String(game.Location || ""),
         format:String(game["Game Format"] || "Quarters"), periodLength:Number(game["Period Length"] || 8),
         status:String(game.Status || "Setup"), currentPeriod:Number(game["Current Period"] || 1),
-        gameType:String(game["Game Type"] || "Official Game")},
+        gameType:String(game["Game Type"] || "Official Game"),analyticsEnabled:trackerMode.analytics,objectivesEnabled:trackerMode.objectives},
       players:players,
       objectives:objectives.sort(function(a, b) { return Number(a.order || 0) - Number(b.order || 0); }),
       originalObjectives:originalObjectives,
       planAdjustments:parseLiveGameJson_(game["Plan Adjustments"], []),
       objectiveTotals:calculateLiveGameObjectiveTotals_(events, objectives),
+      possessions:{our:analytics.offense.possessions, opponent:analytics.defense.possessions, periodOur:analytics.offense.periodPossessions, periodOpponent:analytics.defense.periodPossessions},
+      analytics:analytics,
       events:events.slice(-30).reverse(),
       lastSyncAt:events.length ? events[events.length - 1].syncedAt : ""
     };
@@ -543,15 +556,38 @@ function getLiveGameTracker(gameId) {
       team:String(game.Team || ""), opponent:String(game.Opponent || ""), location:String(game.Location || ""),
       format:String(game["Game Format"] || "Quarters"), periodLength:Number(game["Period Length"] || 8),
       status:String(game.Status || "Setup"), currentPeriod:Number(game["Current Period"] || 1),
-      gameType:String(game["Game Type"] || "Official Game")},
+      gameType:String(game["Game Type"] || "Official Game"),analyticsEnabled:trackerMode.analytics,objectivesEnabled:trackerMode.objectives},
     players:players,
     selectedStats:selectedStats,
     customStats:customStats,
     actions:buildLiveGameActions_(selectedStats, customStats),
     events:events.slice(-30).reverse(),
+    possessions:{our:analytics.offense.possessions, opponent:analytics.defense.possessions, periodOur:analytics.offense.periodPossessions, periodOpponent:analytics.defense.periodPossessions},
+    analytics:analytics,
     ourScore:totals.ourScore,
     opponentScore:totals.opponentScore
   };
+}
+
+function getLiveGameTrackerMode_(game, objectives, selectedStats) {
+  const stored=parseLiveGameObject_((game||{})["Tracker Mode"],{});
+  if(Object.prototype.hasOwnProperty.call(stored,"analytics")||Object.prototype.hasOwnProperty.call(stored,"objectives")){
+    return{analytics:stored.analytics===true,objectives:stored.objectives===true};
+  }
+  return{analytics:true,objectives:(objectives||[]).length>0||(selectedStats||[]).length>0};
+}
+
+function advanceLiveGamePeriod(gameId) {
+  requireStaffCapability_("run_sessions");initializeLiveGameSheets_();
+  const lock=LockService.getScriptLock();lock.waitLock(10000);
+  try{
+    const record=findLiveGameRecord_(gameId);requireLiveGameTeamAccess_(record.game.Team);
+    if(String(record.game.Status||"")==="Completed")throw new Error("A completed game cannot advance periods.");
+    const next=Math.min(20,Number(record.game["Current Period"]||1)+1);
+    record.sheet.getRange(record.rowNumber,record.cols["Current Period"]+1).setValue(next);
+    record.sheet.getRange(record.rowNumber,record.cols["Updated At"]+1).setValue(new Date());
+  }finally{lock.releaseLock();}
+  return getLiveGameTracker(gameId);
 }
 
 function recordLiveGameObjectiveEvent(gameId, event) {
@@ -572,7 +608,16 @@ function recordLiveGameObjectiveEvents(gameId, events) {
   const userEmail = Session.getActiveUser().getEmail() || "";
   const normalizedEvents = events.map(function(rawEvent) {
     const event = rawEvent || {};
-    const objective = objectives.find(function(item) { return item.id === String(event.objectiveId || ""); });
+    const objectiveId = String(event.objectiveId || "");
+    const period = Number(event.period);
+    if (!Number.isInteger(period) || period < 1 || period > 20) throw new Error("Choose a valid period.");
+    if (objectiveId === LIVE_GAME_POSSESSION_EVENT) {
+      const side = String(event.side || "");
+      if (["Us", "Opponent"].indexOf(side) < 0 || Number(event.delta) !== 1) throw new Error("Choose which team finished the possession.");
+      return {eventId:String(event.eventId || "") || "GEVT-" + Utilities.getUuid().slice(0, 12).toUpperCase(),
+        period:period, side:side, playerId:"", objectiveId:LIVE_GAME_POSSESSION_EVENT, delta:1};
+    }
+    const objective = objectives.find(function(item) { return item.id === objectiveId; });
     if (!objective || objective.active === false) throw new Error("That game-plan objective is not currently active.");
     const delta = Number(event.delta);
     const permittedDeltas = objective.unit === "points" ? [-3, -2, -1, 1, 2, 3] : [-1, 1];
@@ -588,8 +633,6 @@ function recordLiveGameObjectiveEvents(gameId, events) {
       if(["made","attempt"].indexOf(component)<0) throw new Error("Choose success or miss for a percentage objective.");
       side += component === "made" ? " Made" : " Attempt";
     }
-    const period = Number(event.period);
-    if (!Number.isInteger(period) || period < 1 || period > 20) throw new Error("Choose a valid period.");
     if (objective.subject === "our_player") requirePlayerAccess_(objective.playerId);
     return {eventId:String(event.eventId || "") || "GEVT-" + Utilities.getUuid().slice(0, 12).toUpperCase(),
       period:period, side:side, playerId:objective.playerId || "", objectiveId:objective.id, delta:delta};
@@ -624,6 +667,17 @@ function recordLiveGameObjectiveEvents(gameId, events) {
     lock.releaseLock();
   }
   return getLiveGameTracker(gameId);
+}
+
+function calculateLiveGamePossessions_(events, currentPeriod) {
+  const result={our:0,opponent:0,periodOur:0,periodOpponent:0};
+  (events||[]).forEach(function(event){
+    if(event.eventType!==LIVE_GAME_POSSESSION_EVENT)return;
+    const key=String(event.side||"").indexOf("Opponent")===0?"opponent":"our";
+    result[key]++;
+    if(Number(event.period)===Number(currentPeriod))result[key==="our"?"periodOur":"periodOpponent"]++;
+  });
+  return result;
 }
 
 function calculateLiveGameObjectiveTotals_(events, objectives) {
@@ -803,42 +857,52 @@ function saveLiveGamePlanAdjustment(gameId, data) {
 }
 
 function buildLiveGameCheckpointReport_(tracker, checkpointType) {
-  const recommendations = [];
-  const rows = tracker.objectives.map(function(objective) {
-    const total = tracker.objectiveTotals[objective.id] || {our:0, opponent:0};
-    const value = objective.subject.indexOf("opponent_") === 0 ? total.opponent : total.our;
-    let margin = null;
-    let status = "neutral";
-    const unitSuffix=objective.unit==="percentage"?"%":"";
-    let summary = objective.label + ": " + value + unitSuffix;
-    let recommendation = "Keep charting " + objective.label.toLowerCase() + ".";
-    if (objective.goalType === "comparison") {
-      margin = objective.direction === "lower" ? total.opponent - total.our : total.our - total.opponent;
-      const requiredMargin = Math.max(1, Number(objective.target || 0));
-      status = margin >= requiredMargin ? "winning" : margin >= 0 ? "even" : "behind";
-      summary = objective.label + ": " + tracker.game.team + " " + total.our + unitSuffix + " – " + tracker.game.opponent + " " + total.opponent + unitSuffix;
-      recommendation = margin >= Number(objective.target || 0)
-        ? "Protect the " + objective.label.toLowerCase() + " advantage."
-        : "Prioritize " + objective.label.toLowerCase() + "; the battle is " + (margin === 0 ? "even" : "currently against us") + ".";
-    } else if (objective.goalType === "minimum") {
-      margin = value - Number(objective.target || 0);
-      status = value >= objective.target ? "winning" : value >= objective.target * .65 ? "even" : "behind";
-      summary += " of " + objective.target + unitSuffix + " minimum";
-      recommendation = status === "winning" ? "Maintain the pace on " + objective.label.toLowerCase() + "." : "Create more opportunities for " + objective.label.toLowerCase() + ".";
-    } else if (objective.goalType === "maximum") {
-      margin = Number(objective.target || 0) - value;
-      status = value <= objective.target ? "winning" : "behind";
-      summary += " of " + objective.target + unitSuffix + " maximum";
-      recommendation = status === "winning" ? "Keep " + objective.label.toLowerCase() + " under control." : "Immediate adjustment: reduce " + objective.label.toLowerCase() + ".";
+  const recommendations=[];
+  const period=Number(tracker.game.currentPeriod||1),format=String(tracker.game.format||"").toLowerCase();
+  const regulationPeriods=format.indexOf("half")>=0?2:format.indexOf("quarter")>=0?4:4;
+  const completedPeriod=checkpointType.indexOf("End")===0;
+  const gameProgress=Math.min(1,Math.max(1/regulationPeriods,(period-(completedPeriod?0:.5))/regulationPeriods));
+  const rows=tracker.objectives.map(function(objective){
+    const total=tracker.objectiveTotals[objective.id]||{our:0,opponent:0};
+    const value=objective.subject.indexOf("opponent_")===0?total.opponent:total.our;
+    const suffix=objective.unit==="percentage"?"%":"";
+    let margin=null,status="neutral",summary=objective.label+": "+value+suffix,recommendation="Keep charting "+objective.label.toLowerCase()+".";
+    if(objective.goalType==="comparison"){
+      margin=objective.direction==="lower"?total.opponent-total.our:total.our-total.opponent;
+      const required=Math.max(1,Number(objective.target||0));
+      status=margin>=required?"winning":margin<0?"behind":"even";
+      summary=objective.label+": "+tracker.game.team+" "+total.our+suffix+" – "+tracker.game.opponent+" "+total.opponent+suffix;
+      recommendation=status==="winning"?"Protect the "+objective.label.toLowerCase()+" advantage.":status==="behind"?"Prioritize "+objective.label.toLowerCase()+"; the battle is currently against us.":"The "+objective.label.toLowerCase()+" battle is even; win the next stretch.";
+    }else if(objective.goalType==="minimum"){
+      const paceTarget=Number(objective.target||0)*gameProgress;
+      margin=value-paceTarget;status=value>=paceTarget?"winning":value>=paceTarget*.8?"even":"behind";
+      summary+=" of "+objective.target+suffix+" minimum";
+      recommendation=status==="winning"?"Maintain the pace on "+objective.label.toLowerCase()+".":objective.unit==="percentage"?"Improve shot quality; "+objective.label.toLowerCase()+" is below the target.":"Increase the pace on "+objective.label.toLowerCase()+".";
+    }else if(objective.goalType==="maximum"){
+      const paceLimit=Number(objective.target||0)*gameProgress;
+      margin=paceLimit-value;status=value<=paceLimit?"winning":"behind";
+      summary+=" of "+objective.target+suffix+" maximum";
+      recommendation=status==="winning"?"Keep "+objective.label.toLowerCase()+" under control.":"Immediate adjustment: reduce "+objective.label.toLowerCase()+".";
     }
-    if (status === "behind" || status === "even") recommendations.push(recommendation);
-    return {id:objective.id, label:objective.label, categoryKey:normalizeLiveGameCategoryKey_(objective.categoryKey || objective.label),
-      status:status, summary:summary, recommendation:recommendation, our:Number(total.our || 0),
-      opponent:Number(total.opponent || 0), value:value, target:Number(objective.target || 0), margin:margin};
+    const possessions=tracker.possessions||{our:0,opponent:0};
+    if(objective.unit!=="percentage"){
+      if(objective.subject==="both_teams"&&possessions.our&&possessions.opponent)summary+=" · "+(Number(total.our||0)/possessions.our*10).toFixed(1)+" vs "+(Number(total.opponent||0)/possessions.opponent*10).toFixed(1)+" per 10 possessions";
+      else{const possessionCount=objective.subject.indexOf("opponent_")===0?possessions.opponent:possessions.our;if(possessionCount)summary+=" · "+(value/possessionCount*10).toFixed(1)+" per 10 possessions";}
+    }
+    if(status==="behind")recommendations.push(recommendation);
+    return{id:objective.id,label:objective.label,categoryKey:normalizeLiveGameCategoryKey_(objective.categoryKey||objective.label),status:status,summary:summary,recommendation:recommendation,our:Number(total.our||0),opponent:Number(total.opponent||0),value:value,target:Number(objective.target||0),margin:margin};
   });
-  if (!recommendations.length) recommendations.push("The game plan is on track. Reinforce the habits creating the advantage.");
-  return {checkpointType:checkpointType, period:tracker.game.currentPeriod,
-    headline:checkpointType + " Game Intelligence", objectives:rows, recommendations:recommendations.slice(0, 3)};
+  if(!recommendations.length)recommendations.push("The game plan is on track. Reinforce the habits creating the advantage.");
+  const halftime=checkpointType==="End Quarter"&&((format.indexOf("half")>=0&&period===1)||(format.indexOf("quarter")>=0&&period===2));
+  const recent=(tracker.events||[]).filter(function(event){return event.eventType!==LIVE_GAME_POSSESSION_EVENT;}).slice(0,8),recentCounts={},labels={};
+  tracker.objectives.forEach(function(item){labels[item.id]=item.label;});
+  recent.forEach(function(event){const label=(String(event.side||"").indexOf("Opponent")===0?tracker.game.opponent+" · ":tracker.game.team+" · ")+(labels[event.eventType]||event.eventType);recentCounts[label]=(recentCounts[label]||0)+1;});
+  const recentLeader=Object.keys(recentCounts).sort(function(a,b){return recentCounts[b]-recentCounts[a];})[0];
+  const recentLeaderCount=recentLeader?recentCounts[recentLeader]:0;
+  let recentPulse="Keep tracking — at least 3 priority taps are needed to show a useful recent trend.";
+  if(recent.length>=3&&recentLeaderCount>1)recentPulse="Most common recent tag: "+recentLeader+" ("+recentLeaderCount+" of the last "+recent.length+" priority taps).";
+  else if(recent.length>=3)recentPulse="No priority has repeated in the last "+recent.length+" taps — there is not a clear recent trend yet.";
+  return{checkpointType:checkpointType,period:period,coachMode:checkpointType==="Timeout"?"timeout":halftime?"halftime":"period",headline:checkpointType==="Timeout"?"Timeout Coach Mode":halftime?"Halftime Coach Mode":"End-of-Period Coach Mode",objectives:rows,recommendations:recommendations.slice(0,3),keepDoing:rows.filter(function(item){return item.status==="winning";}).slice(0,3).map(function(item){return item.summary;}),fixNow:rows.filter(function(item){return item.status==="behind";}).slice(0,2).map(function(item){return item.recommendation;}),recentPulse:recentPulse,topAdjustment:recommendations[0],possessions:tracker.possessions||{our:0,opponent:0},gameProgress:gameProgress};
 }
 
 function finishLiveGame(gameId) {
@@ -854,8 +918,9 @@ function finishLiveGame(gameId) {
     const current=findLiveGameRecord_(gameId);
     if(String(current.game.Status||"")==="Completed")return getLiveGamePostgameReport(gameId);
     tracker = getLiveGameTracker(gameId);
-    if (!tracker.objectives || !tracker.objectives.length) throw new Error("This game does not have a tracking plan.");
-    report = buildLiveGamePostgameReport_(tracker, getPreviousCompletedReports_(tracker.game.team));
+    report = tracker.objectives && tracker.objectives.length
+      ? buildLiveGamePostgameReport_(tracker, getPreviousCompletedReports_(tracker.game.team))
+      : buildOptionalTrackerPostgameReport_(tracker);
     const now = new Date();
     current.sheet.getRange(current.rowNumber, current.cols.Status + 1).setValue("Completed");
     current.sheet.getRange(current.rowNumber, current.cols["Final Report"] + 1).setValue(JSON.stringify(report));
@@ -867,6 +932,17 @@ function finishLiveGame(gameId) {
       team:tracker.game.team, beforeValue:"Live", afterValue:{status:"Completed",achieved:report.achieved,scored:report.scored}, success:true, error:""});
   } catch (auditError) { console.error("Game finished, but audit logging failed: " + auditError.message); }
   return report;
+}
+
+function buildOptionalTrackerPostgameReport_(tracker) {
+  const analytics=tracker.analytics||{},offense=analytics.offense||{},defense=analytics.defense||{};
+  const recommendations=[];
+  if(tracker.game.analyticsEnabled){
+    recommendations.push("Offense: "+(offense.ppp==null?"—":Number(offense.ppp).toFixed(2))+" PPP across "+Number(offense.possessions||0)+" possessions.");
+    recommendations.push("Defense: "+(defense.ppp==null?"—":Number(defense.ppp).toFixed(2))+" PPP allowed across "+Number(defense.possessions||0)+" possessions.");
+  }else recommendations.push("Game recorded without optional analytics or game-plan objectives.");
+  return{checkpointType:"Postgame",headline:"Game Complete",objectives:[],recommendations:recommendations,
+    trends:[],achieved:0,scored:0,analytics:analytics,possessions:tracker.possessions||{our:0,opponent:0}};
 }
 
 function getLiveGamePostgameReport(gameId) {
