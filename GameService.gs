@@ -138,11 +138,9 @@ function createLiveGameSetup(data) {
   const rosterIds = Array.isArray(data.playerIds) ? data.playerIds.map(String) : [];
   const guestPlayers = cleanLiveGameGuestPlayers_(data.guestPlayers);
   const allRosterIds = rosterIds.concat(guestPlayers.map(function(player){return player.id;}));
-  const enableAnalytics = data.enableAnalytics === true;
-  const enableObjectives = data.enableObjectives === true;
-  const selectedStats = enableObjectives && Array.isArray(data.selectedStats) ? data.selectedStats.map(String) : [];
+  const selectedStats = Array.isArray(data.selectedStats) ? data.selectedStats.map(String) : [];
   const customStats = cleanLiveGameCustomStats_(data.customStats);
-  const trackingPlan = enableObjectives ? cleanLiveGameTrackingPlan_(data.trackingObjectives) : [];
+  const trackingPlan = cleanLiveGameTrackingPlan_(data.trackingObjectives);
   const opponentRoster = cleanLiveGameOpponentPlayers_(data.opponentRoster);
 
   if (!gameDate) throw new Error("Choose a game date.");
@@ -150,7 +148,7 @@ function createLiveGameSetup(data) {
   if (!opponent) throw new Error("Enter the opponent.");
   if (!Number.isInteger(periodLength) || periodLength < 1 || periodLength > 60) throw new Error("Period length must be between 1 and 60 minutes.");
   if (!allRosterIds.length) throw new Error("Select or manually add at least one available player.");
-  if (enableObjectives && !trackingPlan.length && !selectedStats.length) throw new Error("Add at least one game-plan objective or turn Game Plan Objectives off.");
+  if (!trackingPlan.length && !selectedStats.length) throw new Error("Add at least one game-plan objective.");
   trackingPlan.forEach(function(objective) {
     if (objective.subject === "our_player" && allRosterIds.indexOf(objective.playerId) < 0) {
       throw new Error(objective.playerLabel + " must be included on the available roster.");
@@ -189,7 +187,6 @@ function createLiveGameSetup(data) {
     ];
     while(row.length<sheet.getLastColumn())row.push("");
     row[headers.indexOf("Opponent Roster")]=JSON.stringify(opponentRoster);
-    row[headers.indexOf("Tracker Mode")]=JSON.stringify({analytics:enableAnalytics,objectives:enableObjectives});
     setCoachIQSeasonOnRow_(headers,row,getCoachIQCurrentSeason_());
     sheet.appendRow(row);
   } finally {
@@ -205,8 +202,7 @@ function createLiveGameSetup(data) {
       beforeValue:"Game did not exist",
       afterValue:{gameDate:gameDate, gameType:gameType, opponent:opponent, location:location, sport:sport, format:format,
         periodLength:periodLength, rosterSize:allRosterIds.length, guestRosterSize:guestPlayers.length, selectedStats:selectedStats,
-        customStats:customStats, trackingObjectives:trackingPlan, analyticsEnabled:enableAnalytics,
-        objectivesEnabled:enableObjectives, opponentRosterSize:opponentRoster.length},
+        customStats:customStats, trackingObjectives:trackingPlan, opponentRosterSize:opponentRoster.length},
       success:true,
       error:""
     });
@@ -224,7 +220,6 @@ function initializeLiveGameSheets_() {
   ensureLiveGameSheet_(LIVE_GAME_TEMPLATES_SHEET, LIVE_GAME_TEMPLATE_HEADERS);
   ensureLiveGameSheet_(LIVE_GAME_OPPONENTS_SHEET, LIVE_GAME_OPPONENT_HEADERS);
   ensureLiveGameOptionalColumn_(LIVE_GAMES_SHEET,"Opponent Roster");
-  ensureLiveGameOptionalColumn_(LIVE_GAMES_SHEET,"Tracker Mode");
 }
 
 function ensureLiveGameOptionalColumn_(sheetName,header){const sheet=SpreadsheetApp.getActive().getSheetByName(sheetName);const headers=sheet.getRange(1,1,1,sheet.getLastColumn()).getDisplayValues()[0];if(headers.indexOf(header)<0)sheet.getRange(1,sheet.getLastColumn()+1).setValue(header).setFontWeight("bold");}
@@ -530,7 +525,6 @@ function getLiveGameTracker(gameId) {
     return{id:String(player.id||""),firstName:names.shift()||"",lastName:names.join(" "),jersey:String(player.jersey||""),position:"Game-only player",guest:true};
   }));
   const events = getLiveGameEvents_(gameId);
-  const trackerMode = getLiveGameTrackerMode_(game, objectives, selectedStats);
   const analytics = buildLiveAnalyticsSummary_(getLiveAnalyticsPossessions_(gameId), Number(game["Current Period"] || 1));
   if (objectives.length) {
     return {
@@ -538,7 +532,7 @@ function getLiveGameTracker(gameId) {
         team:String(game.Team || ""), opponent:String(game.Opponent || ""), location:String(game.Location || ""),
         format:String(game["Game Format"] || "Quarters"), periodLength:Number(game["Period Length"] || 8),
         status:String(game.Status || "Setup"), currentPeriod:Number(game["Current Period"] || 1),
-        gameType:String(game["Game Type"] || "Official Game"),analyticsEnabled:trackerMode.analytics,objectivesEnabled:trackerMode.objectives},
+        gameType:String(game["Game Type"] || "Official Game")},
       players:players,
       objectives:objectives.sort(function(a, b) { return Number(a.order || 0) - Number(b.order || 0); }),
       originalObjectives:originalObjectives,
@@ -556,7 +550,7 @@ function getLiveGameTracker(gameId) {
       team:String(game.Team || ""), opponent:String(game.Opponent || ""), location:String(game.Location || ""),
       format:String(game["Game Format"] || "Quarters"), periodLength:Number(game["Period Length"] || 8),
       status:String(game.Status || "Setup"), currentPeriod:Number(game["Current Period"] || 1),
-      gameType:String(game["Game Type"] || "Official Game"),analyticsEnabled:trackerMode.analytics,objectivesEnabled:trackerMode.objectives},
+      gameType:String(game["Game Type"] || "Official Game")},
     players:players,
     selectedStats:selectedStats,
     customStats:customStats,
@@ -567,27 +561,6 @@ function getLiveGameTracker(gameId) {
     ourScore:totals.ourScore,
     opponentScore:totals.opponentScore
   };
-}
-
-function getLiveGameTrackerMode_(game, objectives, selectedStats) {
-  const stored=parseLiveGameObject_((game||{})["Tracker Mode"],{});
-  if(Object.prototype.hasOwnProperty.call(stored,"analytics")||Object.prototype.hasOwnProperty.call(stored,"objectives")){
-    return{analytics:stored.analytics===true,objectives:stored.objectives===true};
-  }
-  return{analytics:true,objectives:(objectives||[]).length>0||(selectedStats||[]).length>0};
-}
-
-function advanceLiveGamePeriod(gameId) {
-  requireStaffCapability_("run_sessions");initializeLiveGameSheets_();
-  const lock=LockService.getScriptLock();lock.waitLock(10000);
-  try{
-    const record=findLiveGameRecord_(gameId);requireLiveGameTeamAccess_(record.game.Team);
-    if(String(record.game.Status||"")==="Completed")throw new Error("A completed game cannot advance periods.");
-    const next=Math.min(20,Number(record.game["Current Period"]||1)+1);
-    record.sheet.getRange(record.rowNumber,record.cols["Current Period"]+1).setValue(next);
-    record.sheet.getRange(record.rowNumber,record.cols["Updated At"]+1).setValue(new Date());
-  }finally{lock.releaseLock();}
-  return getLiveGameTracker(gameId);
 }
 
 function recordLiveGameObjectiveEvent(gameId, event) {
@@ -918,9 +891,8 @@ function finishLiveGame(gameId) {
     const current=findLiveGameRecord_(gameId);
     if(String(current.game.Status||"")==="Completed")return getLiveGamePostgameReport(gameId);
     tracker = getLiveGameTracker(gameId);
-    report = tracker.objectives && tracker.objectives.length
-      ? buildLiveGamePostgameReport_(tracker, getPreviousCompletedReports_(tracker.game.team))
-      : buildOptionalTrackerPostgameReport_(tracker);
+    if (!tracker.objectives || !tracker.objectives.length) throw new Error("This game does not have a tracking plan.");
+    report = buildLiveGamePostgameReport_(tracker, getPreviousCompletedReports_(tracker.game.team));
     const now = new Date();
     current.sheet.getRange(current.rowNumber, current.cols.Status + 1).setValue("Completed");
     current.sheet.getRange(current.rowNumber, current.cols["Final Report"] + 1).setValue(JSON.stringify(report));
@@ -932,17 +904,6 @@ function finishLiveGame(gameId) {
       team:tracker.game.team, beforeValue:"Live", afterValue:{status:"Completed",achieved:report.achieved,scored:report.scored}, success:true, error:""});
   } catch (auditError) { console.error("Game finished, but audit logging failed: " + auditError.message); }
   return report;
-}
-
-function buildOptionalTrackerPostgameReport_(tracker) {
-  const analytics=tracker.analytics||{},offense=analytics.offense||{},defense=analytics.defense||{};
-  const recommendations=[];
-  if(tracker.game.analyticsEnabled){
-    recommendations.push("Offense: "+(offense.ppp==null?"—":Number(offense.ppp).toFixed(2))+" PPP across "+Number(offense.possessions||0)+" possessions.");
-    recommendations.push("Defense: "+(defense.ppp==null?"—":Number(defense.ppp).toFixed(2))+" PPP allowed across "+Number(defense.possessions||0)+" possessions.");
-  }else recommendations.push("Game recorded without optional analytics or game-plan objectives.");
-  return{checkpointType:"Postgame",headline:"Game Complete",objectives:[],recommendations:recommendations,
-    trends:[],achieved:0,scored:0,analytics:analytics,possessions:tracker.possessions||{our:0,opponent:0}};
 }
 
 function getLiveGamePostgameReport(gameId) {
