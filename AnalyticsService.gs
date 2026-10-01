@@ -18,9 +18,6 @@ function recordLiveAnalyticsPossession(gameId, payload) {
   initializeLiveGameSheets_();
   const gameRecord = findLiveGameRecord_(gameId);
   requireLiveGameTeamAccess_(gameRecord.game.Team);
-  if (!getLiveGameTrackerMode_(gameRecord.game, parseLiveGameJson_(gameRecord.game["Active Tracking Plan"], []), []).analytics) {
-    throw new Error("Possession Analytics is turned off for this game.");
-  }
   if (String(gameRecord.game.Status || "") === "Completed") throw new Error("A completed game cannot accept possessions.");
   const possession = cleanLiveAnalyticsPossession_(payload, Number(gameRecord.game["Current Period"] || 1));
   const sheet = initializeLiveAnalyticsSheet_();
