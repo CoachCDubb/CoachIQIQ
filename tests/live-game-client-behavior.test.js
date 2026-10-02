@@ -22,8 +22,8 @@ test("same-action taps are blocked only inside the accidental-tap window", () =>
 
 test("pending count does not double-count a tap in both queue and protection", () => {
   const pendingCount = loadFunction("liveGamePendingTapCount");
-  const context = {liveGame:{tapQueue:[1, 2], protectedTaps:[1, 2]}};
-  assert.equal(pendingCount.call(null, context), 2);
+  const context = {liveGame:{tapQueue:[1, 2], protectedTaps:[1, 2], analyticsQueue:[3], protectedAnalytics:[3]}};
+  assert.equal(pendingCount.call(null, context), 3);
 });
 
 function loadMultilineFunction(name) {

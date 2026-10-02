@@ -43,6 +43,19 @@ test('tracker explains possession-level tags and permits rebound correction', ()
   assert.match(scripts, /Math\.max\(0,Number\(draft\.offensiveRebounds\|\|0\)-1\)/);
 });
 
+test('completed possessions clear immediately into a protected background queue', () => {
+  const scripts = read('Scripts.html');
+  assert.match(scripts, /analyticsQueue:\[\]/);
+  assert.match(scripts, /protectedAnalytics:\[\]/);
+  assert.match(scripts, /CoachIQ\.liveGame\.analyticsDraft=emptyLiveAnalyticsDraft_\(role\);applyOptimisticLiveAnalyticsPossession_/);
+  assert.match(scripts, /persistProtectedLiveAnalytics_/);
+  assert.match(scripts, /localStorage\.setItem\(key,JSON\.stringify/);
+  assert.match(scripts, /flushLiveAnalyticsQueue_/);
+  assert.match(scripts, /recoverProtectedLiveAnalytics_/);
+  assert.match(scripts, /flushAllLiveGameQueues_/);
+  assert.doesNotMatch(scripts, /analyticsSaving=true/);
+});
+
 test('analytics and objectives are independently optional per game', () => {
   const game = read('Game.html');
   const client = read('Scripts.html');
