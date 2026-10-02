@@ -26,10 +26,21 @@ test('tracker uses role-specific tags and a single possession outcome', () => {
   assert.match(game, /Track Defense/);
   assert.match(game, /End possession/);
   assert.match(game, /finishLiveAnalyticsPossession\(3/);
-  assert.match(scripts, /Right-Hand Drive/);
-  assert.match(scripts, /Paint Touch Allowed/);
+  assert.match(scripts, /Any Right-Hand Drive/);
+  assert.match(scripts, /Any Paint Touch Allowed/);
   assert.match(scripts, /recordLiveAnalyticsPossession/);
   assert.match(scripts, /voidLatestLiveAnalyticsPossession/);
+});
+
+test('tracker explains possession-level tags and permits rebound correction', () => {
+  const game = read('Game.html');
+  const scripts = read('Scripts.html');
+  assert.match(game, /Half court is the default; tap each tag once if it happened/);
+  assert.match(game, /removeLiveAnalyticsRebound/);
+  assert.match(scripts, /Any Paint Touch/);
+  assert.match(scripts, /aria-pressed/);
+  assert.match(scripts, /function removeLiveAnalyticsRebound/);
+  assert.match(scripts, /Math\.max\(0,Number\(draft\.offensiveRebounds\|\|0\)-1\)/);
 });
 
 test('analytics and objectives are independently optional per game', () => {
