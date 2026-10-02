@@ -58,10 +58,10 @@ test("plan adjustments re-read status and append history inside the shared mutat
   assert.ok(adjustmentPath.indexOf("current.game.Status") < adjustmentPath.indexOf("adjustments.push(adjustment)"));
 });
 
-test("pregame readiness stays focused on matchup, roster, and objectives", () => {
+test("pregame readiness stays focused on matchup, roster, and optional tools", () => {
   assert.match(view, /liveGameReadiness/);
   assert.match(client, /Pregame readiness/);
-  assert.match(client, /Focused plan/);
+  assert.match(client, /Tonight's tools/);
 });
 
 test("game-day layout keeps controls compact and tap targets inside each card", () => {

@@ -253,6 +253,7 @@ function populateLiveGameSetup(setup){
   renderLiveGameTemplateOptions();
   renderLiveGameOpponentRosterOptions();
   applyPendingScoutingPlan_(setup,teamSelect);
+  updateLiveGameTrackingOptions();
   updateLiveGameType();
   if(loading){ loading.hidden = true; }
   form.hidden = false;
@@ -266,6 +267,7 @@ function applyPendingScoutingPlan_(setup,teamSelect){
   const teamExists=Array.from(teamSelect.options||[]).some(function(option){return option.value===pending.team;});
   if(!teamExists){showToast("The scouting report team is not available in Live Game.","error");CoachIQ.liveGame.pendingScoutingPlan=null;return;}
   teamSelect.value=pending.team;document.getElementById("liveGameOpponent").value=pending.opponent||"";
+  const objectivesToggle=document.getElementById("liveGameEnableObjectives");if(objectivesToggle)objectivesToggle.checked=true;
   const templates=setup.gamePlanTemplates||(setup.gamePlanTemplates=[]);let template=templates.find(function(item){return item.templateId===pending.templateId;});
   if(!template){template={templateId:pending.templateId,name:pending.templateName,team:pending.team,objectives:pending.objectives||[]};templates.push(template);}
   renderLiveGameRoster();renderLiveGameTemplateOptions();document.getElementById("liveGameTemplateSelect").value=template.templateId;
@@ -285,11 +287,21 @@ function renderLiveGameReadiness(){
   const objectives=CoachIQ.liveGame.objectives.length;
   const opponent=String((document.getElementById("liveGameOpponent")||{}).value||"").trim();
   const scrimmage=(document.getElementById("liveGameType")||{}).value==="Practice Scrimmage";
+  const analytics=!!((document.getElementById("liveGameEnableAnalytics")||{}).checked);
+  const objectivesEnabled=!!((document.getElementById("liveGameEnableObjectives")||{}).checked);
   const checks=[{label:"Matchup",ready:!!opponent||scrimmage,detail:opponent||(scrimmage?"Intrasquad":"Opponent needed")},
     {label:"Available roster",ready:roster>0,detail:roster+" selected"},
-    {label:"Focused plan",ready:objectives>0,detail:objectives+" objective"+(objectives===1?"":"s")}];
+    {label:"Tonight's tools",ready:!objectivesEnabled||objectives>0,detail:(analytics?"Analytics":"No analytics")+" · "+(objectivesEnabled?objectives+" objective"+(objectives===1?"":"s"):"No objectives")}];
   const ready=checks.every(function(item){return item.ready;});
   summary.innerHTML='<div><span>Pregame readiness</span><strong>'+(ready?'Ready for game day':'Finish the essentials')+'</strong></div><ul>'+checks.map(function(item){return '<li class="'+(item.ready?'ready':'needed')+'"><b>'+(item.ready?'✓':'!')+' '+escapeHtmlValue(item.label)+'</b><small>'+escapeHtmlValue(item.detail)+'</small></li>';}).join("")+'</ul>';
+}
+
+function updateLiveGameTrackingOptions(){
+  const objectives=!!document.getElementById("liveGameEnableObjectives").checked;
+  document.getElementById("liveGameObjectivesPanel").hidden=!objectives;
+  const button=document.getElementById("saveLiveGameSetupButton");
+  if(button)button.textContent="Save Game Setup";
+  renderLiveGameReadiness();
 }
 
 function renderRecentLiveGames(games){
@@ -580,7 +592,9 @@ function updateLiveGameFormat(){
 function submitLiveGameSetup(event){
   event.preventDefault();
   const button = document.getElementById("saveLiveGameSetupButton");
-  if(!CoachIQ.liveGame.objectives.length){ showToast("Add at least one winning objective.", "error"); return; }
+  const enableAnalytics=!!document.getElementById("liveGameEnableAnalytics").checked;
+  const enableObjectives=!!document.getElementById("liveGameEnableObjectives").checked;
+  if(enableObjectives&&!CoachIQ.liveGame.objectives.length){ showToast("Add a winning objective or turn Game-Plan Objectives off.", "error"); return; }
   const playerIds = Array.from(document.querySelectorAll(".live-game-player-check:checked")).map(function(input){ return input.value; });
   const selectedGuestIds=Array.from(document.querySelectorAll(".live-game-guest-check:checked")).map(function(input){return input.value;});
   const payload = {
@@ -597,7 +611,9 @@ function submitLiveGameSetup(event){
     opponentRoster:CoachIQ.liveGame.opponentRoster||[],
     selectedStats:[],
     customStats:[],
-    trackingObjectives:CoachIQ.liveGame.objectives
+    enableAnalytics:enableAnalytics,
+    enableObjectives:enableObjectives,
+    trackingObjectives:enableObjectives?CoachIQ.liveGame.objectives:[]
   };
   button.disabled = true;
   button.textContent = "Saving Setup…";
@@ -609,12 +625,12 @@ function submitLiveGameSetup(event){
       document.getElementById("liveGameSetupSuccessTitle").textContent = payload.team + " vs. " + (result.opponent || payload.opponent);
       document.getElementById("openSavedLiveGameButton").onclick = function(){ openLiveGameTracker(result.gameId); };
       button.disabled = false;
-      button.textContent = "Save Game Plan";
+      button.textContent = "Save Game Setup";
       showToast(result.message || "Game setup saved.");
     })
     .withFailureHandler(function(error){
       button.disabled = false;
-      button.textContent = "Save Game Plan";
+      button.textContent = "Save Game Setup";
       showToast(error.message || "Unable to save game setup.", "error");
     })
     .createLiveGameSetup(payload);
@@ -670,12 +686,23 @@ function renderLiveGameTracker(data){
   document.getElementById("liveTrackerOpponent").textContent=data.game.opponent;
   document.getElementById("liveTrackerPeriodLabel").textContent=liveGamePeriodName(data.game.format,data.game.currentPeriod);
   const trackerElement=document.getElementById("liveGameTracker");
-  if(trackerElement){const objectiveCount=(data.objectives||[]).filter(function(item){return item.active!==false;}).length;trackerElement.dataset.objectiveCount=String(objectiveCount);trackerElement.classList.toggle("dense-objectives",objectiveCount>4);}
+  if(trackerElement){const objectiveCount=(data.objectives||[]).filter(function(item){return item.active!==false;}).length;trackerElement.dataset.objectiveCount=String(objectiveCount);trackerElement.classList.toggle("dense-objectives",objectiveCount>4);trackerElement.classList.toggle("analytics-disabled",data.game.analyticsEnabled===false);trackerElement.classList.toggle("objectives-disabled",data.game.objectivesEnabled===false);}
+  const analyticsPanel=document.querySelector(".live-analytics");if(analyticsPanel)analyticsPanel.hidden=data.game.analyticsEnabled===false;
+  const objectiveGrid=document.getElementById("liveTrackerObjectives");if(objectiveGrid)objectiveGrid.hidden=data.game.objectivesEnabled===false;
+  const objectiveTools=document.getElementById("liveObjectiveGameTools");if(objectiveTools)objectiveTools.hidden=data.game.objectivesEnabled===false;
+  const recent=document.querySelector(".objective-recent");if(recent)recent.hidden=data.game.objectivesEnabled===false;
   renderLiveTrackerPossessions(data);
   renderLiveTrackerObjectives(data);
   renderLiveTrackerEvents(data);
   if(data.lastSyncAt){CoachIQ.liveGame.lastSyncAt=data.lastSyncAt;}
   setLiveTrackerSaveState("All taps saved", "saved");
+}
+
+function endLiveGamePeriod(){
+  const tracker=CoachIQ.liveGame.tracker;if(!tracker)return;
+  if(tracker.game.objectivesEnabled!==false){createLiveCheckpoint("End Quarter");return;}
+  CoachIQ.liveGame.saving=true;setLiveTrackerSaveState("Advancing period…","saving");
+  google.script.run.withSuccessHandler(function(data){CoachIQ.liveGame.saving=false;renderLiveGameTracker(data);showToast("Advanced to "+liveGamePeriodName(data.game.format,data.game.currentPeriod)+".");}).withFailureHandler(function(error){CoachIQ.liveGame.saving=false;showToast(error.message||"Unable to advance the period.","error");}).advanceLiveGamePeriod(tracker.game.gameId);
 }
 
 function renderLiveTrackerPossessions(data){
@@ -705,16 +732,17 @@ function renderLiveAnalyticsTracker_(data){
   ["offense","defense"].forEach(function(side){const button=document.getElementById("liveAnalytics"+(side==="offense"?"Offense":"Defense")+"Role");if(button)button.classList.toggle("active",role===side);});
   controls.hidden=!role;if(!role){document.getElementById("liveAnalyticsSummary").innerHTML='<span>Select offense or defense on this device.</span>';return;}
   let draft=CoachIQ.liveGame.analyticsDraft;if(!draft||draft.teamSide!==role){draft=CoachIQ.liveGame.analyticsDraft=emptyLiveAnalyticsDraft_(role);}
-  const tags=role==="offense"?[{key:"transition",label:"Transition"},{key:"paintTouch",label:"Paint Touch"}]:[{key:"transition",label:"Transition"},{key:"rightHandDrive",label:"Right-Hand Drive"},{key:"paintTouch",label:"Paint Touch Allowed"}];
-  document.getElementById("liveAnalyticsTags").innerHTML=tags.map(function(tag){return '<button class="'+(draft[tag.key]?"active":"")+'" type="button" onclick="toggleLiveAnalyticsTag(\''+tag.key+'\')">'+escapeHtmlValue(tag.label)+'</button>';}).join("");
+  const tags=role==="offense"?[{key:"transition",label:"Any Transition"},{key:"paintTouch",label:"Any Paint Touch"}]:[{key:"transition",label:"Any Transition"},{key:"rightHandDrive",label:"Any Right-Hand Drive"},{key:"paintTouch",label:"Any Paint Touch Allowed"}];
+  document.getElementById("liveAnalyticsTags").innerHTML=tags.map(function(tag){const active=draft[tag.key]===true;return '<button class="'+(active?"active":"")+'" type="button" aria-pressed="'+active+'" onclick="toggleLiveAnalyticsTag(\''+tag.key+'\')">'+(active?"✓ ":"")+escapeHtmlValue(tag.label)+'</button>';}).join("");
   document.getElementById("liveAnalyticsRebounds").textContent=String(draft.offensiveRebounds||0);
   const turnover=document.getElementById("liveAnalyticsTurnover");turnover.textContent=role==="offense"?"Turnover":"Forced TO";
   const side=role==="offense"?offense:defense;const fmt=function(value){return value==null?"—":Number(value).toFixed(2);};
   document.getElementById("liveAnalyticsSummary").innerHTML='<span><b>'+side.possessions+'</b> possessions</span><span><b>'+fmt(side.ppp)+'</b> PPP</span><span><b>'+fmt(side.transitionPpp)+'</b> transition</span><span><b>'+fmt(side.paintTouchPpp)+'</b> paint touch</span>'+(role==="defense"?'<span><b>'+fmt(side.rightHandDrivePpp)+'</b> right hand</span>':'');
-  const headline=document.getElementById("liveAnalyticsHeadline");if(headline)headline.textContent=analytics.possessionDifference>1?"Check counts now — offense and defense differ by "+analytics.possessionDifference+".":(role==="offense"?"Offense operator · tag what happened, then tap the outcome.":"Defense operator · tag what happened, then tap the outcome.");
+  const headline=document.getElementById("liveAnalyticsHeadline");if(headline)headline.textContent=analytics.possessionDifference>1?"Check counts now — offense and defense differ by "+analytics.possessionDifference+".":(role==="offense"?"Offense · half court is default · tap each tag once if it happened · then choose the outcome.":"Defense · half court is default · tap each tag once if it happened · then choose the outcome.");
 }
 function toggleLiveAnalyticsTag(key){const draft=CoachIQ.liveGame.analyticsDraft;if(!draft||["transition","paintTouch","rightHandDrive"].indexOf(key)<0)return;draft[key]=!draft[key];renderLiveAnalyticsTracker_(CoachIQ.liveGame.tracker||{});}
 function addLiveAnalyticsRebound(){const draft=CoachIQ.liveGame.analyticsDraft;if(!draft)return;draft.offensiveRebounds=Math.min(10,Number(draft.offensiveRebounds||0)+1);renderLiveAnalyticsTracker_(CoachIQ.liveGame.tracker||{});}
+function removeLiveAnalyticsRebound(){const draft=CoachIQ.liveGame.analyticsDraft;if(!draft)return;draft.offensiveRebounds=Math.max(0,Number(draft.offensiveRebounds||0)-1);renderLiveAnalyticsTracker_(CoachIQ.liveGame.tracker||{});}
 function finishLiveAnalyticsTurnover(button){finishLiveAnalyticsPossession(0,button,true);}
 function finishLiveAnalyticsPossession(points,button,isTurnover){
   const tracker=CoachIQ.liveGame.tracker,role=getLiveAnalyticsRole_(),draft=CoachIQ.liveGame.analyticsDraft;if(!tracker||!role||!draft||CoachIQ.liveGame.analyticsSaving)return;
