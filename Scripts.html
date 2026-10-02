@@ -158,7 +158,7 @@ const CoachIQ = {
 
   dataCacheAt: {},
 
-  liveGame: {setup:null, objectives:[], manualRoster:[], opponentRoster:[], opponentRosterId:"", tracker:null, saving:false, lastGameId:"", tapQueue:[], protectedTaps:[], tapTimer:null, syncing:false, lastSyncAt:"", lastTapKey:"", lastTapAt:0, wakeLock:null, adjustmentDraft:[], adjustmentType:"Live Adjustment",analyticsRole:"",analyticsDraft:null,analyticsSaving:false,filmGameId:"",filmFile:null,filmUploading:false,filmData:null},
+  liveGame: {setup:null, objectives:[], manualRoster:[], opponentRoster:[], opponentRosterId:"", tracker:null, saving:false, lastGameId:"", tapQueue:[], protectedTaps:[], tapTimer:null, syncing:false, lastSyncAt:"", lastTapKey:"", lastTapAt:0, wakeLock:null, adjustmentDraft:[], adjustmentType:"Live Adjustment",analyticsRole:"",analyticsDraft:null,analyticsQueue:[],protectedAnalytics:[],analyticsSyncing:false,analyticsGameId:"",filmGameId:"",filmFile:null,filmUploading:false,filmData:null},
   scouting: {data:null, activeId:"", sections:[], saving:false}
 
 };
@@ -253,6 +253,7 @@ function populateLiveGameSetup(setup){
   renderLiveGameTemplateOptions();
   renderLiveGameOpponentRosterOptions();
   applyPendingScoutingPlan_(setup,teamSelect);
+  updateLiveGameTrackingOptions();
   updateLiveGameType();
   if(loading){ loading.hidden = true; }
   form.hidden = false;
@@ -266,6 +267,7 @@ function applyPendingScoutingPlan_(setup,teamSelect){
   const teamExists=Array.from(teamSelect.options||[]).some(function(option){return option.value===pending.team;});
   if(!teamExists){showToast("The scouting report team is not available in Live Game.","error");CoachIQ.liveGame.pendingScoutingPlan=null;return;}
   teamSelect.value=pending.team;document.getElementById("liveGameOpponent").value=pending.opponent||"";
+  const objectivesToggle=document.getElementById("liveGameEnableObjectives");if(objectivesToggle)objectivesToggle.checked=true;
   const templates=setup.gamePlanTemplates||(setup.gamePlanTemplates=[]);let template=templates.find(function(item){return item.templateId===pending.templateId;});
   if(!template){template={templateId:pending.templateId,name:pending.templateName,team:pending.team,objectives:pending.objectives||[]};templates.push(template);}
   renderLiveGameRoster();renderLiveGameTemplateOptions();document.getElementById("liveGameTemplateSelect").value=template.templateId;
@@ -285,11 +287,21 @@ function renderLiveGameReadiness(){
   const objectives=CoachIQ.liveGame.objectives.length;
   const opponent=String((document.getElementById("liveGameOpponent")||{}).value||"").trim();
   const scrimmage=(document.getElementById("liveGameType")||{}).value==="Practice Scrimmage";
+  const analytics=!!((document.getElementById("liveGameEnableAnalytics")||{}).checked);
+  const objectivesEnabled=!!((document.getElementById("liveGameEnableObjectives")||{}).checked);
   const checks=[{label:"Matchup",ready:!!opponent||scrimmage,detail:opponent||(scrimmage?"Intrasquad":"Opponent needed")},
     {label:"Available roster",ready:roster>0,detail:roster+" selected"},
-    {label:"Focused plan",ready:objectives>0,detail:objectives+" objective"+(objectives===1?"":"s")}];
+    {label:"Tonight's tools",ready:!objectivesEnabled||objectives>0,detail:(analytics?"Analytics":"No analytics")+" · "+(objectivesEnabled?objectives+" objective"+(objectives===1?"":"s"):"No objectives")}];
   const ready=checks.every(function(item){return item.ready;});
   summary.innerHTML='<div><span>Pregame readiness</span><strong>'+(ready?'Ready for game day':'Finish the essentials')+'</strong></div><ul>'+checks.map(function(item){return '<li class="'+(item.ready?'ready':'needed')+'"><b>'+(item.ready?'✓':'!')+' '+escapeHtmlValue(item.label)+'</b><small>'+escapeHtmlValue(item.detail)+'</small></li>';}).join("")+'</ul>';
+}
+
+function updateLiveGameTrackingOptions(){
+  const objectives=!!document.getElementById("liveGameEnableObjectives").checked;
+  document.getElementById("liveGameObjectivesPanel").hidden=!objectives;
+  const button=document.getElementById("saveLiveGameSetupButton");
+  if(button)button.textContent="Save Game Setup";
+  renderLiveGameReadiness();
 }
 
 function renderRecentLiveGames(games){
@@ -580,7 +592,9 @@ function updateLiveGameFormat(){
 function submitLiveGameSetup(event){
   event.preventDefault();
   const button = document.getElementById("saveLiveGameSetupButton");
-  if(!CoachIQ.liveGame.objectives.length){ showToast("Add at least one winning objective.", "error"); return; }
+  const enableAnalytics=!!document.getElementById("liveGameEnableAnalytics").checked;
+  const enableObjectives=!!document.getElementById("liveGameEnableObjectives").checked;
+  if(enableObjectives&&!CoachIQ.liveGame.objectives.length){ showToast("Add a winning objective or turn Game-Plan Objectives off.", "error"); return; }
   const playerIds = Array.from(document.querySelectorAll(".live-game-player-check:checked")).map(function(input){ return input.value; });
   const selectedGuestIds=Array.from(document.querySelectorAll(".live-game-guest-check:checked")).map(function(input){return input.value;});
   const payload = {
@@ -597,7 +611,9 @@ function submitLiveGameSetup(event){
     opponentRoster:CoachIQ.liveGame.opponentRoster||[],
     selectedStats:[],
     customStats:[],
-    trackingObjectives:CoachIQ.liveGame.objectives
+    enableAnalytics:enableAnalytics,
+    enableObjectives:enableObjectives,
+    trackingObjectives:enableObjectives?CoachIQ.liveGame.objectives:[]
   };
   button.disabled = true;
   button.textContent = "Saving Setup…";
@@ -609,12 +625,12 @@ function submitLiveGameSetup(event){
       document.getElementById("liveGameSetupSuccessTitle").textContent = payload.team + " vs. " + (result.opponent || payload.opponent);
       document.getElementById("openSavedLiveGameButton").onclick = function(){ openLiveGameTracker(result.gameId); };
       button.disabled = false;
-      button.textContent = "Save Game Plan";
+      button.textContent = "Save Game Setup";
       showToast(result.message || "Game setup saved.");
     })
     .withFailureHandler(function(error){
       button.disabled = false;
-      button.textContent = "Save Game Plan";
+      button.textContent = "Save Game Setup";
       showToast(error.message || "Unable to save game setup.", "error");
     })
     .createLiveGameSetup(payload);
@@ -631,6 +647,9 @@ function openLiveGameTracker(gameId){
   if(tracker){ tracker.hidden = false; }
   CoachIQ.liveGame.tapQueue=[];
   CoachIQ.liveGame.syncing=false;
+  CoachIQ.liveGame.analyticsQueue=[];
+  CoachIQ.liveGame.protectedAnalytics=[];
+  CoachIQ.liveGame.analyticsSyncing=false;
   CoachIQ.liveGame.lastSyncAt="";
   requestLiveGameWakeLock_();
   document.body.classList.add("live-game-mode");
@@ -643,6 +662,7 @@ function openLiveGameTracker(gameId){
       CoachIQ.liveGame.selectedPlayerId = data.players.length ? data.players[0].id : "";
       renderLiveGameTracker(data);
       recoverProtectedLiveGameTaps(data);
+      recoverProtectedLiveAnalytics_(data);
     })
     .withFailureHandler(function(error){
       setLiveTrackerSaveState(error.message || "Unable to open the game.", "error");
@@ -670,12 +690,23 @@ function renderLiveGameTracker(data){
   document.getElementById("liveTrackerOpponent").textContent=data.game.opponent;
   document.getElementById("liveTrackerPeriodLabel").textContent=liveGamePeriodName(data.game.format,data.game.currentPeriod);
   const trackerElement=document.getElementById("liveGameTracker");
-  if(trackerElement){const objectiveCount=(data.objectives||[]).filter(function(item){return item.active!==false;}).length;trackerElement.dataset.objectiveCount=String(objectiveCount);trackerElement.classList.toggle("dense-objectives",objectiveCount>4);}
+  if(trackerElement){const objectiveCount=(data.objectives||[]).filter(function(item){return item.active!==false;}).length;trackerElement.dataset.objectiveCount=String(objectiveCount);trackerElement.classList.toggle("dense-objectives",objectiveCount>4);trackerElement.classList.toggle("analytics-disabled",data.game.analyticsEnabled===false);trackerElement.classList.toggle("objectives-disabled",data.game.objectivesEnabled===false);}
+  const analyticsPanel=document.querySelector(".live-analytics");if(analyticsPanel)analyticsPanel.hidden=data.game.analyticsEnabled===false;
+  const objectiveGrid=document.getElementById("liveTrackerObjectives");if(objectiveGrid)objectiveGrid.hidden=data.game.objectivesEnabled===false;
+  const objectiveTools=document.getElementById("liveObjectiveGameTools");if(objectiveTools)objectiveTools.hidden=data.game.objectivesEnabled===false;
+  const recent=document.querySelector(".objective-recent");if(recent)recent.hidden=data.game.objectivesEnabled===false;
   renderLiveTrackerPossessions(data);
   renderLiveTrackerObjectives(data);
   renderLiveTrackerEvents(data);
   if(data.lastSyncAt){CoachIQ.liveGame.lastSyncAt=data.lastSyncAt;}
   setLiveTrackerSaveState("All taps saved", "saved");
+}
+
+function endLiveGamePeriod(){
+  const tracker=CoachIQ.liveGame.tracker;if(!tracker)return;
+  if(tracker.game.objectivesEnabled!==false){createLiveCheckpoint("End Quarter");return;}
+  flushAllLiveGameQueues_(function(){CoachIQ.liveGame.saving=true;setLiveTrackerSaveState("Advancing period…","saving");
+    google.script.run.withSuccessHandler(function(data){CoachIQ.liveGame.saving=false;renderLiveGameTracker(data);showToast("Advanced to "+liveGamePeriodName(data.game.format,data.game.currentPeriod)+".");}).withFailureHandler(function(error){CoachIQ.liveGame.saving=false;showToast(error.message||"Unable to advance the period.","error");}).advanceLiveGamePeriod(tracker.game.gameId);});
 }
 
 function renderLiveTrackerPossessions(data){
@@ -705,29 +736,62 @@ function renderLiveAnalyticsTracker_(data){
   ["offense","defense"].forEach(function(side){const button=document.getElementById("liveAnalytics"+(side==="offense"?"Offense":"Defense")+"Role");if(button)button.classList.toggle("active",role===side);});
   controls.hidden=!role;if(!role){document.getElementById("liveAnalyticsSummary").innerHTML='<span>Select offense or defense on this device.</span>';return;}
   let draft=CoachIQ.liveGame.analyticsDraft;if(!draft||draft.teamSide!==role){draft=CoachIQ.liveGame.analyticsDraft=emptyLiveAnalyticsDraft_(role);}
-  const tags=role==="offense"?[{key:"transition",label:"Transition"},{key:"paintTouch",label:"Paint Touch"}]:[{key:"transition",label:"Transition"},{key:"rightHandDrive",label:"Right-Hand Drive"},{key:"paintTouch",label:"Paint Touch Allowed"}];
-  document.getElementById("liveAnalyticsTags").innerHTML=tags.map(function(tag){return '<button class="'+(draft[tag.key]?"active":"")+'" type="button" onclick="toggleLiveAnalyticsTag(\''+tag.key+'\')">'+escapeHtmlValue(tag.label)+'</button>';}).join("");
+  const tags=role==="offense"?[{key:"transition",label:"Any Transition"},{key:"paintTouch",label:"Any Paint Touch"}]:[{key:"transition",label:"Any Transition"},{key:"rightHandDrive",label:"Any Right-Hand Drive"},{key:"paintTouch",label:"Any Paint Touch Allowed"}];
+  document.getElementById("liveAnalyticsTags").innerHTML=tags.map(function(tag){const active=draft[tag.key]===true;return '<button class="'+(active?"active":"")+'" type="button" aria-pressed="'+active+'" onclick="toggleLiveAnalyticsTag(\''+tag.key+'\')">'+(active?"✓ ":"")+escapeHtmlValue(tag.label)+'</button>';}).join("");
   document.getElementById("liveAnalyticsRebounds").textContent=String(draft.offensiveRebounds||0);
   const turnover=document.getElementById("liveAnalyticsTurnover");turnover.textContent=role==="offense"?"Turnover":"Forced TO";
   const side=role==="offense"?offense:defense;const fmt=function(value){return value==null?"—":Number(value).toFixed(2);};
   document.getElementById("liveAnalyticsSummary").innerHTML='<span><b>'+side.possessions+'</b> possessions</span><span><b>'+fmt(side.ppp)+'</b> PPP</span><span><b>'+fmt(side.transitionPpp)+'</b> transition</span><span><b>'+fmt(side.paintTouchPpp)+'</b> paint touch</span>'+(role==="defense"?'<span><b>'+fmt(side.rightHandDrivePpp)+'</b> right hand</span>':'');
-  const headline=document.getElementById("liveAnalyticsHeadline");if(headline)headline.textContent=analytics.possessionDifference>1?"Check counts now — offense and defense differ by "+analytics.possessionDifference+".":(role==="offense"?"Offense operator · tag what happened, then tap the outcome.":"Defense operator · tag what happened, then tap the outcome.");
+  const headline=document.getElementById("liveAnalyticsHeadline");if(headline)headline.textContent=analytics.possessionDifference>1?"Check counts now — offense and defense differ by "+analytics.possessionDifference+".":(role==="offense"?"Offense · half court is default · tap each tag once if it happened · then choose the outcome.":"Defense · half court is default · tap each tag once if it happened · then choose the outcome.");
 }
 function toggleLiveAnalyticsTag(key){const draft=CoachIQ.liveGame.analyticsDraft;if(!draft||["transition","paintTouch","rightHandDrive"].indexOf(key)<0)return;draft[key]=!draft[key];renderLiveAnalyticsTracker_(CoachIQ.liveGame.tracker||{});}
 function addLiveAnalyticsRebound(){const draft=CoachIQ.liveGame.analyticsDraft;if(!draft)return;draft.offensiveRebounds=Math.min(10,Number(draft.offensiveRebounds||0)+1);renderLiveAnalyticsTracker_(CoachIQ.liveGame.tracker||{});}
+function removeLiveAnalyticsRebound(){const draft=CoachIQ.liveGame.analyticsDraft;if(!draft)return;draft.offensiveRebounds=Math.max(0,Number(draft.offensiveRebounds||0)-1);renderLiveAnalyticsTracker_(CoachIQ.liveGame.tracker||{});}
 function finishLiveAnalyticsTurnover(button){finishLiveAnalyticsPossession(0,button,true);}
 function finishLiveAnalyticsPossession(points,button,isTurnover){
-  const tracker=CoachIQ.liveGame.tracker,role=getLiveAnalyticsRole_(),draft=CoachIQ.liveGame.analyticsDraft;if(!tracker||!role||!draft||CoachIQ.liveGame.analyticsSaving)return;
+  const tracker=CoachIQ.liveGame.tracker,role=getLiveAnalyticsRole_(),draft=CoachIQ.liveGame.analyticsDraft;if(!tracker||!role||!draft)return;
   const payload=Object.assign({},draft,{possessionId:"LAP-"+Date.now().toString(36)+"-"+Math.random().toString(36).slice(2,9),points:Number(points),period:tracker.game.currentPeriod});
   if(isTurnover){payload[role==="offense"?"turnover":"forcedTurnover"]=true;}
-  CoachIQ.liveGame.analyticsSaving=true;if(button)button.disabled=true;
-  google.script.run.withSuccessHandler(function(data){CoachIQ.liveGame.analyticsSaving=false;if(button)button.disabled=false;CoachIQ.liveGame.analyticsDraft=emptyLiveAnalyticsDraft_(role);renderLiveGameTracker(data);})
-    .withFailureHandler(function(error){CoachIQ.liveGame.analyticsSaving=false;if(button)button.disabled=false;showToast(error.message||"Unable to save the possession.","error");})
-    .recordLiveAnalyticsPossession(tracker.game.gameId,payload);
+  CoachIQ.liveGame.analyticsDraft=emptyLiveAnalyticsDraft_(role);applyOptimisticLiveAnalyticsPossession_(tracker,payload);
+  CoachIQ.liveGame.analyticsQueue.push(payload);CoachIQ.liveGame.protectedAnalytics.push(payload);persistProtectedLiveAnalytics_();
+  setLiveTrackerSaveState(liveGamePendingTapCount()+" item"+(liveGamePendingTapCount()===1?"":"s")+" queued…","saving");
+  flushLiveAnalyticsQueue_();
 }
 function undoLiveAnalyticsPossession(){
-  const tracker=CoachIQ.liveGame.tracker,role=getLiveAnalyticsRole_();if(!tracker||!role||CoachIQ.liveGame.analyticsSaving)return;
-  showConfirmModal("Undo last possession?","Remove the latest "+role+" possession recorded for this game.","Undo Possession",function(){CoachIQ.liveGame.analyticsSaving=true;google.script.run.withSuccessHandler(function(data){CoachIQ.liveGame.analyticsSaving=false;CoachIQ.liveGame.analyticsDraft=emptyLiveAnalyticsDraft_(role);renderLiveGameTracker(data);}).withFailureHandler(function(error){CoachIQ.liveGame.analyticsSaving=false;showToast(error.message||"Unable to undo the possession.","error");}).voidLatestLiveAnalyticsPossession(tracker.game.gameId,role);});
+  const tracker=CoachIQ.liveGame.tracker,role=getLiveAnalyticsRole_();if(!tracker||!role||CoachIQ.liveGame.analyticsSyncing)return;
+  showConfirmModal("Undo last possession?","Remove the latest "+role+" possession recorded for this game.","Undo Possession",function(){CoachIQ.liveGame.analyticsSyncing=true;google.script.run.withSuccessHandler(function(data){CoachIQ.liveGame.analyticsSyncing=false;CoachIQ.liveGame.analyticsDraft=emptyLiveAnalyticsDraft_(role);renderLiveGameTracker(data);}).withFailureHandler(function(error){CoachIQ.liveGame.analyticsSyncing=false;showToast(error.message||"Unable to undo the possession.","error");}).voidLatestLiveAnalyticsPossession(tracker.game.gameId,role);});
+}
+
+function liveAnalyticsRecoveryKey_(gameId){return "coachiq_live_analytics_"+String(gameId||"");}
+function persistProtectedLiveAnalytics_(){
+  const tracker=CoachIQ.liveGame.tracker;if(!tracker)return;
+  try{const key=liveAnalyticsRecoveryKey_(tracker.game.gameId);if(CoachIQ.liveGame.protectedAnalytics.length){localStorage.setItem(key,JSON.stringify({gameId:tracker.game.gameId,savedAt:new Date().toISOString(),possessions:CoachIQ.liveGame.protectedAnalytics}));}else{localStorage.removeItem(key);}}catch(error){console.error("CoachIQ could not protect analytics locally: "+error.message);}
+}
+function applyOptimisticLiveAnalyticsPossession_(tracker,payload){
+  const analytics=tracker.analytics||(tracker.analytics={offense:{},defense:{}}),side=analytics[payload.teamSide]||(analytics[payload.teamSide]={});
+  side.possessions=Number(side.possessions||0)+1;side.periodPossessions=Number(side.periodPossessions||0)+1;side.points=Number(side.points||0)+Number(payload.points||0);side.offensiveRebounds=Number(side.offensiveRebounds||0)+Number(payload.offensiveRebounds||0);
+  [["transition","transitionPossessions","transitionPoints"],["paintTouch","paintTouchPossessions","paintTouchPoints"],["rightHandDrive","rightHandDrivePossessions","rightHandDrivePoints"]].forEach(function(keys){if(payload[keys[0]]){side[keys[1]]=Number(side[keys[1]]||0)+1;side[keys[2]]=Number(side[keys[2]]||0)+Number(payload.points||0);}});
+  if(payload.turnover)side.turnovers=Number(side.turnovers||0)+1;if(payload.forcedTurnover)side.forcedTurnovers=Number(side.forcedTurnovers||0)+1;
+  side.ppp=side.possessions?Math.round(side.points/side.possessions*1000)/1000:null;side.transitionPpp=side.transitionPossessions?Math.round(Number(side.transitionPoints||0)/side.transitionPossessions*1000)/1000:null;side.paintTouchPpp=side.paintTouchPossessions?Math.round(Number(side.paintTouchPoints||0)/side.paintTouchPossessions*1000)/1000:null;side.rightHandDrivePpp=side.rightHandDrivePossessions?Math.round(Number(side.rightHandDrivePoints||0)/side.rightHandDrivePossessions*1000)/1000:null;
+  const possessions=tracker.possessions||(tracker.possessions={our:0,opponent:0,periodOur:0,periodOpponent:0}),opponent=payload.teamSide==="defense";possessions[opponent?"opponent":"our"]++;possessions[opponent?"periodOpponent":"periodOur"]++;
+  renderLiveTrackerPossessions(tracker);
+}
+function flushLiveAnalyticsQueue_(callback){
+  if(CoachIQ.liveGame.analyticsSyncing){if(callback)setTimeout(function(){flushLiveAnalyticsQueue_(callback);},100);return;}
+  if(!CoachIQ.liveGame.analyticsQueue.length){if(callback)callback();return;}
+  const tracker=CoachIQ.liveGame.tracker;if(!tracker)return;const payload=CoachIQ.liveGame.analyticsQueue[0];CoachIQ.liveGame.analyticsSyncing=true;
+  setLiveTrackerSaveState("Syncing "+CoachIQ.liveGame.analyticsQueue.length+" possession"+(CoachIQ.liveGame.analyticsQueue.length===1?"":"s")+"…","saving");
+  google.script.run.withSuccessHandler(function(data){
+    CoachIQ.liveGame.analyticsQueue.shift();CoachIQ.liveGame.protectedAnalytics=CoachIQ.liveGame.protectedAnalytics.filter(function(item){return item.possessionId!==payload.possessionId;});persistProtectedLiveAnalytics_();CoachIQ.liveGame.analyticsSyncing=false;CoachIQ.liveGame.lastSyncAt=new Date().toISOString();
+    renderLiveGameTracker(data);CoachIQ.liveGame.protectedAnalytics.forEach(function(item){applyOptimisticLiveAnalyticsPossession_(CoachIQ.liveGame.tracker,item);});
+    if(CoachIQ.liveGame.analyticsQueue.length){flushLiveAnalyticsQueue_(callback);}else{hideLiveGameRecovery();setLiveTrackerSaveState(liveGamePendingTapCount()?liveGamePendingTapCount()+" item(s) queued…":"All taps saved",liveGamePendingTapCount()?"saving":"saved");if(callback)callback();}
+  }).withFailureHandler(function(error){CoachIQ.liveGame.analyticsSyncing=false;CoachIQ.liveGame.analyticsQueue=CoachIQ.liveGame.protectedAnalytics.slice();persistProtectedLiveAnalytics_();showLiveGameRecovery(liveGamePendingTapCount(),"Sync failed. Possessions remain protected on this device.");setLiveTrackerSaveState("Offline protection active","error");showToast(error.message||"Unable to sync possessions. They remain protected.","error");}).recordLiveAnalyticsPossession(tracker.game.gameId,payload);
+}
+function recoverProtectedLiveAnalytics_(data){
+  let recovered=[];try{const stored=JSON.parse(localStorage.getItem(liveAnalyticsRecoveryKey_(data.game.gameId))||"null");recovered=stored&&Array.isArray(stored.possessions)?stored.possessions:[];}catch(error){recovered=[];}
+  const serverIds={};(((data.analytics||{}).recent)||[]).forEach(function(item){serverIds[item.possessionId]=true;});recovered=recovered.filter(function(item){return !serverIds[item.possessionId];});
+  CoachIQ.liveGame.analyticsGameId=data.game.gameId;CoachIQ.liveGame.protectedAnalytics=recovered.slice();CoachIQ.liveGame.analyticsQueue=recovered.slice();persistProtectedLiveAnalytics_();recovered.forEach(function(item){applyOptimisticLiveAnalyticsPossession_(CoachIQ.liveGame.tracker,item);});
+  if(recovered.length){showLiveGameRecovery(liveGamePendingTapCount(),"Recovered protected possessions. Retrying now.");setTimeout(flushLiveAnalyticsQueue_,350);}
 }
 
 function liveGamePeriodName(format,period){
@@ -841,7 +905,7 @@ function persistProtectedLiveGameTaps(){
   const tracker=CoachIQ.liveGame.tracker;if(!tracker){return;}
   try{const key=liveGameRecoveryKey(tracker.game.gameId);if(CoachIQ.liveGame.protectedTaps.length){localStorage.setItem(key,JSON.stringify({gameId:tracker.game.gameId,savedAt:new Date().toISOString(),taps:CoachIQ.liveGame.protectedTaps}));}else{localStorage.removeItem(key);}}catch(error){console.error("CoachIQ could not protect live taps locally: "+error.message);}
 }
-function liveGamePendingTapCount(coachIQ){const state=(coachIQ||CoachIQ).liveGame;return Math.max(state.tapQueue.length,state.protectedTaps.length);}
+function liveGamePendingTapCount(coachIQ){const state=(coachIQ||CoachIQ).liveGame;return Math.max(state.tapQueue.length,state.protectedTaps.length)+Math.max((state.analyticsQueue||[]).length,(state.protectedAnalytics||[]).length);}
 function recoverProtectedLiveGameTaps(data){
   let recovered=[];try{const stored=JSON.parse(localStorage.getItem(liveGameRecoveryKey(data.game.gameId))||"null");recovered=stored&&Array.isArray(stored.taps)?stored.taps:[];}catch(error){recovered=[];}
   if(!recovered.length){CoachIQ.liveGame.protectedTaps=[];hideLiveGameRecovery();return;}
@@ -853,7 +917,8 @@ function recoverProtectedLiveGameTaps(data){
 }
 function showLiveGameRecovery(count,message){const banner=document.getElementById("liveTrackerRecovery");if(!banner){return;}document.getElementById("liveTrackerRecoveryTitle").textContent=count+" protected tap"+(count===1?"":"s");document.getElementById("liveTrackerRecoveryMessage").textContent=message;banner.hidden=false;}
 function hideLiveGameRecovery(){const banner=document.getElementById("liveTrackerRecovery");if(banner){banner.hidden=true;}}
-function retryProtectedLiveGameTaps(){if(!CoachIQ.liveGame.tapQueue.length&&CoachIQ.liveGame.protectedTaps.length){CoachIQ.liveGame.tapQueue=CoachIQ.liveGame.protectedTaps.slice();}flushLiveObjectiveQueue();}
+function retryProtectedLiveGameTaps(){if(!CoachIQ.liveGame.tapQueue.length&&CoachIQ.liveGame.protectedTaps.length){CoachIQ.liveGame.tapQueue=CoachIQ.liveGame.protectedTaps.slice();}if(!CoachIQ.liveGame.analyticsQueue.length&&CoachIQ.liveGame.protectedAnalytics.length){CoachIQ.liveGame.analyticsQueue=CoachIQ.liveGame.protectedAnalytics.slice();}flushLiveObjectiveQueue();flushLiveAnalyticsQueue_();}
+function flushAllLiveGameQueues_(callback){flushLiveObjectiveQueue(function(){flushLiveAnalyticsQueue_(callback);});}
 function refreshLiveGameSharedView(silent){
   const tracker=CoachIQ.liveGame.tracker;if(!tracker||CoachIQ.liveGame.syncing||liveGamePendingTapCount()){showToast("Finish syncing protected taps before refreshing.","error");return;}
   setLiveTrackerSaveState("Refreshing shared activity…","saving");
@@ -892,7 +957,7 @@ function performUndoLatestLiveTrackerEvent_(event){
   flushLiveObjectiveQueue(function(){undoLiveTrackerEvent(event.eventId);});
 }
 function undoLiveTrackerEvent(eventId){ if(CoachIQ.liveGame.saving||!CoachIQ.liveGame.tracker){return;} CoachIQ.liveGame.saving=true; setLiveTrackerSaveState("Undoing tap…","saving"); google.script.run.withSuccessHandler(function(data){CoachIQ.liveGame.saving=false;renderLiveGameTracker(data);}).withFailureHandler(function(error){CoachIQ.liveGame.saving=false;showToast(error.message||"Unable to undo tap.","error");}).voidLiveGameEvent(CoachIQ.liveGame.tracker.game.gameId,eventId); }
-function createLiveCheckpoint(type){ if(!CoachIQ.liveGame.tracker){return;} flushLiveObjectiveQueue(function(){ CoachIQ.liveGame.saving=true; setLiveTrackerSaveState("Building "+type.toLowerCase()+" intelligence…","saving"); google.script.run.withSuccessHandler(function(result){CoachIQ.liveGame.saving=false;renderLiveGameTracker(result.tracker);renderLiveCheckpointReport(result.report);}).withFailureHandler(function(error){CoachIQ.liveGame.saving=false;showToast(error.message||"Unable to build report.","error");}).createLiveGameCheckpoint(CoachIQ.liveGame.tracker.game.gameId,type); }); }
+function createLiveCheckpoint(type){ if(!CoachIQ.liveGame.tracker){return;} flushAllLiveGameQueues_(function(){ CoachIQ.liveGame.saving=true; setLiveTrackerSaveState("Building "+type.toLowerCase()+" intelligence…","saving"); google.script.run.withSuccessHandler(function(result){CoachIQ.liveGame.saving=false;renderLiveGameTracker(result.tracker);renderLiveCheckpointReport(result.report);}).withFailureHandler(function(error){CoachIQ.liveGame.saving=false;showToast(error.message||"Unable to build report.","error");}).createLiveGameCheckpoint(CoachIQ.liveGame.tracker.game.gameId,type); }); }
 function openLivePlanAdjustment(type){
   if(!CoachIQ.liveGame.tracker){return;}
   CoachIQ.liveGame.adjustmentType=type||"Live Adjustment";
@@ -917,14 +982,14 @@ function addObjectiveDuringGame(){
 function saveLivePlanAdjustment(){
   if(!CoachIQ.liveGame.adjustmentDraft.some(function(item){return item.active!==false;})){showToast("Keep at least one objective active.","error");return;}
   const button=document.getElementById("saveLivePlanAdjustmentButton");button.disabled=true;button.textContent="Applying…";
-  flushLiveObjectiveQueue(function(){google.script.run.withSuccessHandler(function(data){button.disabled=false;button.textContent="Apply Changes";closeLivePlanAdjustment();renderLiveGameTracker(data);showToast("Live game plan adjusted.");}).withFailureHandler(function(error){button.disabled=false;button.textContent="Apply Changes";showToast(error.message||"Unable to adjust the game plan.","error");}).saveLiveGamePlanAdjustment(CoachIQ.liveGame.tracker.game.gameId,{adjustmentType:CoachIQ.liveGame.adjustmentType,reason:document.getElementById("livePlanAdjustmentReason").value,objectives:CoachIQ.liveGame.adjustmentDraft});});
+  flushAllLiveGameQueues_(function(){google.script.run.withSuccessHandler(function(data){button.disabled=false;button.textContent="Apply Changes";closeLivePlanAdjustment();renderLiveGameTracker(data);showToast("Live game plan adjusted.");}).withFailureHandler(function(error){button.disabled=false;button.textContent="Apply Changes";showToast(error.message||"Unable to adjust the game plan.","error");}).saveLiveGamePlanAdjustment(CoachIQ.liveGame.tracker.game.gameId,{adjustmentType:CoachIQ.liveGame.adjustmentType,reason:document.getElementById("livePlanAdjustmentReason").value,objectives:CoachIQ.liveGame.adjustmentDraft});});
 }
 function adjustPlanFromCheckpoint(){const type=CoachIQ.liveGame.currentCheckpointType||"Live Adjustment";closeLiveCheckpointReport();openLivePlanAdjustment(type);}
 function finishLiveGameFromTracker(){
   if(!CoachIQ.liveGame.tracker){return;}
   const pending=liveGamePendingTapCount();
   showConfirmModal("Finish and permanently lock this game?",(pending?pending+" protected tap"+(pending===1?" must":"s must")+" sync first. ":"")+"Finishing is irreversible: all devices will be blocked from adding or undoing events, and the postgame report becomes the official record.","Sync & Finish Game",function(){
-    flushLiveObjectiveQueue(function(){setLiveTrackerSaveState("Building postgame report…","saving");google.script.run.withSuccessHandler(function(report){renderLiveCheckpointReport(report);}).withFailureHandler(function(error){showToast(error.message||"Unable to finish the game.","error");}).finishLiveGame(CoachIQ.liveGame.tracker.game.gameId);});
+    flushAllLiveGameQueues_(function(){setLiveTrackerSaveState("Building postgame report…","saving");google.script.run.withSuccessHandler(function(report){renderLiveCheckpointReport(report);}).withFailureHandler(function(error){showToast(error.message||"Unable to finish the game.","error");}).finishLiveGame(CoachIQ.liveGame.tracker.game.gameId);});
   });
 }
 function renderLiveCheckpointReport(report){
@@ -949,7 +1014,7 @@ function setLiveTrackerSaveState(message, state){
   if(!element){ return; }
   element.className = "live-tracker-save-state " + (state || "");
   const messageElement=document.getElementById("liveTrackerSaveMessage");if(messageElement){messageElement.textContent=message;}
-  const count=CoachIQ.liveGame.protectedTaps.length;const countElement=document.getElementById("liveTrackerProtectedCount");if(countElement){countElement.textContent=count+" protected";}
+  const count=Math.max(CoachIQ.liveGame.tapQueue.length,CoachIQ.liveGame.protectedTaps.length)+Math.max(CoachIQ.liveGame.analyticsQueue.length,CoachIQ.liveGame.protectedAnalytics.length);const countElement=document.getElementById("liveTrackerProtectedCount");if(countElement){countElement.textContent=count+" protected";}
   const connection=document.getElementById("liveTrackerConnection");if(connection){const online=navigator.onLine!==false;connection.textContent=online?"Online":"Offline";connection.classList.toggle("attention",!online);}
   const syncElement=document.getElementById("liveTrackerLastSync");if(syncElement){syncElement.textContent=CoachIQ.liveGame.lastSyncAt?"Synced "+new Date(CoachIQ.liveGame.lastSyncAt).toLocaleTimeString([], {hour:"numeric",minute:"2-digit"}):"No taps yet";}
   try{if(CoachIQ.liveGame.tracker){localStorage.setItem("coachiq_live_game_status_"+CoachIQ.liveGame.tracker.game.gameId,JSON.stringify({message:message,state:state||"",protectedCount:count,lastSyncAt:CoachIQ.liveGame.lastSyncAt,updatedAt:new Date().toISOString()}));}}catch(error){console.error("CoachIQ could not persist sync status: "+error.message);}

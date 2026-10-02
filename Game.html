@@ -31,8 +31,14 @@
       </article>
     </div>
 
-    <article class="card live-game-panel live-objective-builder">
-      <div class="live-game-panel-heading"><span>03</span><div><h3>Winning Objectives</h3><p>Build the few items you want visible during the game. No scorebook and no extra noise.</p></div></div>
+    <article class="card live-tracking-options">
+      <div><span>03</span><div><h3>Choose Tonight's Tools</h3><p>Use either tracker, both trackers, or neither. You can keep game setup simple.</p></div></div>
+      <label><input id="liveGameEnableAnalytics" type="checkbox" checked onchange="updateLiveGameTrackingOptions()"><span><strong>Possession Analytics</strong><small>Two-person offense and defense tracking with PPP.</small></span></label>
+      <label><input id="liveGameEnableObjectives" type="checkbox" onchange="updateLiveGameTrackingOptions()"><span><strong>Game-Plan Objectives</strong><small>Optional focused goals from scouting or tonight's plan.</small></span></label>
+    </article>
+
+    <article id="liveGameObjectivesPanel" class="card live-game-panel live-objective-builder" hidden>
+      <div class="live-game-panel-heading"><span>04</span><div><h3>Winning Objectives</h3><p>Optional: build only the few items you want visible during the game.</p></div></div>
       <div class="game-plan-template-bar"><div><strong>Start Faster</strong><small>Reuse a trusted plan from a previous game.</small></div><select id="liveGameTemplateSelect"><option value="">Choose saved template</option></select><button class="btn" type="button" onclick="applySelectedLiveGameTemplate()">Use Template</button><button id="useLastLiveGamePlanButton" class="btn" type="button" onclick="useLastLiveGamePlan()">Use Last Game</button></div>
       <div class="objective-builder-grid">
         <label>What to Track<select id="objectiveMetric" onchange="updateObjectiveBuilderFields()"><option>Transition Points</option><option>Offensive Rebounds</option><option>Turnovers</option><option>Paint Touches</option><option>Deflections</option><option>Fouls</option><option>Points</option><option value="Custom">Custom Category</option></select></label>
@@ -50,23 +56,23 @@
     </article>
 
     <aside id="liveGameReadiness" class="live-game-readiness" aria-live="polite"></aside>
-    <div class="live-game-launch-bar"><div><strong>Game-plan tracking</strong><p>The live screen will show only the objectives above.</p></div><button id="saveLiveGameSetupButton" class="btn btn-primary" type="submit">Save Game Plan</button></div>
+    <div class="live-game-launch-bar"><div><strong>Game-day setup</strong><p>CoachIQ will show only the tools you selected above.</p></div><button id="saveLiveGameSetupButton" class="btn btn-primary" type="submit">Save Game Setup</button></div>
   </form>
 
-  <div id="liveGameSetupSuccess" class="card live-game-success" hidden><span>Game plan saved</span><h3 id="liveGameSetupSuccessTitle">Game ready</h3><p>Open the focused tracker whenever your staff is ready.</p><div class="live-game-success-actions"><button id="openSavedLiveGameButton" class="btn btn-primary" type="button">Start Focused Tracker</button><button class="btn" type="button" onclick="resetLiveGameSetup()">Build Another Plan</button></div></div>
+  <div id="liveGameSetupSuccess" class="card live-game-success" hidden><span>Game setup saved</span><h3 id="liveGameSetupSuccessTitle">Game ready</h3><p>Open the game screen whenever your staff is ready.</p><div class="live-game-success-actions"><button id="openSavedLiveGameButton" class="btn btn-primary" type="button">Open Game Screen</button><button class="btn" type="button" onclick="resetLiveGameSetup()">Build Another Game</button></div></div>
 
   <section id="liveGameTracker" class="live-game-tracker" hidden>
     <header class="objective-tracker-header">
       <div><span class="objective-live-badge">LIVE PLAN</span><h2><span id="liveTrackerTeam">Our Team</span> <small>vs.</small> <span id="liveTrackerOpponent">Opponent</span></h2><p id="liveTrackerPeriodLabel">Quarter 1</p></div>
-      <div class="objective-tracker-actions"><div class="objective-tracker-game-tools"><button type="button" onclick="createLiveCheckpoint('Timeout')">Timeout</button><button type="button" onclick="createLiveCheckpoint('End Quarter')">End period</button><button type="button" onclick="openLivePlanAdjustment('Live Adjustment')">Adjust plan</button><button type="button" onclick="undoLatestLiveTrackerEvent()">Undo</button></div><div class="objective-tracker-session-tools"><button class="finish" type="button" onclick="finishLiveGameFromTracker()">Finish game</button><button class="exit" type="button" onclick="exitLiveGameTracker()" aria-label="Exit live game">Exit</button></div></div>
+      <div class="objective-tracker-actions"><div class="objective-tracker-game-tools"><span id="liveObjectiveGameTools"><button type="button" onclick="createLiveCheckpoint('Timeout')">Timeout</button><button type="button" onclick="openLivePlanAdjustment('Live Adjustment')">Adjust plan</button><button type="button" onclick="undoLatestLiveTrackerEvent()">Undo objective</button></span><button type="button" onclick="endLiveGamePeriod()">End period</button></div><div class="objective-tracker-session-tools"><button class="finish" type="button" onclick="finishLiveGameFromTracker()">Finish game</button><button class="exit" type="button" onclick="exitLiveGameTracker()" aria-label="Exit live game">Exit</button></div></div>
     </header>
     <div id="liveTrackerRecovery" class="live-tracker-recovery" hidden><span><strong id="liveTrackerRecoveryTitle">Protected taps recovered</strong><small id="liveTrackerRecoveryMessage">CoachIQ kept unsynced activity on this device.</small></span><button type="button" onclick="retryProtectedLiveGameTaps()">Retry Sync</button></div>
     <div id="liveTrackerSaveState" class="live-tracker-save-state" role="status" aria-live="polite"><strong id="liveTrackerSaveMessage"><i aria-hidden="true"></i> Ready</strong><span><b id="liveTrackerConnection">Online</b><b id="liveTrackerProtectedCount">0 protected</b><b id="liveTrackerLastSync">No taps yet</b><b id="liveTrackerWakeState">Screen awake</b><button type="button" onclick="refreshLiveGameSharedView()" aria-label="Refresh activity from other devices">↻ Refresh</button></span></div>
     <section class="live-analytics" aria-label="Possession analytics tracker">
-      <div class="live-analytics-head"><div><span>Possession Analytics</span><strong><b id="livePossessionsUs">0</b> offense · <b id="livePossessionsOpponent">0</b> defense</strong><small id="liveAnalyticsHeadline">Choose your assignment. One outcome tap saves the complete possession.</small></div><div class="live-analytics-roles"><button id="liveAnalyticsOffenseRole" type="button" onclick="setLiveAnalyticsRole('offense')">Track Offense</button><button id="liveAnalyticsDefenseRole" type="button" onclick="setLiveAnalyticsRole('defense')">Track Defense</button></div></div>
+      <div class="live-analytics-head"><div><span>Possession Analytics</span><strong><b id="livePossessionsUs">0</b> offense · <b id="livePossessionsOpponent">0</b> defense</strong><small id="liveAnalyticsHeadline">Choose your assignment. Half court is the default; tap each tag once if it happened.</small></div><div class="live-analytics-roles"><button id="liveAnalyticsOffenseRole" type="button" onclick="setLiveAnalyticsRole('offense')">Track Offense</button><button id="liveAnalyticsDefenseRole" type="button" onclick="setLiveAnalyticsRole('defense')">Track Defense</button></div></div>
       <div id="liveAnalyticsControls" class="live-analytics-controls" hidden>
         <div id="liveAnalyticsTags" class="live-analytics-tags"></div>
-        <div class="live-analytics-oreb"><button type="button" onclick="addLiveAnalyticsRebound()">+ OREB</button><strong id="liveAnalyticsRebounds">0</strong></div>
+        <div class="live-analytics-oreb" aria-label="Offensive rebounds this possession"><button type="button" onclick="removeLiveAnalyticsRebound()" aria-label="Remove one offensive rebound">−</button><strong id="liveAnalyticsRebounds">0</strong><button type="button" onclick="addLiveAnalyticsRebound()" aria-label="Add one offensive rebound">+ OREB</button></div>
         <div class="live-analytics-outcomes"><span>End possession</span><button type="button" onclick="finishLiveAnalyticsPossession(0,this)">0</button><button type="button" onclick="finishLiveAnalyticsPossession(1,this)">1</button><button type="button" onclick="finishLiveAnalyticsPossession(2,this)">2</button><button type="button" onclick="finishLiveAnalyticsPossession(3,this)">3</button><button id="liveAnalyticsTurnover" class="turnover" type="button" onclick="finishLiveAnalyticsTurnover(this)">Turnover</button></div>
         <button class="live-analytics-undo" type="button" onclick="undoLiveAnalyticsPossession()">Undo last possession</button>
       </div>
