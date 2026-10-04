@@ -1,6 +1,6 @@
 # CoachIQ Live adaptive possession benchmarks — 2026-10-04
 
-Build **2026.10.04.5** adds adaptive, team-specific guidance to Possession Analytics while leaving the manually configured Winning Chart unchanged.
+Build **2026.10.04.7** adds adaptive, team-specific guidance to Possession Analytics while leaving the manually configured Winning Chart unchanged.
 
 ## Result integrity
 
@@ -18,6 +18,15 @@ The live header now shows points scored and points allowed beside possession cou
 Program Intelligence explicitly separates the current-game value, target or maximum,
 and winning/loss averages. A tracker note clarifies that possession tags update
 analytics while the manually configured Winning Chart retains its own +1 taps.
+
+Selecting Track Defense now labels transition, right-hand drive, paint touch,
+offensive rebound, and points as allowed, and limits the live benchmark strip to
+defensive metrics. Track Offense similarly shows only offensive metrics; Program
+Intelligence continues to contain the complete program view.
+
+Every live PPP, rate, and per-100 benchmark now includes its underlying totals—for
+example, `7 turnovers · 40 possessions` or `5 offensive rebounds allowed · 32
+possessions`—both on the benchmark card and in Program Intelligence.
 
 ## Benchmark method
 

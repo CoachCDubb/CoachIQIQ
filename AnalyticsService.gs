@@ -137,17 +137,17 @@ function voidLatestLiveAnalyticsPossession(gameId, teamSide) {
  */
 function getStarterLiveAnalyticsBenchmarks_() {
   return [
-    {id:"offensivePpp",label:"Offensive PPP",starter:1.00,direction:"higher",side:"offense",field:"ppp",unit:"PPP"},
-    {id:"defensivePppAllowed",label:"Defensive PPP allowed",starter:1.00,direction:"lower",side:"defense",field:"ppp",unit:"PPP"},
-    {id:"transitionPpp",label:"Transition PPP",starter:1.15,direction:"higher",side:"offense",field:"transitionPpp",unit:"PPP"},
-    {id:"transitionPppAllowed",label:"Transition PPP allowed",starter:1.00,direction:"lower",side:"defense",field:"transitionPpp",unit:"PPP"},
-    {id:"paintTouchPpp",label:"Paint-touch PPP",starter:1.10,direction:"higher",side:"offense",field:"paintTouchPpp",unit:"PPP"},
-    {id:"paintTouchPppAllowed",label:"Paint-touch PPP allowed",starter:1.00,direction:"lower",side:"defense",field:"paintTouchPpp",unit:"PPP"},
-    {id:"turnoverRate",label:"Turnover rate",starter:0.18,direction:"lower",side:"offense",field:"turnoverRate",unit:"rate"},
-    {id:"forcedTurnoverRate",label:"Forced-turnover rate",starter:0.18,direction:"higher",side:"defense",field:"forcedTurnoverRate",unit:"rate"},
-    {id:"offensiveReboundsPer100",label:"Offensive rebounds / 100",starter:25,direction:"higher",side:"offense",field:"offensiveReboundsPer100",unit:"per 100"},
-    {id:"offensiveReboundsAllowedPer100",label:"Offensive rebounds allowed / 100",starter:25,direction:"lower",side:"defense",field:"offensiveReboundsPer100",unit:"per 100"},
-    {id:"rightHandDrivePppAllowed",label:"Right-hand-drive PPP allowed",starter:0.90,direction:"lower",side:"defense",field:"rightHandDrivePpp",unit:"PPP"}
+    {id:"offensivePpp",label:"Offensive PPP",starter:1.00,direction:"higher",side:"offense",field:"ppp",unit:"PPP",numeratorField:"points",numeratorLabel:"points",denominatorField:"possessions",denominatorLabel:"possessions"},
+    {id:"defensivePppAllowed",label:"Defensive PPP allowed",starter:1.00,direction:"lower",side:"defense",field:"ppp",unit:"PPP",numeratorField:"points",numeratorLabel:"points allowed",denominatorField:"possessions",denominatorLabel:"possessions"},
+    {id:"transitionPpp",label:"Transition PPP",starter:1.15,direction:"higher",side:"offense",field:"transitionPpp",unit:"PPP",numeratorField:"transitionPoints",numeratorLabel:"transition points",denominatorField:"transitionPossessions",denominatorLabel:"transition possessions"},
+    {id:"transitionPppAllowed",label:"Transition PPP allowed",starter:1.00,direction:"lower",side:"defense",field:"transitionPpp",unit:"PPP",numeratorField:"transitionPoints",numeratorLabel:"transition points allowed",denominatorField:"transitionPossessions",denominatorLabel:"transition possessions"},
+    {id:"paintTouchPpp",label:"Paint-touch PPP",starter:1.10,direction:"higher",side:"offense",field:"paintTouchPpp",unit:"PPP",numeratorField:"paintTouchPoints",numeratorLabel:"paint-touch points",denominatorField:"paintTouchPossessions",denominatorLabel:"paint-touch possessions"},
+    {id:"paintTouchPppAllowed",label:"Paint-touch PPP allowed",starter:1.00,direction:"lower",side:"defense",field:"paintTouchPpp",unit:"PPP",numeratorField:"paintTouchPoints",numeratorLabel:"paint-touch points allowed",denominatorField:"paintTouchPossessions",denominatorLabel:"paint-touch possessions"},
+    {id:"turnoverRate",label:"Turnover rate",starter:0.18,direction:"lower",side:"offense",field:"turnoverRate",unit:"rate",numeratorField:"turnovers",numeratorLabel:"turnovers",denominatorField:"possessions",denominatorLabel:"possessions"},
+    {id:"forcedTurnoverRate",label:"Forced-turnover rate",starter:0.18,direction:"higher",side:"defense",field:"forcedTurnoverRate",unit:"rate",numeratorField:"forcedTurnovers",numeratorLabel:"forced turnovers",denominatorField:"possessions",denominatorLabel:"possessions"},
+    {id:"offensiveReboundsPer100",label:"Offensive rebounds / 100",starter:25,direction:"higher",side:"offense",field:"offensiveReboundsPer100",unit:"per 100",numeratorField:"offensiveRebounds",numeratorLabel:"offensive rebounds",denominatorField:"possessions",denominatorLabel:"possessions"},
+    {id:"offensiveReboundsAllowedPer100",label:"Offensive rebounds allowed / 100",starter:25,direction:"lower",side:"defense",field:"offensiveReboundsPer100",unit:"per 100",numeratorField:"offensiveRebounds",numeratorLabel:"offensive rebounds allowed",denominatorField:"possessions",denominatorLabel:"possessions"},
+    {id:"rightHandDrivePppAllowed",label:"Right-hand-drive PPP allowed",starter:0.90,direction:"lower",side:"defense",field:"rightHandDrivePpp",unit:"PPP",numeratorField:"rightHandDrivePoints",numeratorLabel:"right-hand-drive points allowed",denominatorField:"rightHandDrivePossessions",denominatorLabel:"right-hand-drive possessions"}
   ];
 }
 
@@ -178,7 +178,7 @@ function buildLiveAnalyticsProgramBenchmark_(completedGames) {
       targetSource=confidence+" · blended with coach-configurable starter benchmark";
     }
     const changedDates=valid.map(function(item){return String(item.completedAt||"");}).filter(Boolean).sort();
-    return{id:definition.id,label:definition.label,direction:definition.direction,side:definition.side,field:definition.field,
+    return{id:definition.id,label:definition.label,direction:definition.direction,side:definition.side,field:definition.field,numeratorField:definition.numeratorField,numeratorLabel:definition.numeratorLabel,denominatorField:definition.denominatorField,denominatorLabel:definition.denominatorLabel,
       unit:definition.unit,starterBenchmark:definition.starter,recommendedTarget:target,targetSource:targetSource,
       confidenceLabel:confidence,validSampleCount:validCount,winningGameAverage:winningAverage,losingGameAverage:losingAverage,
       insufficient:validCount<3||winningAverage==null,lastChanged:confidence==="Starter benchmark"?"2026-10-04":(changedDates.pop()||"Unknown")};
