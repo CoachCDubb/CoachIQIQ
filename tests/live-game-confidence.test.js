@@ -73,6 +73,15 @@ test("game-day layout keeps controls compact and tap targets inside each card", 
   assert.match(styles, /#liveTrackerWakeState:not\(\.attention\)\{display:none\}/);
 });
 
+test("live tracker shows a tap-updated winning targets chart", () => {
+  assert.match(view, /liveWinningTargets/);
+  assert.match(view, /Targets to hit/);
+  assert.match(client, /function renderLiveWinningTargets/);
+  assert.match(client, /role="progressbar"/);
+  assert.match(client, /liveWinningTargetData_/);
+  assert.match(styles, /\.live-winning-target-track/);
+});
+
 test("sport-aware opponent rosters are persistent, audited, and snapshotted", () => {
   assert.match(server, /LIVE_GAME_OPPONENTS_SHEET/);
   assert.match(server, /saveLiveGameOpponentRoster/);
