@@ -1,6 +1,6 @@
 # CoachIQ Live adaptive possession benchmarks — 2026-10-04
 
-Build **2026.10.04.4** adds adaptive, team-specific guidance to Possession Analytics while leaving the manually configured Winning Chart unchanged.
+Build **2026.10.04.5** adds adaptive, team-specific guidance to Possession Analytics while leaving the manually configured Winning Chart unchanged.
 
 ## Result integrity
 
@@ -13,6 +13,11 @@ occupy columns after the fixed Games schema; no manual column insertion is neede
 Program Intelligence stays visible above the horizontally scrolling benchmark cards
 in the compact desktop tracker. Opening it uses a scrollable overlay so the full
 win/loss evidence cannot be clipped by the game-day viewport.
+
+The live header now shows points scored and points allowed beside possession counts.
+Program Intelligence explicitly separates the current-game value, target or maximum,
+and winning/loss averages. A tracker note clarifies that possession tags update
+analytics while the manually configured Winning Chart retains its own +1 taps.
 
 ## Benchmark method
 
