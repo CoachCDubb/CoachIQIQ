@@ -5,6 +5,7 @@ const vm=require('node:vm');
 const service=fs.readFileSync('AnalyticsService.gs','utf8');
 const client=fs.readFileSync('Scripts.html','utf8');
 const game=fs.readFileSync('Game.html','utf8');
+const styles=fs.readFileSync('Styles.html','utf8');
 const context={};vm.runInNewContext(service,context);
 const summary=(offensePoints=1,defensePoints=1,options={})=>context.buildLiveAnalyticsSummary_([
   {teamSide:'offense',period:1,points:offensePoints,transition:options.transition!==false,paintTouch:options.paint!==false,turnover:!!options.turnover,offensiveRebounds:options.oreb==null?1:options.oreb},
@@ -32,4 +33,5 @@ test('authoritative final result capture does not infer results from objectives'
 test('result capture appends a named optional column without shifting existing Games columns',()=>{const gamesService=fs.readFileSync('GameService.gs','utf8');const core=gamesService.match(/const LIVE_GAME_HEADERS = \[([\s\S]*?)\n\];/)[1];assert.doesNotMatch(core,/Game Result/);assert.match(gamesService,/ensureLiveGameOptionalColumn_\(LIVE_GAMES_SHEET,"Game Result"\)/);});
 test('sheet validation cannot make optional Games fields positional after a merge',()=>{const gamesService=fs.readFileSync('GameService.gs','utf8');assert.match(gamesService,/optionalHeaders=\["Opponent Roster","Tracker Mode","Game Result"\]/);assert.match(gamesService,/requiredHeaders=\(headers\|\|\[\]\)\.filter/);assert.match(gamesService,/setValues\(\[requiredHeaders\]\)/);});
 test('recent activity combines analytics possessions and manual objective taps',()=>{assert.match(game,/Recent activity/);assert.match(game,/Possessions and manual objective taps save immediately/);assert.match(client,/data\.analytics\|\|\{\}\)\.recent/);assert.match(client,/kind:"analytics"/);assert.match(client,/item\.teamSide==="defense"\?"Defense":"Offense"/);assert.match(client,/pts allowed/);assert.match(client,/undoLiveAnalyticsPossessionForSide_/);});
+test('desktop layout reserves analytics and constrains recent activity',()=>{assert.match(styles,/grid-template-rows:auto auto auto auto minmax\(0,1fr\) minmax\(70px,auto\)/);assert.match(styles,/\.objective-recent\{min-height:0;max-height:104px/);assert.match(styles,/\.live-tracker-events\{display:flex;min-width:0/);});
 test('existing Winning Chart stays intact and separate',()=>{assert.match(game,/Winning chart/);assert.match(game,/liveWinningTargets/);assert.match(client,/function renderLiveWinningTargets/);});

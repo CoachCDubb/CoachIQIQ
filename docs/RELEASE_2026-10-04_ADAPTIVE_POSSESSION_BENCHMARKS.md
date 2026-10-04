@@ -47,6 +47,8 @@ Recent Activity now combines saved possession outcomes with manual objective tap
 Possession rows identify offense or defense, points or turnover outcome, selected
 context tags, rebounds, and period; the newest possession can be undone from the same
 activity list without changing the device's offense/defense assignment.
+On desktop, Recent Activity stays in a compact horizontal strip so a full activity
+history cannot collapse Possession Analytics or the game-plan cards.
 
 ## Benchmark method
 

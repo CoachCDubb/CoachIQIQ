@@ -2651,7 +2651,7 @@ body.live-game-setup-mode #content{padding-top:12px;}
 @media screen and (min-width:901px){
   body.live-game-mode #content{overflow:hidden}
   body.live-game-mode .live-game-page{height:100vh;min-height:0;padding-bottom:14px;overflow:hidden}
-  body.live-game-mode .live-game-tracker{height:calc(100vh - 28px);min-height:0;grid-template-rows:auto auto auto minmax(0,1fr) auto;gap:8px;overflow:hidden}
+  body.live-game-mode .live-game-tracker{height:calc(100vh - 28px);min-height:0;grid-template-rows:auto auto auto auto minmax(0,1fr) minmax(70px,auto);gap:8px;overflow:hidden}
   body.live-game-mode .objective-tracker-header{position:static;margin:-14px -18px 0;padding:12px 20px;border-bottom-width:4px}
   body.live-game-mode .objective-live-badge{padding:3px 7px;font-size:8px}
   body.live-game-mode .objective-tracker-header h2{margin:4px 0 1px;font-size:clamp(20px,1.65vw,27px)}
@@ -2672,12 +2672,14 @@ body.live-game-setup-mode #content{padding-top:12px;}
   body.live-game-mode .objective-comparison strong,body.live-game-mode .objective-single>strong{font-size:clamp(32px,3.2vh,46px)}
   body.live-game-mode .objective-tap-buttons{gap:4px}
   body.live-game-mode .objective-tap-buttons button{min-height:34px;padding:4px 8px;font-size:13px}
-  body.live-game-mode .objective-recent{min-height:0;padding:8px 11px;gap:10px;font-size:9px}
+  body.live-game-mode .objective-recent{min-height:0;max-height:104px;grid-template-columns:170px minmax(0,1fr);padding:8px 11px;gap:10px;overflow:hidden;font-size:9px}
+  body.live-game-mode .live-tracker-events{display:flex;min-width:0;gap:7px;overflow-x:auto;overflow-y:hidden;padding-bottom:2px}
+  body.live-game-mode .live-tracker-event{min-width:250px;flex:1 0 250px;padding:8px 10px}
   body.live-game-mode .live-game-tracker[data-objective-count="3"] .objective-tracker-grid,
   body.live-game-mode .live-game-tracker[data-objective-count="4"] .objective-tracker-grid{grid-template-rows:repeat(2,minmax(0,1fr))}
   body.live-game-mode .live-game-tracker[data-objective-count="5"] .objective-tracker-grid,
   body.live-game-mode .live-game-tracker[data-objective-count="6"] .objective-tracker-grid{grid-template-rows:repeat(3,minmax(0,1fr))}
-  body.live-game-mode .live-game-tracker.dense-objectives{grid-template-rows:auto auto auto minmax(0,1fr)}
+  body.live-game-mode .live-game-tracker.dense-objectives{grid-template-rows:auto auto auto auto minmax(0,1fr)}
   body.live-game-mode .live-game-tracker.dense-objectives .objective-recent{display:none}
 }
 @media screen and (min-width:901px) and (max-height:760px){
