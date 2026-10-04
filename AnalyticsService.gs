@@ -128,3 +128,76 @@ function voidLatestLiveAnalyticsPossession(gameId, teamSide) {
   }finally{lock.releaseLock();}
   return getLiveGameTracker(gameId);
 }
+
+/**
+ * Coach-configurable starting points, not universal high-school standards.
+ * These defaults are product guidance chosen for initial setup; programs should
+ * review them with their staff and replace them as their own completed-game
+ * evidence develops.
+ */
+function getStarterLiveAnalyticsBenchmarks_() {
+  return [
+    {id:"offensivePpp",label:"Offensive PPP",starter:1.00,direction:"higher",side:"offense",field:"ppp",unit:"PPP",numeratorField:"points",numeratorLabel:"points",denominatorField:"possessions",denominatorLabel:"possessions"},
+    {id:"defensivePppAllowed",label:"Defensive PPP allowed",starter:1.00,direction:"lower",side:"defense",field:"ppp",unit:"PPP",numeratorField:"points",numeratorLabel:"points allowed",denominatorField:"possessions",denominatorLabel:"possessions"},
+    {id:"transitionPpp",label:"Transition PPP",starter:1.15,direction:"higher",side:"offense",field:"transitionPpp",unit:"PPP",numeratorField:"transitionPoints",numeratorLabel:"transition points",denominatorField:"transitionPossessions",denominatorLabel:"transition possessions"},
+    {id:"transitionPppAllowed",label:"Transition PPP allowed",starter:1.00,direction:"lower",side:"defense",field:"transitionPpp",unit:"PPP",numeratorField:"transitionPoints",numeratorLabel:"transition points allowed",denominatorField:"transitionPossessions",denominatorLabel:"transition possessions"},
+    {id:"paintTouchPpp",label:"Paint-touch PPP",starter:1.10,direction:"higher",side:"offense",field:"paintTouchPpp",unit:"PPP",numeratorField:"paintTouchPoints",numeratorLabel:"paint-touch points",denominatorField:"paintTouchPossessions",denominatorLabel:"paint-touch possessions"},
+    {id:"paintTouchPppAllowed",label:"Paint-touch PPP allowed",starter:1.00,direction:"lower",side:"defense",field:"paintTouchPpp",unit:"PPP",numeratorField:"paintTouchPoints",numeratorLabel:"paint-touch points allowed",denominatorField:"paintTouchPossessions",denominatorLabel:"paint-touch possessions"},
+    {id:"turnoverRate",label:"Turnover rate",starter:0.18,direction:"lower",side:"offense",field:"turnoverRate",unit:"rate",numeratorField:"turnovers",numeratorLabel:"turnovers",denominatorField:"possessions",denominatorLabel:"possessions"},
+    {id:"forcedTurnoverRate",label:"Forced-turnover rate",starter:0.18,direction:"higher",side:"defense",field:"forcedTurnoverRate",unit:"rate",numeratorField:"forcedTurnovers",numeratorLabel:"forced turnovers",denominatorField:"possessions",denominatorLabel:"possessions"},
+    {id:"offensiveReboundsPer100",label:"Offensive rebounds / 100",starter:25,direction:"higher",side:"offense",field:"offensiveReboundsPer100",unit:"per 100",numeratorField:"offensiveRebounds",numeratorLabel:"offensive rebounds",denominatorField:"possessions",denominatorLabel:"possessions"},
+    {id:"offensiveReboundsAllowedPer100",label:"Offensive rebounds allowed / 100",starter:25,direction:"lower",side:"defense",field:"offensiveReboundsPer100",unit:"per 100",numeratorField:"offensiveRebounds",numeratorLabel:"offensive rebounds allowed",denominatorField:"possessions",denominatorLabel:"possessions"},
+    {id:"rightHandDrivePppAllowed",label:"Right-hand-drive PPP allowed",starter:0.90,direction:"lower",side:"defense",field:"rightHandDrivePpp",unit:"PPP",numeratorField:"rightHandDrivePoints",numeratorLabel:"right-hand-drive points allowed",denominatorField:"rightHandDrivePossessions",denominatorLabel:"right-hand-drive possessions"}
+  ];
+}
+
+function averageLiveAnalyticsMetric_(values){
+  return values.length?roundLiveAnalytics_(values.reduce(function(sum,value){return sum+value;},0)/values.length):null;
+}
+
+/** Pure benchmark calculator. Games without an explicit final result are ignored. */
+function buildLiveAnalyticsProgramBenchmark_(completedGames) {
+  const games=(completedGames||[]).filter(function(game){return game&&game.completed===true&&(game.result==="Win"||game.result==="Loss");});
+  const winCount=games.filter(function(game){return game.result==="Win";}).length;
+  const lossCount=games.filter(function(game){return game.result==="Loss";}).length;
+  const metrics=getStarterLiveAnalyticsBenchmarks_().map(function(definition){
+    const valid=games.map(function(game){
+      const side=(game.analytics||{})[definition.side]||{};
+      const value=side[definition.field];
+      return typeof value==="number"&&isFinite(value)?{value:value,result:game.result,completedAt:game.completedAt}:null;
+    }).filter(Boolean);
+    const wins=valid.filter(function(item){return item.result==="Win";}).map(function(item){return item.value;});
+    const losses=valid.filter(function(item){return item.result==="Loss";}).map(function(item){return item.value;});
+    const validCount=valid.length,winningAverage=averageLiveAnalyticsMetric_(wins),losingAverage=averageLiveAnalyticsMetric_(losses);
+    let target=definition.starter,targetSource="Starter benchmark",confidence="Starter benchmark";
+    if(validCount>=3&&winningAverage!=null){
+      const weight=validCount<=5?0.25:validCount<=9?0.5:0.75;
+      const bounded=Math.max(definition.starter*0.8,Math.min(definition.starter*1.2,winningAverage));
+      target=roundLiveAnalytics_(definition.starter*(1-weight)+bounded*weight);
+      confidence=validCount<=5?"Early signal":validCount<=9?"Emerging target":"Program target";
+      targetSource=confidence+" · blended with coach-configurable starter benchmark";
+    }
+    const changedDates=valid.map(function(item){return String(item.completedAt||"");}).filter(Boolean).sort();
+    return{id:definition.id,label:definition.label,direction:definition.direction,side:definition.side,field:definition.field,numeratorField:definition.numeratorField,numeratorLabel:definition.numeratorLabel,denominatorField:definition.denominatorField,denominatorLabel:definition.denominatorLabel,
+      unit:definition.unit,starterBenchmark:definition.starter,recommendedTarget:target,targetSource:targetSource,
+      confidenceLabel:confidence,validSampleCount:validCount,winningGameAverage:winningAverage,losingGameAverage:losingAverage,
+      insufficient:validCount<3||winningAverage==null,lastChanged:confidence==="Starter benchmark"?"2026-10-04":(changedDates.pop()||"Unknown")};
+  });
+  return{completedGameCount:games.length,winCount:winCount,lossCount:lossCount,metrics:metrics,
+    guidance:"Targets describe associations in accessible completed games; they do not establish that a metric caused a result."};
+}
+
+function getLiveAnalyticsProgramBenchmark_(team) {
+  requireLiveGameTeamAccess_(team);
+  const sheet=SpreadsheetApp.getActive().getSheetByName(LIVE_GAMES_SHEET);
+  if(!sheet||sheet.getLastRow()<2)return buildLiveAnalyticsProgramBenchmark_([]);
+  const values=sheet.getDataRange().getValues(),headers=values.shift(),cols=liveGameHeaderMap_(headers),access=getCurrentStaffAccess_();
+  const rows=filterCoachIQRowsForCurrentSeason_(headers,values).filter(function(row){
+    const rowTeam=String(row[cols.Team]||"");
+    const accessible=!access.configured||access.role==="Head Coach"||!access.teams.length||access.teams.indexOf(rowTeam)>=0;
+    return accessible&&rowTeam===String(team)&&String(row[cols.Sport]||"Basketball").toLowerCase()==="basketball"&&String(row[cols.Status]||"")==="Completed"&&
+      (String(row[cols["Game Result"]]||"")==="Win"||String(row[cols["Game Result"]]||"")==="Loss");
+  });
+  return buildLiveAnalyticsProgramBenchmark_(rows.map(function(row){return{completed:true,result:String(row[cols["Game Result"]]||""),
+    completedAt:formatLiveGameTimestamp_(row[cols["Completed At"]]),analytics:buildLiveAnalyticsSummary_(getLiveAnalyticsPossessions_(String(row[cols["Game ID"]]||"")),1)};}));
+}
