@@ -195,7 +195,7 @@ function getLiveAnalyticsProgramBenchmark_(team) {
   const rows=filterCoachIQRowsForCurrentSeason_(headers,values).filter(function(row){
     const rowTeam=String(row[cols.Team]||"");
     const accessible=!access.configured||access.role==="Head Coach"||!access.teams.length||access.teams.indexOf(rowTeam)>=0;
-    return accessible&&rowTeam===String(team)&&String(row[cols.Sport]||"Basketball").toLowerCase()==="basketball"&&String(row[cols.Status]||"")==="Completed"&&
+    return accessible&&!isLiveGameArchived_(row,cols)&&rowTeam===String(team)&&String(row[cols.Sport]||"Basketball").toLowerCase()==="basketball"&&String(row[cols.Status]||"")==="Completed"&&
       (String(row[cols["Game Result"]]||"")==="Win"||String(row[cols["Game Result"]]||"")==="Loss");
   });
   return buildLiveAnalyticsProgramBenchmark_(rows.map(function(row){return{completed:true,result:String(row[cols["Game Result"]]||""),

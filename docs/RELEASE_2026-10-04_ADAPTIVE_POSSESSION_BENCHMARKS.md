@@ -50,6 +50,12 @@ activity list without changing the device's offense/defense assignment.
 On desktop, Recent Activity stays in a compact horizontal strip so a full activity
 history cannot collapse Possession Analytics or the game-plan cards.
 
+Live and completed game lists now include a protected Archive action for test and
+showcase games. Archiving appends and sets the named `Archive Status` field, hides the
+game from normal Live Game lists, excludes it from adaptive benchmarks and prior-game
+objective intelligence, and records an audit event. Linked possessions, events,
+reports, scores, and completed-game fields are preserved rather than deleted.
+
 ## Benchmark method
 
 The eleven values in `getStarterLiveAnalyticsBenchmarks_` are **coach-configurable product defaults**, not universal facts or claimed high-school norms. Targets use only current-season, completed games for the selected team that the signed-in staff member may access. Missing denominators produce `null` metrics and never produce learned guidance.
