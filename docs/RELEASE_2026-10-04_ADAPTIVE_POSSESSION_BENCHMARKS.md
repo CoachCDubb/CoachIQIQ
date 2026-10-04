@@ -1,6 +1,6 @@
 # CoachIQ Live adaptive possession benchmarks — 2026-10-04
 
-Build **2026.10.04.3** adds adaptive, team-specific guidance to Possession Analytics while leaving the manually configured Winning Chart unchanged.
+Build **2026.10.04.4** adds adaptive, team-specific guidance to Possession Analytics while leaving the manually configured Winning Chart unchanged.
 
 ## Result integrity
 
@@ -9,6 +9,10 @@ Completed basketball games now require staff to confirm both final scores. The s
 `Game Result` is appended as an optional named column. This preserves existing
 workbooks where `Opponent Roster`, `Tracker Mode`, or other optional fields already
 occupy columns after the fixed Games schema; no manual column insertion is needed.
+
+Program Intelligence stays visible above the horizontally scrolling benchmark cards
+in the compact desktop tracker. Opening it uses a scrollable overlay so the full
+win/loss evidence cannot be clipped by the game-day viewport.
 
 ## Benchmark method
 
