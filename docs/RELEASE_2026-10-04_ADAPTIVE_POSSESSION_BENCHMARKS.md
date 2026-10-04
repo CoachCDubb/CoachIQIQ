@@ -75,6 +75,13 @@ Analytics-only games now remain in Resume a Saved Game after Exit. The resume li
 recognizes either enabled tracker instead of requiring a non-empty Winning Objectives
 plan, so exiting an analytics-only game no longer makes the saved game appear missing.
 
+Postgame reports now show the authoritative final score plus a full offense/defense
+possession breakdown: points, possessions, PPP, transition and paint-touch totals and
+PPP, turnovers or forced turnovers and their rates, offensive rebounds and per-100
+rates, and right-hand-drive results allowed. Analytics-only games no longer display a
+misleading `0 of 0 objectives` scorecard. Existing completed reports are enriched at
+read time from their preserved possession rows and final-score fields.
+
 ## Benchmark method
 
 The eleven values in `getStarterLiveAnalyticsBenchmarks_` are **coach-configurable product defaults**, not universal facts or claimed high-school norms. Targets use only current-season, completed games for the selected team that the signed-in staff member may access. Missing denominators produce `null` metrics and never produce learned guidance.

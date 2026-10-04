@@ -985,6 +985,11 @@ function finishLiveGame(gameId, finalResult) {
     report = tracker.objectives && tracker.objectives.length
       ? buildLiveGamePostgameReport_(tracker, getPreviousCompletedReports_(tracker.game.team))
       : buildOptionalTrackerPostgameReport_(tracker);
+    report.analytics=tracker.analytics||report.analytics||{};
+    report.possessions=tracker.possessions||report.possessions||{our:0,opponent:0};
+    report.finalScore={our:finalOurScore,opponent:finalOpponentScore};
+    report.gameResult=authoritativeResult;
+    report.game={gameId:tracker.game.gameId,gameDate:tracker.game.gameDate,team:tracker.game.team,opponent:tracker.game.opponent};
     const now = new Date();
     current.sheet.getRange(current.rowNumber, current.cols.Status + 1).setValue("Completed");
     current.sheet.getRange(current.rowNumber, current.cols["Our Score"] + 1).setValue(finalOurScore);
@@ -1019,6 +1024,11 @@ function getLiveGamePostgameReport(gameId) {
   requireLiveGameTeamAccess_(record.game.Team);
   const report = parseLiveGameObject_(record.game["Final Report"], null);
   if (!report) throw new Error("This game does not have a completed postgame report.");
+  if(!report.analytics)report.analytics=buildLiveAnalyticsSummary_(getLiveAnalyticsPossessions_(gameId),Number(record.game["Current Period"]||1));
+  if(!report.possessions)report.possessions={our:Number((report.analytics.offense||{}).possessions||0),opponent:Number((report.analytics.defense||{}).possessions||0)};
+  if(!report.finalScore)report.finalScore={our:Number(record.game["Our Score"]||0),opponent:Number(record.game["Opponent Score"]||0)};
+  if(!report.gameResult)report.gameResult=String(record.game["Game Result"]||"");
+  if(!report.game)report.game={gameId:String(gameId),gameDate:formatLiveGameDate_(record.game["Game Date"]),team:String(record.game.Team||""),opponent:String(record.game.Opponent||"")};
   return report;
 }
 
