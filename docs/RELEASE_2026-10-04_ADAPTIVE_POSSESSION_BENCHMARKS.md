@@ -1,10 +1,14 @@
 # CoachIQ Live adaptive possession benchmarks — 2026-10-04
 
-Build **2026.10.04.2** adds adaptive, team-specific guidance to Possession Analytics while leaving the manually configured Winning Chart unchanged.
+Build **2026.10.04.3** adds adaptive, team-specific guidance to Possession Analytics while leaving the manually configured Winning Chart unchanged.
 
 ## Result integrity
 
 Completed basketball games now require staff to confirm both final scores. The server stores those scores and an explicit `Game Result` (`Win` or `Loss`) together when it permanently locks the game. Objective success is never used as a proxy for the result. Legacy completed games without an explicit result remain visible, but are excluded from learning.
+
+`Game Result` is appended as an optional named column. This preserves existing
+workbooks where `Opponent Roster`, `Tracker Mode`, or other optional fields already
+occupy columns after the fixed Games schema; no manual column insertion is needed.
 
 ## Benchmark method
 

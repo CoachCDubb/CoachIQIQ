@@ -225,6 +225,9 @@ function initializeLiveGameSheets_() {
   ensureLiveGameSheet_(LIVE_GAME_OPPONENTS_SHEET, LIVE_GAME_OPPONENT_HEADERS);
   ensureLiveGameOptionalColumn_(LIVE_GAMES_SHEET,"Opponent Roster");
   ensureLiveGameOptionalColumn_(LIVE_GAMES_SHEET,"Tracker Mode");
+  // Existing workbooks already have optional columns after the 25-column core.
+  // Append result capture by name instead of claiming a fixed column position.
+  ensureLiveGameOptionalColumn_(LIVE_GAMES_SHEET,"Game Result");
 }
 
 function ensureLiveGameOptionalColumn_(sheetName,header){const sheet=SpreadsheetApp.getActive().getSheetByName(sheetName);const headers=sheet.getRange(1,1,1,sheet.getLastColumn()).getDisplayValues()[0];if(headers.indexOf(header)<0)sheet.getRange(1,sheet.getLastColumn()+1).setValue(header).setFontWeight("bold");}
