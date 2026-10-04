@@ -457,6 +457,7 @@ function getRecentLiveGames_() {
   const cols = liveGameHeaderMap_(headers);
   const access = getCurrentStaffAccess_();
   return filterCoachIQRowsForCurrentSeason_(headers,values).filter(function(row){return !isLiveGameArchived_(row,cols);}).map(function(row) {
+    const trackerMode=parseLiveGameObject_(row[cols["Tracker Mode"]],{}),hasTrackingPlan=parseLiveGameJson_(row[cols["Tracking Plan"]], []).length > 0;
     return {
       gameId:String(row[cols["Game ID"]] || ""),
       gameDate:formatLiveGameDate_(row[cols["Game Date"]]),
@@ -464,10 +465,10 @@ function getRecentLiveGames_() {
       opponent:String(row[cols.Opponent] || ""),
       status:String(row[cols.Status] || "Setup"),
       gameType:String(row[cols["Game Type"]] || "Official Game"),
-      hasTrackingPlan:parseLiveGameJson_(row[cols["Tracking Plan"]], []).length > 0
+      hasEnabledTracker:hasTrackingPlan||trackerMode.analytics===true||trackerMode.objectives===true
     };
   }).filter(function(game) {
-    if (["Setup", "Live"].indexOf(game.status) === -1 || !game.hasTrackingPlan) return false;
+    if (["Setup", "Live"].indexOf(game.status) === -1 || !game.hasEnabledTracker) return false;
     return !access.configured || access.role === "Head Coach" ||
       access.capabilities.indexOf("manage_settings") >= 0 || !access.teams.length ||
       access.teams.indexOf(game.team) >= 0;

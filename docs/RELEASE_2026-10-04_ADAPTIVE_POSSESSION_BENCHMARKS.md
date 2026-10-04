@@ -66,6 +66,15 @@ collects so coaches do not add duplicate objectives merely to capture the same d
 Compatible team-level objectives are visibly labeled as automatic and explain that
 they should remain in the plan only when the coach wants a Winning Chart target card.
 
+The live possession tracker now auto-switches to the other side after an outcome is
+saved. The setting is local to each device and can be turned off for two-operator
+workflows. An Undo selection control reverses the most recent unsaved tag or rebound
+change, while Undo possession continues to reverse an already saved possession.
+
+Analytics-only games now remain in Resume a Saved Game after Exit. The resume list
+recognizes either enabled tracker instead of requiring a non-empty Winning Objectives
+plan, so exiting an analytics-only game no longer makes the saved game appear missing.
+
 ## Benchmark method
 
 The eleven values in `getStarterLiveAnalyticsBenchmarks_` are **coach-configurable product defaults**, not universal facts or claimed high-school norms. Targets use only current-season, completed games for the selected team that the signed-in staff member may access. Missing denominators produce `null` metrics and never produce learned guidance.

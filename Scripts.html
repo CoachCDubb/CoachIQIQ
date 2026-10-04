@@ -158,7 +158,7 @@ const CoachIQ = {
 
   dataCacheAt: {},
 
-  liveGame: {setup:null, objectives:[], manualRoster:[], opponentRoster:[], opponentRosterId:"", tracker:null, saving:false, lastGameId:"", tapQueue:[], protectedTaps:[], tapTimer:null, syncing:false, lastSyncAt:"", lastTapKey:"", lastTapAt:0, wakeLock:null, adjustmentDraft:[], adjustmentType:"Live Adjustment",analyticsRole:"",analyticsDraft:null,analyticsQueue:[],protectedAnalytics:[],analyticsSyncing:false,analyticsGameId:"",filmGameId:"",filmFile:null,filmUploading:false,filmData:null},
+  liveGame: {setup:null, objectives:[], manualRoster:[], opponentRoster:[], opponentRosterId:"", tracker:null, saving:false, lastGameId:"", tapQueue:[], protectedTaps:[], tapTimer:null, syncing:false, lastSyncAt:"", lastTapKey:"", lastTapAt:0, wakeLock:null, adjustmentDraft:[], adjustmentType:"Live Adjustment",analyticsRole:"",analyticsDraft:null,analyticsDraftHistory:[],analyticsAutoSwitch:null,analyticsQueue:[],protectedAnalytics:[],analyticsSyncing:false,analyticsGameId:"",filmGameId:"",filmFile:null,filmUploading:false,filmData:null},
   scouting: {data:null, activeId:"", sections:[], saving:false}
 
 };
@@ -732,10 +732,14 @@ function recordLivePossession(side,button){recordLiveObjectiveChange("system_pos
 function emptyLiveAnalyticsDraft_(role){return{teamSide:role,transition:false,paintTouch:false,rightHandDrive:false,offensiveRebounds:0};}
 function setLiveAnalyticsRole(role){
   if(["offense","defense"].indexOf(role)<0)return;
-  CoachIQ.liveGame.analyticsRole=role;CoachIQ.liveGame.analyticsDraft=emptyLiveAnalyticsDraft_(role);
+  CoachIQ.liveGame.analyticsRole=role;CoachIQ.liveGame.analyticsDraft=emptyLiveAnalyticsDraft_(role);CoachIQ.liveGame.analyticsDraftHistory=[];
   try{localStorage.setItem("coachiq_live_analytics_role",role);}catch(error){}
   renderLiveAnalyticsTracker_(CoachIQ.liveGame.tracker||{});renderLiveAnalyticsBenchmarks_(CoachIQ.liveGame.tracker||{});
 }
+function liveAnalyticsAutoSwitchEnabled_(){if(CoachIQ.liveGame.analyticsAutoSwitch!=null)return CoachIQ.liveGame.analyticsAutoSwitch;let enabled=true;try{const saved=localStorage.getItem("coachiq_live_analytics_auto_switch");if(saved==="off")enabled=false;}catch(error){}CoachIQ.liveGame.analyticsAutoSwitch=enabled;return enabled;}
+function toggleLiveAnalyticsAutoSwitch_(){CoachIQ.liveGame.analyticsAutoSwitch=!liveAnalyticsAutoSwitchEnabled_();try{localStorage.setItem("coachiq_live_analytics_auto_switch",CoachIQ.liveGame.analyticsAutoSwitch?"on":"off");}catch(error){}renderLiveAnalyticsTracker_(CoachIQ.liveGame.tracker||{});}
+function rememberLiveAnalyticsSelection_(){const draft=CoachIQ.liveGame.analyticsDraft;if(!draft)return;CoachIQ.liveGame.analyticsDraftHistory=CoachIQ.liveGame.analyticsDraftHistory||[];CoachIQ.liveGame.analyticsDraftHistory.push(Object.assign({},draft));CoachIQ.liveGame.analyticsDraftHistory=CoachIQ.liveGame.analyticsDraftHistory.slice(-10);}
+function undoLiveAnalyticsSelection_(){const history=CoachIQ.liveGame.analyticsDraftHistory||[];if(!history.length){showToast("No possession selection to undo.");return;}CoachIQ.liveGame.analyticsDraft=history.pop();renderLiveAnalyticsTracker_(CoachIQ.liveGame.tracker||{});}
 function getLiveAnalyticsRole_(){
   if(CoachIQ.liveGame.analyticsRole)return CoachIQ.liveGame.analyticsRole;
   try{const saved=localStorage.getItem("coachiq_live_analytics_role");if(saved==="offense"||saved==="defense")CoachIQ.liveGame.analyticsRole=saved;}catch(error){}
@@ -745,6 +749,7 @@ function renderLiveAnalyticsTracker_(data){
   const controls=document.getElementById("liveAnalyticsControls");if(!controls)return;
   const role=getLiveAnalyticsRole_(),analytics=data.analytics||{},offense=analytics.offense||{},defense=analytics.defense||{};
   ["offense","defense"].forEach(function(side){const button=document.getElementById("liveAnalytics"+(side==="offense"?"Offense":"Defense")+"Role");if(button)button.classList.toggle("active",role===side);});
+  const autoSwitch=document.getElementById("liveAnalyticsAutoSwitch");if(autoSwitch){const enabled=liveAnalyticsAutoSwitchEnabled_();autoSwitch.textContent="Auto-switch "+(enabled?"On":"Off");autoSwitch.classList.toggle("active",enabled);autoSwitch.title=enabled?"After saving, move to the other side":"Stay on the selected side after saving";}
   controls.hidden=!role;if(!role){document.getElementById("liveAnalyticsSummary").innerHTML='<span>Select offense or defense on this device.</span>';return;}
   let draft=CoachIQ.liveGame.analyticsDraft;if(!draft||draft.teamSide!==role){draft=CoachIQ.liveGame.analyticsDraft=emptyLiveAnalyticsDraft_(role);}
   const tags=role==="offense"?[{key:"transition",label:"Any Transition"},{key:"paintTouch",label:"Any Paint Touch"}]:[{key:"transition",label:"Any Transition Allowed"},{key:"rightHandDrive",label:"Any Right-Hand Drive Allowed"},{key:"paintTouch",label:"Any Paint Touch Allowed"}];
@@ -767,21 +772,21 @@ function renderLiveAnalyticsBenchmarks_(data){
   container.innerHTML=visibleMetrics.map(function(metric){const value=((analytics[metric.side]||{})[metric.field]),status=liveAnalyticsBenchmarkStatus_(value,metric.recommendedTarget,metric.direction),goal=metric.direction==="lower"?"Maximum":"Target";return '<article class="live-analytics-benchmark '+status+'"><strong>'+escapeHtmlValue(metric.label)+'</strong><span>Current <b>'+formatLiveBenchmarkValue_(value,metric.unit)+'</b></span><span>'+goal+' <b>'+formatLiveBenchmarkValue_(metric.recommendedTarget,metric.unit)+'</b></span><span class="live-analytics-benchmark-totals">'+escapeHtmlValue(liveAnalyticsBenchmarkTotals_(analytics,metric))+'</span><small>'+escapeHtmlValue(status==="near-target"?"near target":status)+' · n='+Number(metric.validSampleCount||0)+' · '+escapeHtmlValue(metric.confidenceLabel)+'</small></article>';}).join("");
   if(intelligence)intelligence.innerHTML='<p><b>'+Number(program.completedGameCount||0)+'</b> completed games · '+Number(program.winCount||0)+' wins · '+Number(program.lossCount||0)+' losses</p>'+(program.metrics||[]).map(function(metric){const current=((analytics[metric.side]||{})[metric.field]),goal=metric.direction==="lower"?"Maximum":"Target";return '<article><strong>'+escapeHtmlValue(metric.label)+'</strong><span>Current game: '+formatLiveBenchmarkValue_(current,metric.unit)+' · '+goal+': '+formatLiveBenchmarkValue_(metric.recommendedTarget,metric.unit)+'</span><span>Current totals: '+escapeHtmlValue(liveAnalyticsBenchmarkTotals_(analytics,metric))+'</span><span>Winning games: '+formatLiveBenchmarkValue_(metric.winningGameAverage,metric.unit)+' · Losing games: '+formatLiveBenchmarkValue_(metric.losingGameAverage,metric.unit)+' · valid n='+Number(metric.validSampleCount||0)+'</span><small>'+escapeHtmlValue(metric.targetSource)+' · last changed '+escapeHtmlValue(metric.lastChanged)+'</small></article>';}).join('');
 }
-function toggleLiveAnalyticsTag(key){const draft=CoachIQ.liveGame.analyticsDraft;if(!draft||["transition","paintTouch","rightHandDrive"].indexOf(key)<0)return;draft[key]=!draft[key];renderLiveAnalyticsTracker_(CoachIQ.liveGame.tracker||{});}
-function addLiveAnalyticsRebound(){const draft=CoachIQ.liveGame.analyticsDraft;if(!draft)return;draft.offensiveRebounds=Math.min(10,Number(draft.offensiveRebounds||0)+1);renderLiveAnalyticsTracker_(CoachIQ.liveGame.tracker||{});}
-function removeLiveAnalyticsRebound(){const draft=CoachIQ.liveGame.analyticsDraft;if(!draft)return;draft.offensiveRebounds=Math.max(0,Number(draft.offensiveRebounds||0)-1);renderLiveAnalyticsTracker_(CoachIQ.liveGame.tracker||{});}
+function toggleLiveAnalyticsTag(key){const draft=CoachIQ.liveGame.analyticsDraft;if(!draft||["transition","paintTouch","rightHandDrive"].indexOf(key)<0)return;rememberLiveAnalyticsSelection_();draft[key]=!draft[key];renderLiveAnalyticsTracker_(CoachIQ.liveGame.tracker||{});}
+function addLiveAnalyticsRebound(){const draft=CoachIQ.liveGame.analyticsDraft;if(!draft)return;rememberLiveAnalyticsSelection_();draft.offensiveRebounds=Math.min(10,Number(draft.offensiveRebounds||0)+1);renderLiveAnalyticsTracker_(CoachIQ.liveGame.tracker||{});}
+function removeLiveAnalyticsRebound(){const draft=CoachIQ.liveGame.analyticsDraft;if(!draft||!Number(draft.offensiveRebounds||0))return;rememberLiveAnalyticsSelection_();draft.offensiveRebounds=Math.max(0,Number(draft.offensiveRebounds||0)-1);renderLiveAnalyticsTracker_(CoachIQ.liveGame.tracker||{});}
 function finishLiveAnalyticsTurnover(button){finishLiveAnalyticsPossession(0,button,true);}
 function finishLiveAnalyticsPossession(points,button,isTurnover){
   const tracker=CoachIQ.liveGame.tracker,role=getLiveAnalyticsRole_(),draft=CoachIQ.liveGame.analyticsDraft;if(!tracker||!role||!draft)return;
   const payload=Object.assign({},draft,{possessionId:"LAP-"+Date.now().toString(36)+"-"+Math.random().toString(36).slice(2,9),points:Number(points),period:tracker.game.currentPeriod});
   if(isTurnover){payload[role==="offense"?"turnover":"forcedTurnover"]=true;}
-  CoachIQ.liveGame.analyticsDraft=emptyLiveAnalyticsDraft_(role);applyOptimisticLiveAnalyticsPossession_(tracker,payload);
+  const nextRole=liveAnalyticsAutoSwitchEnabled_()?(role==="offense"?"defense":"offense"):role;CoachIQ.liveGame.analyticsRole=nextRole;CoachIQ.liveGame.analyticsDraft=emptyLiveAnalyticsDraft_(nextRole);CoachIQ.liveGame.analyticsDraftHistory=[];try{localStorage.setItem("coachiq_live_analytics_role",nextRole);}catch(error){}applyOptimisticLiveAnalyticsPossession_(tracker,payload);
   CoachIQ.liveGame.analyticsQueue.push(payload);CoachIQ.liveGame.protectedAnalytics.push(payload);persistProtectedLiveAnalytics_();
   setLiveTrackerSaveState(liveGamePendingTapCount()+" item"+(liveGamePendingTapCount()===1?"":"s")+" queued…","saving");
   flushLiveAnalyticsQueue_();
 }
 function undoLiveAnalyticsPossession(){
-  const tracker=CoachIQ.liveGame.tracker,role=getLiveAnalyticsRole_();if(!tracker||!role||CoachIQ.liveGame.analyticsSyncing)return;
+  const tracker=CoachIQ.liveGame.tracker,recent=(((tracker||{}).analytics||{}).recent||[]),role=(recent[0]&&recent[0].teamSide)||getLiveAnalyticsRole_();if(!tracker||!role||CoachIQ.liveGame.analyticsSyncing)return;
   undoLiveAnalyticsPossessionForSide_(role);
 }
 function undoLiveAnalyticsPossessionForSide_(role){
