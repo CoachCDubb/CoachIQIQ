@@ -1,0 +1,75 @@
+# CoachIQ Live adaptive possession benchmarks — 2026-10-04
+
+Build **2026.10.04.11** adds adaptive, team-specific guidance to Possession Analytics while leaving the manually configured Winning Chart unchanged.
+
+## Result integrity
+
+Completed basketball games now require staff to confirm both final scores. The server stores those scores and an explicit `Game Result` (`Win` or `Loss`) together when it permanently locks the game. Objective success is never used as a proxy for the result. Legacy completed games without an explicit result remain visible, but are excluded from learning.
+
+`Game Result` is appended as an optional named column. This preserves existing
+workbooks where `Opponent Roster`, `Tracker Mode`, or other optional fields already
+occupy columns after the fixed Games schema; no manual column insertion is needed.
+
+Program Intelligence stays visible above the horizontally scrolling benchmark cards
+in the compact desktop tracker. Opening it uses a scrollable overlay so the full
+win/loss evidence cannot be clipped by the game-day viewport.
+
+The live header now shows points scored and points allowed beside possession counts.
+Program Intelligence explicitly separates the current-game value, target or maximum,
+and winning/loss averages. A tracker note clarifies that possession tags update
+analytics while the manually configured Winning Chart retains its own +1 taps.
+
+Selecting Track Defense now labels transition, right-hand drive, paint touch,
+offensive rebound, and points as allowed, and limits the live benchmark strip to
+defensive metrics. Track Offense similarly shows only offensive metrics; Program
+Intelligence continues to contain the complete program view.
+
+Every live PPP, rate, and per-100 benchmark now includes its underlying totals—for
+example, `7 turnovers · 40 possessions` or `5 offensive rebounds allowed · 32
+possessions`—both on the benchmark card and in Program Intelligence.
+
+Exact team-level game-plan objectives for paint-touch possessions, turnovers,
+offensive rebounds, transition points, and points now derive from the same canonical
+possessions. Linked cards are labeled `Auto from Possession Analytics` and omit
+manual +/- controls, preventing duplicate entry and double counting. Percentage,
+player-specific, custom, and unsupported objectives remain manual. No outcome preset
+buttons were added.
+
+As an additional compatibility guard, sheet validation removes `Opponent Roster`,
+`Tracker Mode`, and `Game Result` from positional header checks even if a future
+merge accidentally places one in the fixed header list. These fields are always
+located or appended by name, so an existing column 26 cannot block Live Game.
+
+The live helper text now accurately tells operators that compatible objectives update
+automatically and that +1 is only needed on objective cards that retain manual buttons.
+
+Recent Activity now combines saved possession outcomes with manual objective taps.
+Possession rows identify offense or defense, points or turnover outcome, selected
+context tags, rebounds, and period; the newest possession can be undone from the same
+activity list without changing the device's offense/defense assignment.
+On desktop, Recent Activity stays in a compact horizontal strip so a full activity
+history cannot collapse Possession Analytics or the game-plan cards.
+
+Live and completed game lists now include a protected Archive action for test and
+showcase games. Archiving appends and sets the named `Archive Status` field, hides the
+game from normal Live Game lists, excludes it from adaptive benchmarks and prior-game
+objective intelligence, and records an audit event. Linked possessions, events,
+reports, scores, and completed-game fields are preserved rather than deleted.
+
+## Benchmark method
+
+The eleven values in `getStarterLiveAnalyticsBenchmarks_` are **coach-configurable product defaults**, not universal facts or claimed high-school norms. Targets use only current-season, completed games for the selected team that the signed-in staff member may access. Missing denominators produce `null` metrics and never produce learned guidance.
+
+* Fewer than 3 valid metric samples: Starter benchmark.
+* 3–5: Early signal (25% bounded winning-game average, 75% starter).
+* 6–9: Emerging target (50% bounded winning-game average, 50% starter).
+* 10+: Program target (75% bounded winning-game average, 25% starter).
+* Learned inputs are limited to ±20% of the starter before blending to avoid abrupt movement.
+
+Win and loss averages describe associations only and must not be interpreted causally.
+
+## Release and rollback
+
+Run `npm test`, `npm run check:syntax`, and `git diff --check`. Validate result capture, a two-device protected-queue smoke test, access isolation, the Winning Chart, and completed-game immutability in a copied Apps Script project.
+
+**Deployment remains a separate manual release step.** This repository change does not access, modify, or deploy Google Apps Script. After approval, an authorized owner must manually create and validate a new Apps Script deployment. Roll back by selecting the previously recorded deployment version; do not edit completed game rows.

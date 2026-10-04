@@ -225,6 +225,10 @@ function initializeLiveGameSheets_() {
   ensureLiveGameSheet_(LIVE_GAME_OPPONENTS_SHEET, LIVE_GAME_OPPONENT_HEADERS);
   ensureLiveGameOptionalColumn_(LIVE_GAMES_SHEET,"Opponent Roster");
   ensureLiveGameOptionalColumn_(LIVE_GAMES_SHEET,"Tracker Mode");
+  // Existing workbooks already have optional columns after the 25-column core.
+  // Append result capture by name instead of claiming a fixed column position.
+  ensureLiveGameOptionalColumn_(LIVE_GAMES_SHEET,"Game Result");
+  ensureLiveGameOptionalColumn_(LIVE_GAMES_SHEET,"Archive Status");
 }
 
 function ensureLiveGameOptionalColumn_(sheetName,header){const sheet=SpreadsheetApp.getActive().getSheetByName(sheetName);const headers=sheet.getRange(1,1,1,sheet.getLastColumn()).getDisplayValues()[0];if(headers.indexOf(header)<0)sheet.getRange(1,sheet.getLastColumn()+1).setValue(header).setFontWeight("bold");}
@@ -291,17 +295,21 @@ function cleanLiveGameGuestPlayers_(players){
 }
 
 function ensureLiveGameSheet_(sheetName, headers) {
+  // Optional Games fields are always appended by name. Never let an accidentally
+  // merged optional header turn into a positional requirement for old workbooks.
+  const optionalHeaders=["Opponent Roster","Tracker Mode","Game Result","Archive Status"];
+  const requiredHeaders=(headers||[]).filter(function(header){return optionalHeaders.indexOf(String(header||""))<0;});
   const spreadsheet = SpreadsheetApp.getActive();
   let sheet = spreadsheet.getSheetByName(sheetName);
   if (!sheet) {
     sheet = spreadsheet.insertSheet(sheetName);
-    sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
+    sheet.getRange(1, 1, 1, requiredHeaders.length).setValues([requiredHeaders]);
     sheet.setFrozenRows(1);
-    sheet.getRange(1, 1, 1, headers.length).setFontWeight("bold");
+    sheet.getRange(1, 1, 1, requiredHeaders.length).setFontWeight("bold");
     return sheet;
   }
-  const actual = sheet.getRange(1, 1, 1, headers.length).getDisplayValues()[0];
-  headers.forEach(function(header, index) {
+  const actual = sheet.getRange(1, 1, 1, requiredHeaders.length).getDisplayValues()[0];
+  requiredHeaders.forEach(function(header, index) {
     const currentHeader = String(actual[index] || "").trim();
     if (!currentHeader) {
       sheet.getRange(1, index + 1).setValue(header).setFontWeight("bold");
@@ -399,7 +407,7 @@ function getLastLiveGamePlans_() {
   if (!sheet || sheet.getLastRow() < 2) return {};
   const values = sheet.getDataRange().getValues(); const headers = values.shift(); const cols = liveGameHeaderMap_(headers);
   const access = getCurrentStaffAccess_(); const plans = {};
-  filterCoachIQRowsForCurrentSeason_(headers,values).forEach(function(row) {
+  filterCoachIQRowsForCurrentSeason_(headers,values).filter(function(row){return !isLiveGameArchived_(row,cols);}).forEach(function(row) {
     const team = String(row[cols.Team] || ""); const plan = parseLiveGameJson_(row[cols["Tracking Plan"]], []);
     if (!team || !plan.length) return;
     if (access.configured && access.role !== "Head Coach" && access.teams.length && access.teams.indexOf(team) < 0) return;
@@ -448,7 +456,7 @@ function getRecentLiveGames_() {
   const headers = values.shift();
   const cols = liveGameHeaderMap_(headers);
   const access = getCurrentStaffAccess_();
-  return filterCoachIQRowsForCurrentSeason_(headers,values).map(function(row) {
+  return filterCoachIQRowsForCurrentSeason_(headers,values).filter(function(row){return !isLiveGameArchived_(row,cols);}).map(function(row) {
     return {
       gameId:String(row[cols["Game ID"]] || ""),
       gameDate:formatLiveGameDate_(row[cols["Game Date"]]),
@@ -473,7 +481,7 @@ function getCompletedLiveGames_() {
   const headers = values.shift();
   const cols = liveGameHeaderMap_(headers);
   const access = getCurrentStaffAccess_();
-  return filterCoachIQRowsForCurrentSeason_(headers,values).map(function(row) {
+  return filterCoachIQRowsForCurrentSeason_(headers,values).filter(function(row){return !isLiveGameArchived_(row,cols);}).map(function(row) {
     return {gameId:String(row[cols["Game ID"]] || ""), gameDate:formatLiveGameDate_(row[cols["Game Date"]]),
       team:String(row[cols.Team] || ""), opponent:String(row[cols.Opponent] || ""),
       gameType:String(row[cols["Game Type"]] || "Official Game"), status:String(row[cols.Status] || ""),
@@ -488,11 +496,33 @@ function getCompletedLiveGames_() {
   });
 }
 
+function isLiveGameArchived_(row,cols){return cols["Archive Status"]!=null&&String(row[cols["Archive Status"]]||"")==="Archived";}
+
+/**
+ * Hides a test/showcase game from operational lists and every program-intelligence
+ * input without deleting its linked possessions, events, reports, or audit trail.
+ * Core completed-game fields remain immutable.
+ */
+function archiveLiveGame(gameId){
+  requireStaffCapability_("run_sessions");initializeLiveGameSheets_();
+  const record=findLiveGameRecord_(gameId);requireLiveGameTeamAccess_(record.game.Team);
+  const archiveCol=record.cols["Archive Status"];if(archiveCol==null)throw new Error("Archive Status is unavailable. Refresh CoachIQ and try again.");
+  if(String(record.game["Archive Status"]||"")==="Archived")return getLiveGameSetupData();
+  const lock=LockService.getScriptLock();lock.waitLock(10000);
+  try{
+    const current=findLiveGameRecord_(gameId);current.sheet.getRange(current.rowNumber,current.cols["Archive Status"]+1).setValue("Archived");
+  }finally{lock.releaseLock();}
+  try{logCoachIQAudit({action:"ARCHIVE_LIVE_GAME",entityType:"Game",entityId:String(gameId),team:String(record.game.Team||""),beforeValue:{archiveStatus:"Active",status:String(record.game.Status||"")},afterValue:{archiveStatus:"Archived",excludedFromIntelligence:true},success:true,error:""});}
+  catch(auditError){console.error("Game archived, but audit logging failed: "+auditError.message);}
+  return getLiveGameSetupData();
+}
+
 function startLiveGame(gameId) {
   requireStaffCapability_("run_sessions");
   initializeLiveGameSheets_();
   const gameRecord = findLiveGameRecord_(gameId);
   requireLiveGameTeamAccess_(gameRecord.game.Team);
+  if(String(gameRecord.game["Archive Status"]||"")==="Archived")throw new Error("This game is archived. It cannot be resumed.");
   const sheet = gameRecord.sheet;
   if (String(gameRecord.game.Status || "") === "Setup") {
     sheet.getRange(gameRecord.rowNumber, gameRecord.cols.Status + 1).setValue("Live");
@@ -513,6 +543,7 @@ function getLiveGameTracker(gameId) {
   const gameRecord = findLiveGameRecord_(gameId);
   const game = gameRecord.game;
   requireLiveGameTeamAccess_(game.Team);
+  if(String(game["Archive Status"]||"")==="Archived")throw new Error("This game is archived. It is excluded from live tracking and Program Intelligence.");
   const rosterIds = parseLiveGameJson_(game["Roster Player IDs"], []);
   const guestPlayers = parseLiveGameJson_(game["Guest Roster"], []);
   const selectedStats = parseLiveGameJson_(game["Selected Stats"], []);
@@ -532,31 +563,38 @@ function getLiveGameTracker(gameId) {
   const events = getLiveGameEvents_(gameId);
   const trackerMode = getLiveGameTrackerMode_(game, objectives, selectedStats);
   const analytics = buildLiveAnalyticsSummary_(getLiveAnalyticsPossessions_(gameId), Number(game["Current Period"] || 1));
+  const benchmarkProgram = trackerMode.analytics ? getLiveAnalyticsProgramBenchmark_(String(game.Team || "")) : null;
+  const scores = calculateLiveGameScore_(events);
   if (objectives.length) {
+    const objectiveState=buildLiveAnalyticsObjectiveState_(objectives,analytics,calculateLiveGameObjectiveTotals_(events, objectives),trackerMode.analytics);
     return {
       game:{gameId:String(game["Game ID"] || ""), gameDate:formatLiveGameDate_(game["Game Date"]),
         team:String(game.Team || ""), opponent:String(game.Opponent || ""), location:String(game.Location || ""),
         format:String(game["Game Format"] || "Quarters"), periodLength:Number(game["Period Length"] || 8),
         status:String(game.Status || "Setup"), currentPeriod:Number(game["Current Period"] || 1),
-        gameType:String(game["Game Type"] || "Official Game"),analyticsEnabled:trackerMode.analytics,objectivesEnabled:trackerMode.objectives},
+        gameType:String(game["Game Type"] || "Official Game"),sport:String(game.Sport||"Basketball"),analyticsEnabled:trackerMode.analytics,objectivesEnabled:trackerMode.objectives},
       players:players,
       objectives:objectives.sort(function(a, b) { return Number(a.order || 0) - Number(b.order || 0); }),
       originalObjectives:originalObjectives,
       planAdjustments:parseLiveGameJson_(game["Plan Adjustments"], []),
-      objectiveTotals:calculateLiveGameObjectiveTotals_(events, objectives),
+      objectiveTotals:objectiveState.totals,
+      objectiveSources:objectiveState.sources,
       possessions:{our:analytics.offense.possessions, opponent:analytics.defense.possessions, periodOur:analytics.offense.periodPossessions, periodOpponent:analytics.defense.periodPossessions},
       analytics:analytics,
+      analyticsBenchmarks:benchmarkProgram,
+      ourScore:scores.ourScore,
+      opponentScore:scores.opponentScore,
       events:events.slice(-30).reverse(),
       lastSyncAt:events.length ? events[events.length - 1].syncedAt : ""
     };
   }
-  const totals = calculateLiveGameScore_(events);
+  const totals = scores;
   return {
     game:{gameId:String(game["Game ID"] || ""), gameDate:formatLiveGameDate_(game["Game Date"]),
       team:String(game.Team || ""), opponent:String(game.Opponent || ""), location:String(game.Location || ""),
       format:String(game["Game Format"] || "Quarters"), periodLength:Number(game["Period Length"] || 8),
       status:String(game.Status || "Setup"), currentPeriod:Number(game["Current Period"] || 1),
-      gameType:String(game["Game Type"] || "Official Game"),analyticsEnabled:trackerMode.analytics,objectivesEnabled:trackerMode.objectives},
+      gameType:String(game["Game Type"] || "Official Game"),sport:String(game.Sport||"Basketball"),analyticsEnabled:trackerMode.analytics,objectivesEnabled:trackerMode.objectives},
     players:players,
     selectedStats:selectedStats,
     customStats:customStats,
@@ -564,6 +602,7 @@ function getLiveGameTracker(gameId) {
     events:events.slice(-30).reverse(),
     possessions:{our:analytics.offense.possessions, opponent:analytics.defense.possessions, periodOur:analytics.offense.periodPossessions, periodOpponent:analytics.defense.periodPossessions},
     analytics:analytics,
+    analyticsBenchmarks:benchmarkProgram,
     ourScore:totals.ourScore,
     opponentScore:totals.opponentScore
   };
@@ -600,6 +639,7 @@ function recordLiveGameObjectiveEvents(gameId, events) {
   if (!Array.isArray(events) || !events.length || events.length > 50) throw new Error("Send between 1 and 50 objective taps.");
   const gameRecord = findLiveGameRecord_(gameId);
   requireLiveGameTeamAccess_(gameRecord.game.Team);
+  if(String(gameRecord.game["Archive Status"]||"")==="Archived")throw new Error("This game is archived. It is excluded from live tracking and Program Intelligence.");
   if (String(gameRecord.game.Status || "") === "Completed") {
     throw new Error("A completed game cannot accept more events.");
   }
@@ -698,6 +738,21 @@ function calculateLiveGameObjectiveTotals_(events, objectives) {
     }
   });
   return totals;
+}
+
+/** Derive exact team-level objectives from canonical possessions to avoid duplicate game-day taps. */
+function buildLiveAnalyticsObjectiveState_(objectives,analytics,eventTotals,analyticsEnabled){
+  const totals=eventTotals||{},sources={},offense=(analytics||{}).offense||{},defense=(analytics||{}).defense||{};
+  const fields={paint_touches:["paintTouchPossessions","paintTouchPossessions"],turnovers:["turnovers","forcedTurnovers"],
+    offensive_rebounds:["offensiveRebounds","offensiveRebounds"],transition_points:["transitionPoints","transitionPoints"],points:["points","points"]};
+  (objectives||[]).forEach(function(objective){
+    const key=normalizeLiveGameCategoryKey_(objective.categoryKey||objective.label),mapping=fields[key];
+    const teamLevel=["our_team","opponent_team","both_teams"].indexOf(String(objective.subject||""))>=0;
+    if(!analyticsEnabled||!teamLevel||objective.unit==="percentage"||!mapping)return;
+    const total=totals[objective.id]||(totals[objective.id]={our:0,opponent:0,ourMade:0,ourAttempts:0,opponentMade:0,opponentAttempts:0});
+    total.our=Number(offense[mapping[0]]||0);total.opponent=Number(defense[mapping[1]]||0);sources[objective.id]="analytics";
+  });
+  return{totals:totals,sources:sources};
 }
 
 function updateLiveGameObjectiveState_(gameRecord, period) {
@@ -905,12 +960,20 @@ function buildLiveGameCheckpointReport_(tracker, checkpointType) {
   return{checkpointType:checkpointType,period:period,coachMode:checkpointType==="Timeout"?"timeout":halftime?"halftime":"period",headline:checkpointType==="Timeout"?"Timeout Coach Mode":halftime?"Halftime Coach Mode":"End-of-Period Coach Mode",objectives:rows,recommendations:recommendations.slice(0,3),keepDoing:rows.filter(function(item){return item.status==="winning";}).slice(0,3).map(function(item){return item.summary;}),fixNow:rows.filter(function(item){return item.status==="behind";}).slice(0,2).map(function(item){return item.recommendation;}),recentPulse:recentPulse,topAdjustment:recommendations[0],possessions:tracker.possessions||{our:0,opponent:0},gameProgress:gameProgress};
 }
 
-function finishLiveGame(gameId) {
+function finishLiveGame(gameId, finalResult) {
   requireStaffCapability_("run_sessions");
   initializeLiveGameSheets_();
   const gameRecord = findLiveGameRecord_(gameId);
   requireLiveGameTeamAccess_(gameRecord.game.Team);
   if (String(gameRecord.game.Status || "") === "Completed") return getLiveGamePostgameReport(gameId);
+  finalResult=finalResult||{};
+  const finalOurScore=Number(finalResult.ourScore),finalOpponentScore=Number(finalResult.opponentScore);
+  if(!Number.isInteger(finalOurScore)||finalOurScore<0||!Number.isInteger(finalOpponentScore)||finalOpponentScore<0){
+    throw new Error("Enter both final scores before finishing the game.");
+  }
+  const isBasketball=String(gameRecord.game.Sport||"Basketball").toLowerCase()==="basketball";
+  if(isBasketball&&finalOurScore===finalOpponentScore)throw new Error("A completed basketball game must have a winner. Confirm the final score after overtime.");
+  const authoritativeResult=finalOurScore===finalOpponentScore?"Tie":finalOurScore>finalOpponentScore?"Win":"Loss";
   let tracker;
   let report;
   const lock=LockService.getScriptLock();lock.waitLock(10000);
@@ -923,13 +986,16 @@ function finishLiveGame(gameId) {
       : buildOptionalTrackerPostgameReport_(tracker);
     const now = new Date();
     current.sheet.getRange(current.rowNumber, current.cols.Status + 1).setValue("Completed");
+    current.sheet.getRange(current.rowNumber, current.cols["Our Score"] + 1).setValue(finalOurScore);
+    current.sheet.getRange(current.rowNumber, current.cols["Opponent Score"] + 1).setValue(finalOpponentScore);
+    current.sheet.getRange(current.rowNumber, current.cols["Game Result"] + 1).setValue(authoritativeResult);
     current.sheet.getRange(current.rowNumber, current.cols["Final Report"] + 1).setValue(JSON.stringify(report));
     current.sheet.getRange(current.rowNumber, current.cols["Completed At"] + 1).setValue(now);
     current.sheet.getRange(current.rowNumber, current.cols["Updated At"] + 1).setValue(now);
   }finally{lock.releaseLock();}
   try {
     logCoachIQAudit({action:"FINISH_LIVE_GAME", entityType:"Game", entityId:String(gameId),
-      team:tracker.game.team, beforeValue:"Live", afterValue:{status:"Completed",achieved:report.achieved,scored:report.scored}, success:true, error:""});
+      team:tracker.game.team, beforeValue:"Live", afterValue:{status:"Completed",result:authoritativeResult,ourScore:finalOurScore,opponentScore:finalOpponentScore,achieved:report.achieved,scored:report.scored}, success:true, error:""});
   } catch (auditError) { console.error("Game finished, but audit logging failed: " + auditError.message); }
   return report;
 }
@@ -976,7 +1042,7 @@ function getPreviousCompletedReports_(team) {
   const sheet = SpreadsheetApp.getActive().getSheetByName(LIVE_GAMES_SHEET);
   if (!sheet || sheet.getLastRow() < 2) return [];
   const values = sheet.getDataRange().getValues(); const headers = values.shift(); const cols = liveGameHeaderMap_(headers);
-  return filterCoachIQRowsForCurrentSeason_(headers,values).filter(function(row) { return String(row[cols.Status] || "") === "Completed" && String(row[cols.Team] || "") === String(team); })
+  return filterCoachIQRowsForCurrentSeason_(headers,values).filter(function(row) { return !isLiveGameArchived_(row,cols) && String(row[cols.Status] || "") === "Completed" && String(row[cols.Team] || "") === String(team); })
     .map(function(row) { return parseLiveGameObject_(row[cols["Final Report"]], null); }).filter(Boolean).slice(-10).reverse();
 }
 
@@ -1006,7 +1072,7 @@ function getLiveGameProgramTrends_(teamFilter) {
   const access = getCurrentStaffAccess_();
   const reports = filterCoachIQRowsForCurrentSeason_(headers,values).filter(function(row) {
     const team = String(row[cols.Team] || "");
-    return String(row[cols.Status] || "") === "Completed" && (!teamFilter || team === String(teamFilter)) && (!access.configured || access.role === "Head Coach" ||
+    return !isLiveGameArchived_(row,cols) && String(row[cols.Status] || "") === "Completed" && (!teamFilter || team === String(teamFilter)) && (!access.configured || access.role === "Head Coach" ||
       !access.teams.length || access.teams.indexOf(team) >= 0);
   }).map(function(row) { return parseLiveGameObject_(row[cols["Final Report"]], null); }).filter(Boolean).slice(-10);
   const groups = {};
