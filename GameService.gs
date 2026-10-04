@@ -7,6 +7,7 @@ const LIVE_GAME_CHECKPOINTS_SHEET = "Game Checkpoints";
 const LIVE_GAME_TEMPLATES_SHEET = "Game Plan Templates";
 const LIVE_GAME_OPPONENTS_SHEET = "Opponent Rosters";
 const LIVE_GAME_POSSESSION_EVENT = "system_possession";
+const LIVE_GAME_SCORE_ADJUSTMENT_EVENT = "system_score_adjustment";
 
 const LIVE_GAME_HEADERS = [
   "Game ID", "Game Date", "Team", "Opponent", "Location", "Game Format",
@@ -658,6 +659,11 @@ function recordLiveGameObjectiveEvents(gameId, events) {
       return {eventId:String(event.eventId || "") || "GEVT-" + Utilities.getUuid().slice(0, 12).toUpperCase(),
         period:period, side:side, playerId:"", objectiveId:LIVE_GAME_POSSESSION_EVENT, delta:1};
     }
+    if(objectiveId===LIVE_GAME_SCORE_ADJUSTMENT_EVENT){
+      const side=String(event.side||""),delta=Number(event.delta);
+      if(["Us","Opponent"].indexOf(side)<0||[-3,-2,-1,1,2,3].indexOf(delta)<0)throw new Error("Choose a valid score adjustment.");
+      return{eventId:String(event.eventId||"")||"GEVT-"+Utilities.getUuid().slice(0,12).toUpperCase(),period:period,side:side,playerId:"",objectiveId:LIVE_GAME_SCORE_ADJUSTMENT_EVENT,delta:delta};
+    }
     const objective = objectives.find(function(item) { return item.id === objectiveId; });
     if (!objective || objective.active === false) throw new Error("That game-plan objective is not currently active.");
     const delta = Number(event.delta);
@@ -1171,8 +1177,10 @@ function getLiveGameEvents_(gameId) {
 function calculateLiveGameScore_(events) {
   const scoringValues = {two_made:2, three_made:3, free_throw_made:1};
   return (events || []).reduce(function(total, event) {
-    if (event.side === "Opponent") total.opponentScore += Number(event.value || 0);
-    else total.ourScore += Number(scoringValues[event.eventType] || 0);
+    const value=event.eventType===LIVE_GAME_SCORE_ADJUSTMENT_EVENT?Number(event.value||0):Number(scoringValues[event.eventType]||0);
+    if(!value)return total;
+    if (event.side === "Opponent") total.opponentScore += value;
+    else total.ourScore += value;
     return total;
   }, {ourScore:0, opponentScore:0});
 }

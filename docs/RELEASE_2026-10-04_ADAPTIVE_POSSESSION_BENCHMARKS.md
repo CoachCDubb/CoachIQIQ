@@ -82,6 +82,14 @@ rates, and right-hand-drive results allowed. Analytics-only games no longer disp
 misleading `0 of 0 objectives` scorecard. Existing completed reports are enriched at
 read time from their preserved possession rows and final-score fields.
 
+Dead-ball and score-adjustment tools now cover live-game exceptions without corrupting
+PPP. Retain ball keeps the unsaved possession and its tags active; Change possession
+ends it at zero points without labeling it a turnover. Score-only +1/−1 adjustments
+handle technical free throws and corrections in the displayed score while remaining
+outside possession PPP. Those adjustments use the protected tap queue and Recent
+Activity undo. On iPad-sized landscape layouts, Recent Activity remains visible even
+when the Winning Chart contains a dense objective plan.
+
 ## Benchmark method
 
 The eleven values in `getStarterLiveAnalyticsBenchmarks_` are **coach-configurable product defaults**, not universal facts or claimed high-school norms. Targets use only current-season, completed games for the selected team that the signed-in staff member may access. Missing denominators produce `null` metrics and never produce learned guidance.
