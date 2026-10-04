@@ -68,6 +68,10 @@
     </header>
     <div id="liveTrackerRecovery" class="live-tracker-recovery" hidden><span><strong id="liveTrackerRecoveryTitle">Protected taps recovered</strong><small id="liveTrackerRecoveryMessage">CoachIQ kept unsynced activity on this device.</small></span><button type="button" onclick="retryProtectedLiveGameTaps()">Retry Sync</button></div>
     <div id="liveTrackerSaveState" class="live-tracker-save-state" role="status" aria-live="polite"><strong id="liveTrackerSaveMessage"><i aria-hidden="true"></i> Ready</strong><span><b id="liveTrackerConnection">Online</b><b id="liveTrackerProtectedCount">0 protected</b><b id="liveTrackerLastSync">No taps yet</b><b id="liveTrackerWakeState">Screen awake</b><button type="button" onclick="refreshLiveGameSharedView()" aria-label="Refresh activity from other devices">↻ Refresh</button></span></div>
+    <section id="liveWinningTargets" class="live-winning-targets" aria-labelledby="liveWinningTargetsTitle">
+      <div class="live-winning-targets-heading"><span>Winning chart</span><strong id="liveWinningTargetsTitle">Targets to hit</strong><small>Updates with every objective tap</small></div>
+      <div id="liveWinningTargetRows" class="live-winning-target-rows"></div>
+    </section>
     <section class="live-analytics" aria-label="Possession analytics tracker">
       <div class="live-analytics-head"><div><span>Possession Analytics</span><strong><b id="livePossessionsUs">0</b> offense · <b id="livePossessionsOpponent">0</b> defense</strong><small id="liveAnalyticsHeadline">Choose your assignment. Half court is the default; tap each tag once if it happened.</small></div><div class="live-analytics-roles"><button id="liveAnalyticsOffenseRole" type="button" onclick="setLiveAnalyticsRole('offense')">Track Offense</button><button id="liveAnalyticsDefenseRole" type="button" onclick="setLiveAnalyticsRole('defense')">Track Defense</button></div></div>
       <div id="liveAnalyticsControls" class="live-analytics-controls" hidden>

@@ -693,9 +693,11 @@ function renderLiveGameTracker(data){
   if(trackerElement){const objectiveCount=(data.objectives||[]).filter(function(item){return item.active!==false;}).length;trackerElement.dataset.objectiveCount=String(objectiveCount);trackerElement.classList.toggle("dense-objectives",objectiveCount>4);trackerElement.classList.toggle("analytics-disabled",data.game.analyticsEnabled===false);trackerElement.classList.toggle("objectives-disabled",data.game.objectivesEnabled===false);}
   const analyticsPanel=document.querySelector(".live-analytics");if(analyticsPanel)analyticsPanel.hidden=data.game.analyticsEnabled===false;
   const objectiveGrid=document.getElementById("liveTrackerObjectives");if(objectiveGrid)objectiveGrid.hidden=data.game.objectivesEnabled===false;
+  const winningTargets=document.getElementById("liveWinningTargets");if(winningTargets)winningTargets.hidden=data.game.objectivesEnabled===false;
   const objectiveTools=document.getElementById("liveObjectiveGameTools");if(objectiveTools)objectiveTools.hidden=data.game.objectivesEnabled===false;
   const recent=document.querySelector(".objective-recent");if(recent)recent.hidden=data.game.objectivesEnabled===false;
   renderLiveTrackerPossessions(data);
+  renderLiveWinningTargets(data);
   renderLiveTrackerObjectives(data);
   renderLiveTrackerEvents(data);
   if(data.lastSyncAt){CoachIQ.liveGame.lastSyncAt=data.lastSyncAt;}
@@ -811,6 +813,25 @@ function objectiveStatus(objective,total){
   if(objective.goalType==="maximum") return value<=objective.target?"winning":"behind";
   return "neutral";
 }
+function liveWinningTargetData_(objective,total){
+  const suffix=objective.unit==="percentage"?"%":"";
+  if(objective.goalType==="comparison"){
+    const margin=objective.direction==="lower"?Number(total.opponent||0)-Number(total.our||0):Number(total.our||0)-Number(total.opponent||0);
+    const target=Math.max(1,Number(objective.target||0));
+    return{current:(margin>0?"+":"")+margin,target:"Lead by "+target+suffix,progress:Math.max(0,Math.min(100,margin/target*100))};
+  }
+  const value=Number(objectiveDisplayValue(objective,total)||0),target=Math.max(0,Number(objective.target||0));
+  if(objective.goalType==="maximum")return{current:value+suffix,target:"Stay at or below "+target+suffix,progress:target===0?(value===0?0:100):Math.max(0,Math.min(100,value/target*100))};
+  return{current:value+suffix,target:"Reach "+target+suffix,progress:target===0?100:Math.max(0,Math.min(100,value/target*100))};
+}
+function renderLiveWinningTargets(data){
+  const container=document.getElementById("liveWinningTargetRows");if(!container)return;
+  const objectives=(data.objectives||[]).filter(function(item){return item.active!==false&&item.goalType!=="track";});
+  container.innerHTML=objectives.map(function(objective){
+    const total=(data.objectiveTotals||{})[objective.id]||{our:0,opponent:0},status=objectiveStatus(objective,total),chart=liveWinningTargetData_(objective,total);
+    return `<article class="live-winning-target ${status}"><div><strong>${escapeHtmlValue(objective.label)}</strong><small>${escapeHtmlValue(chart.target)}</small></div><div class="live-winning-target-value"><b>${escapeHtmlValue(chart.current)}</b><span>${status}</span></div><div class="live-winning-target-track" role="progressbar" aria-label="${escapeHtmlValue(objective.label)} progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${Math.round(chart.progress)}"><i style="width:${chart.progress}%"></i></div></article>`;
+  }).join("")||'<p class="live-winning-target-empty">Add a target-based objective to see the winning chart.</p>';
+}
 function objectiveButtons(objective,side){
   if(objective.unit==="percentage"){
     return `<div class="objective-tap-buttons percentage"><button type="button" onclick="recordLiveObjectiveChange('${escapeHtmlValue(objective.id)}','${side}',1,'made',this)">+ Success</button><button type="button" onclick="recordLiveObjectiveChange('${escapeHtmlValue(objective.id)}','${side}',1,'attempt',this)">+ Miss</button></div>`;
@@ -864,7 +885,7 @@ function applyOptimisticLiveObjectiveTap(event){
   }
   tracker.events.unshift({eventId:event.eventId,eventType:event.objectiveId,side:event.side+(event.component?event.component==="made"?" Made":" Attempt":""),value:event.delta,component:event.component,period:event.period});
   tracker.events=tracker.events.slice(0,30);
-  renderLiveTrackerObjectives(tracker); renderLiveTrackerEvents(tracker);
+  renderLiveWinningTargets(tracker); renderLiveTrackerObjectives(tracker); renderLiveTrackerEvents(tracker);
 }
 function applyLiveObjectiveDelta_(total,event,direction){
   const opponent=String(event.side||"").indexOf("Opponent")===0;
