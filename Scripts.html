@@ -297,8 +297,11 @@ function renderLiveGameReadiness(){
 }
 
 function updateLiveGameTrackingOptions(){
+  const analytics=!!document.getElementById("liveGameEnableAnalytics").checked;
   const objectives=!!document.getElementById("liveGameEnableObjectives").checked;
   document.getElementById("liveGameObjectivesPanel").hidden=!objectives;
+  const coverage=document.getElementById("liveAnalyticsSetupCoverage");if(coverage)coverage.hidden=!analytics;
+  renderLiveGameObjectives();
   const button=document.getElementById("saveLiveGameSetupButton");
   if(button)button.textContent="Save Game Setup";
   renderLiveGameReadiness();
@@ -534,12 +537,13 @@ function addLiveGameObjective(){
 }
 
 function removeLiveGameObjective(id){ CoachIQ.liveGame.objectives=CoachIQ.liveGame.objectives.filter(function(item){return item.id!==id;}); renderLiveGameObjectives(); }
+function liveAnalyticsObjectiveCoverage_(item){if(!((document.getElementById("liveGameEnableAnalytics")||{}).checked))return false;const subject=String(item.subject||""),teamLevel=["our_team","opponent_team","both_teams"].indexOf(subject)>=0;if(!teamLevel||item.unit==="percentage")return false;const key=String(item.categoryKey||item.label||"").toLowerCase().replace(/[^a-z0-9]+/g,"_").replace(/^_+|_+$/g,"");return["paint_touch","paint_touches","turnover","turnovers","oreb","orebs","offensive_rebound","offensive_rebounds","transition","transition_points","fast_break_points","fastbreak_points","point","points"].indexOf(key)>=0;}
 function renderLiveGameObjectives(){
   const container=document.getElementById("liveGameObjectives"); if(!container){return;}
   const names={comparison:"Win the battle",minimum:"Reach at least",maximum:"Stay under",track:"Just track"};
   container.innerHTML=CoachIQ.liveGame.objectives.map(function(item){
     const target=item.goalType==="track"?"":` · ${item.goalType==="comparison"?(item.direction==="lower"?"fewer is better":"more is better"):(names[item.goalType]+" "+item.target)}`;
-    return `<div class="objective-plan-item"><span><strong>${escapeHtmlValue(item.label)}</strong><small>${escapeHtmlValue(names[item.goalType])}${escapeHtmlValue(target)}${item.playerLabel?" · "+escapeHtmlValue(item.playerLabel):""}</small></span><button type="button" onclick="removeLiveGameObjective('${escapeHtmlValue(item.id)}')">Remove</button></div>`;
+    const analyticsCovered=liveAnalyticsObjectiveCoverage_(item);return `<div class="objective-plan-item${analyticsCovered?' analytics-covered':''}"><span><strong>${escapeHtmlValue(item.label)}</strong><small>${escapeHtmlValue(names[item.goalType])}${escapeHtmlValue(target)}${item.playerLabel?" · "+escapeHtmlValue(item.playerLabel):""}</small>${analyticsCovered?'<em>Auto from Possession Analytics · keep only if you want this Winning Chart target</em>':''}</span><button type="button" onclick="removeLiveGameObjective('${escapeHtmlValue(item.id)}')">Remove</button></div>`;
   }).join("")||'<div class="live-game-empty">Add the two to five details that define winning today.</div>';
   renderLiveGameReadiness();
 }
@@ -749,6 +753,7 @@ function renderLiveAnalyticsTracker_(data){
   const reboundAdd=document.getElementById("liveAnalyticsReboundAdd");if(reboundAdd){reboundAdd.textContent=role==="defense"?"+ OREB Allowed":"+ OREB";reboundAdd.setAttribute("aria-label",role==="defense"?"Add one offensive rebound allowed":"Add one offensive rebound");}
   const outcomeLabel=document.getElementById("liveAnalyticsOutcomeLabel");if(outcomeLabel)outcomeLabel.textContent=role==="defense"?"Points allowed":"End possession";
   const turnover=document.getElementById("liveAnalyticsTurnover");turnover.textContent=role==="offense"?"Turnover":"Forced TO";
+  const draftSummary=document.getElementById("liveAnalyticsDraftSummary");if(draftSummary){const tracked=[];if(draft.transition)tracked.push(role==="defense"?"Transition allowed":"Transition");if(draft.paintTouch)tracked.push(role==="defense"?"Paint touch allowed":"Paint touch");if(role==="defense"&&draft.rightHandDrive)tracked.push("Right-hand drive allowed");if(Number(draft.offensiveRebounds||0))tracked.push(Number(draft.offensiveRebounds)+(role==="defense"?" offensive rebound"+(Number(draft.offensiveRebounds)===1?"":"s")+" allowed":" offensive rebound"+(Number(draft.offensiveRebounds)===1?"":"s")));draftSummary.innerHTML='<strong>Tracking this possession</strong><span>'+(role==="defense"?'Defense':'Offense')+' · '+escapeHtmlValue(tracked.length?tracked.join(" · "):"Half court · no added tags")+'</span><small>Choose points'+(role==="defense"?' allowed':'')+' or '+(role==="defense"?'Forced TO':'Turnover')+' to save it.</small>';}
   const side=role==="offense"?offense:defense;const fmt=function(value){return value==null?"—":Number(value).toFixed(2);};
   document.getElementById("liveAnalyticsSummary").innerHTML='<span><b>'+Number(side.points||0)+'</b> '+(role==="defense"?'points allowed':'points')+'</span><span><b>'+side.possessions+'</b> possessions</span><span><b>'+fmt(side.ppp)+'</b> PPP</span><span><b>'+fmt(side.transitionPpp)+'</b> transition</span><span><b>'+fmt(side.paintTouchPpp)+'</b> paint touch</span><span><b>'+fmt(side[role==="offense"?"turnoverRate":"forcedTurnoverRate"]==null?null:Number(side[role==="offense"?"turnoverRate":"forcedTurnoverRate"])*100)+'%</b> '+(role==="offense"?'turnover':'forced TO')+' rate</span>'+(role==="defense"?'<span><b>'+fmt(side.rightHandDrivePpp)+'</b> right hand</span>':'');
   const headline=document.getElementById("liveAnalyticsHeadline");if(headline)headline.textContent=analytics.possessionDifference>1?"Check counts now — offense and defense differ by "+analytics.possessionDifference+".":(role==="offense"?"Offense · half court is default · tap each tag once if it happened · then choose the outcome.":"Defense · half court is default · tap each tag once if it happened · then choose the outcome.");

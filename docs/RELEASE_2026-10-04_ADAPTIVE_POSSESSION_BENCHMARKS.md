@@ -56,6 +56,16 @@ game from normal Live Game lists, excludes it from adaptive benchmarks and prior
 objective intelligence, and records an audit event. Linked possessions, events,
 reports, scores, and completed-game fields are preserved rather than deleted.
 
+Selecting Track Offense or Track Defense now opens a live `Tracking this possession`
+summary. It names the active side, defaults to half court, and immediately reflects
+transition, paint-touch, right-hand-drive, and rebound selections before the operator
+chooses the possession outcome.
+
+During game setup, the Possession Analytics tool now lists every category it already
+collects so coaches do not add duplicate objectives merely to capture the same data.
+Compatible team-level objectives are visibly labeled as automatic and explain that
+they should remain in the plan only when the coach wants a Winning Chart target card.
+
 ## Benchmark method
 
 The eleven values in `getStarterLiveAnalyticsBenchmarks_` are **coach-configurable product defaults**, not universal facts or claimed high-school norms. Targets use only current-season, completed games for the selected team that the signed-in staff member may access. Missing denominators produce `null` metrics and never produce learned guidance.
