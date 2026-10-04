@@ -789,9 +789,12 @@ function applyOptimisticLiveAnalyticsPossession_(tracker,payload){
   [["transition","transitionPossessions","transitionPoints"],["paintTouch","paintTouchPossessions","paintTouchPoints"],["rightHandDrive","rightHandDrivePossessions","rightHandDrivePoints"]].forEach(function(keys){if(payload[keys[0]]){side[keys[1]]=Number(side[keys[1]]||0)+1;side[keys[2]]=Number(side[keys[2]]||0)+Number(payload.points||0);}});
   if(payload.turnover)side.turnovers=Number(side.turnovers||0)+1;if(payload.forcedTurnover)side.forcedTurnovers=Number(side.forcedTurnovers||0)+1;
   side.ppp=side.possessions?Math.round(side.points/side.possessions*1000)/1000:null;side.transitionPpp=side.transitionPossessions?Math.round(Number(side.transitionPoints||0)/side.transitionPossessions*1000)/1000:null;side.paintTouchPpp=side.paintTouchPossessions?Math.round(Number(side.paintTouchPoints||0)/side.paintTouchPossessions*1000)/1000:null;side.rightHandDrivePpp=side.rightHandDrivePossessions?Math.round(Number(side.rightHandDrivePoints||0)/side.rightHandDrivePossessions*1000)/1000:null;
+  side.turnoverRate=side.possessions?Math.round(Number(side.turnovers||0)/side.possessions*1000)/1000:null;side.forcedTurnoverRate=side.possessions?Math.round(Number(side.forcedTurnovers||0)/side.possessions*1000)/1000:null;side.offensiveReboundsPer100=side.possessions?Math.round(Number(side.offensiveRebounds||0)*100/side.possessions*1000)/1000:null;
+  applyOptimisticLiveAnalyticsObjectives_(tracker);
   const possessions=tracker.possessions||(tracker.possessions={our:0,opponent:0,periodOur:0,periodOpponent:0}),opponent=payload.teamSide==="defense";possessions[opponent?"opponent":"our"]++;possessions[opponent?"periodOpponent":"periodOur"]++;
   renderLiveTrackerPossessions(tracker);
 }
+function applyOptimisticLiveAnalyticsObjectives_(tracker){const analytics=tracker.analytics||{},offense=analytics.offense||{},defense=analytics.defense||{},fields={paint_touches:["paintTouchPossessions","paintTouchPossessions"],turnovers:["turnovers","forcedTurnovers"],offensive_rebounds:["offensiveRebounds","offensiveRebounds"],transition_points:["transitionPoints","transitionPoints"],points:["points","points"]};(tracker.objectives||[]).forEach(function(objective){if((tracker.objectiveSources||{})[objective.id]!=="analytics")return;const mapping=fields[objective.categoryKey],total=tracker.objectiveTotals[objective.id];if(mapping&&total){total.our=Number(offense[mapping[0]]||0);total.opponent=Number(defense[mapping[1]]||0);}});renderLiveWinningTargets(tracker);renderLiveTrackerObjectives(tracker);}
 function flushLiveAnalyticsQueue_(callback){
   if(CoachIQ.liveGame.analyticsSyncing){if(callback)setTimeout(function(){flushLiveAnalyticsQueue_(callback);},100);return;}
   if(!CoachIQ.liveGame.analyticsQueue.length){if(callback)callback();return;}
@@ -846,7 +849,8 @@ function renderLiveWinningTargets(data){
     return `<article class="live-winning-target ${status}"><div><strong>${escapeHtmlValue(objective.label)}</strong><small>${escapeHtmlValue(chart.target)}</small></div><div class="live-winning-target-value"><b>${escapeHtmlValue(chart.current)}</b><span>${status}</span></div><div class="live-winning-target-track" role="progressbar" aria-label="${escapeHtmlValue(objective.label)} progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${Math.round(chart.progress)}"><i style="width:${chart.progress}%"></i></div></article>`;
   }).join("")||'<p class="live-winning-target-empty">Add a target-based objective to see the winning chart.</p>';
 }
-function objectiveButtons(objective,side){
+function objectiveButtons(objective,side,autoLinked){
+  if(autoLinked)return '<span class="objective-auto-source">Auto from Possession Analytics</span>';
   if(objective.unit==="percentage"){
     return `<div class="objective-tap-buttons percentage"><button type="button" onclick="recordLiveObjectiveChange('${escapeHtmlValue(objective.id)}','${side}',1,'made',this)">+ Success</button><button type="button" onclick="recordLiveObjectiveChange('${escapeHtmlValue(objective.id)}','${side}',1,'attempt',this)">+ Miss</button></div>`;
   }
@@ -856,16 +860,16 @@ function objectiveButtons(objective,side){
 function renderLiveTrackerObjectives(data){
   const container=document.getElementById("liveTrackerObjectives"); if(!container){return;}
   container.innerHTML=(data.objectives||[]).filter(function(objective){return objective.active!==false;}).map(function(objective){
-    const total=(data.objectiveTotals||{})[objective.id]||{our:0,opponent:0};
+    const total=(data.objectiveTotals||{})[objective.id]||{our:0,opponent:0},autoLinked=(data.objectiveSources||{})[objective.id]==="analytics";
     const status=objectiveStatus(objective,total);
     const suffix=objective.unit==="percentage"?"%":"";
     const ourDetail=objective.unit==="percentage"?`<em>${total.ourMade||0}/${total.ourAttempts||0}</em>`:"";
     const opponentDetail=objective.unit==="percentage"?`<em>${total.opponentMade||0}/${total.opponentAttempts||0}</em>`:"";
-    if(objective.subject==="both_teams") return `<article class="objective-card ${status}"><header><div><span>${escapeHtmlValue(objective.goalType==="comparison"?"GAME-PLAN BATTLE":"TRACK")}</span><h3>${escapeHtmlValue(objective.label)}</h3></div><b>${status}</b></header><div class="objective-comparison"><section><small>${escapeHtmlValue(liveGameTeamDisplayName_(data.game.team))}</small><strong>${total.our}${suffix}</strong>${ourDetail}${objectiveButtons(objective,"Us")}</section><i>VS</i><section><small>${escapeHtmlValue(data.game.opponent)}</small><strong>${total.opponent}${suffix}</strong>${opponentDetail}${objectiveButtons(objective,"Opponent")}</section></div></article>`;
+    if(objective.subject==="both_teams") return `<article class="objective-card ${status}"><header><div><span>${autoLinked?"AUTO FROM ANALYTICS":escapeHtmlValue(objective.goalType==="comparison"?"GAME-PLAN BATTLE":"TRACK")}</span><h3>${escapeHtmlValue(objective.label)}</h3></div><b>${status}</b></header><div class="objective-comparison"><section><small>${escapeHtmlValue(liveGameTeamDisplayName_(data.game.team))}</small><strong>${total.our}${suffix}</strong>${ourDetail}${objectiveButtons(objective,"Us",autoLinked)}</section><i>VS</i><section><small>${escapeHtmlValue(data.game.opponent)}</small><strong>${total.opponent}${suffix}</strong>${opponentDetail}${objectiveButtons(objective,"Opponent",autoLinked)}</section></div></article>`;
     const value=objectiveDisplayValue(objective,total); const who=objective.playerLabel|| (objective.subject.indexOf("opponent_")===0?data.game.opponent:liveGameTeamDisplayName_(data.game.team)); const side=objective.subject.indexOf("opponent_")===0?"Opponent":"Us";
     const goal=objective.goalType==="minimum"?"Goal: "+objective.target+suffix+"+":objective.goalType==="maximum"?"Limit: "+objective.target+suffix:"Live "+(objective.unit==="percentage"?"percentage":"count");
     const detail=objective.unit==="percentage"?(side==="Opponent"?(total.opponentMade||0)+"/"+(total.opponentAttempts||0):(total.ourMade||0)+"/"+(total.ourAttempts||0)):"";
-    return `<article class="objective-card ${status}"><header><div><span>${escapeHtmlValue(who)}</span><h3>${escapeHtmlValue(objective.label)}</h3></div><b>${status}</b></header><div class="objective-single"><strong>${value}${suffix}</strong>${detail?`<em>${detail}</em>`:""}<small>${escapeHtmlValue(goal)}</small>${objectiveButtons(objective,side)}</div></article>`;
+    return `<article class="objective-card ${status}"><header><div><span>${autoLinked?"AUTO FROM ANALYTICS":escapeHtmlValue(who)}</span><h3>${escapeHtmlValue(objective.label)}</h3></div><b>${status}</b></header><div class="objective-single"><strong>${value}${suffix}</strong>${detail?`<em>${detail}</em>`:""}<small>${escapeHtmlValue(goal)}</small>${objectiveButtons(objective,side,autoLinked)}</div></article>`;
   }).join("");
 }
 function recordLiveObjectiveChange(objectiveId,side,delta,component,button){

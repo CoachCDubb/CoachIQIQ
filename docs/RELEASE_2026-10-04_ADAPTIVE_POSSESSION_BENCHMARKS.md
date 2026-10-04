@@ -1,6 +1,6 @@
 # CoachIQ Live adaptive possession benchmarks — 2026-10-04
 
-Build **2026.10.04.7** adds adaptive, team-specific guidance to Possession Analytics while leaving the manually configured Winning Chart unchanged.
+Build **2026.10.04.8** adds adaptive, team-specific guidance to Possession Analytics while leaving the manually configured Winning Chart unchanged.
 
 ## Result integrity
 
@@ -27,6 +27,13 @@ Intelligence continues to contain the complete program view.
 Every live PPP, rate, and per-100 benchmark now includes its underlying totals—for
 example, `7 turnovers · 40 possessions` or `5 offensive rebounds allowed · 32
 possessions`—both on the benchmark card and in Program Intelligence.
+
+Exact team-level game-plan objectives for paint-touch possessions, turnovers,
+offensive rebounds, transition points, and points now derive from the same canonical
+possessions. Linked cards are labeled `Auto from Possession Analytics` and omit
+manual +/- controls, preventing duplicate entry and double counting. Percentage,
+player-specific, custom, and unsupported objectives remain manual. No outcome preset
+buttons were added.
 
 ## Benchmark method
 

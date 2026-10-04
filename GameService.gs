@@ -538,6 +538,7 @@ function getLiveGameTracker(gameId) {
   const benchmarkProgram = trackerMode.analytics ? getLiveAnalyticsProgramBenchmark_(String(game.Team || "")) : null;
   const scores = calculateLiveGameScore_(events);
   if (objectives.length) {
+    const objectiveState=buildLiveAnalyticsObjectiveState_(objectives,analytics,calculateLiveGameObjectiveTotals_(events, objectives),trackerMode.analytics);
     return {
       game:{gameId:String(game["Game ID"] || ""), gameDate:formatLiveGameDate_(game["Game Date"]),
         team:String(game.Team || ""), opponent:String(game.Opponent || ""), location:String(game.Location || ""),
@@ -548,7 +549,8 @@ function getLiveGameTracker(gameId) {
       objectives:objectives.sort(function(a, b) { return Number(a.order || 0) - Number(b.order || 0); }),
       originalObjectives:originalObjectives,
       planAdjustments:parseLiveGameJson_(game["Plan Adjustments"], []),
-      objectiveTotals:calculateLiveGameObjectiveTotals_(events, objectives),
+      objectiveTotals:objectiveState.totals,
+      objectiveSources:objectiveState.sources,
       possessions:{our:analytics.offense.possessions, opponent:analytics.defense.possessions, periodOur:analytics.offense.periodPossessions, periodOpponent:analytics.defense.periodPossessions},
       analytics:analytics,
       analyticsBenchmarks:benchmarkProgram,
@@ -707,6 +709,21 @@ function calculateLiveGameObjectiveTotals_(events, objectives) {
     }
   });
   return totals;
+}
+
+/** Derive exact team-level objectives from canonical possessions to avoid duplicate game-day taps. */
+function buildLiveAnalyticsObjectiveState_(objectives,analytics,eventTotals,analyticsEnabled){
+  const totals=eventTotals||{},sources={},offense=(analytics||{}).offense||{},defense=(analytics||{}).defense||{};
+  const fields={paint_touches:["paintTouchPossessions","paintTouchPossessions"],turnovers:["turnovers","forcedTurnovers"],
+    offensive_rebounds:["offensiveRebounds","offensiveRebounds"],transition_points:["transitionPoints","transitionPoints"],points:["points","points"]};
+  (objectives||[]).forEach(function(objective){
+    const key=normalizeLiveGameCategoryKey_(objective.categoryKey||objective.label),mapping=fields[key];
+    const teamLevel=["our_team","opponent_team","both_teams"].indexOf(String(objective.subject||""))>=0;
+    if(!analyticsEnabled||!teamLevel||objective.unit==="percentage"||!mapping)return;
+    const total=totals[objective.id]||(totals[objective.id]={our:0,opponent:0,ourMade:0,ourAttempts:0,opponentMade:0,opponentAttempts:0});
+    total.our=Number(offense[mapping[0]]||0);total.opponent=Number(defense[mapping[1]]||0);sources[objective.id]="analytics";
+  });
+  return{totals:totals,sources:sources};
 }
 
 function updateLiveGameObjectiveState_(gameRecord, period) {
