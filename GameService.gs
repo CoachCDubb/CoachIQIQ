@@ -225,6 +225,9 @@ function initializeLiveGameSheets_() {
   ensureLiveGameSheet_(LIVE_GAME_OPPONENTS_SHEET, LIVE_GAME_OPPONENT_HEADERS);
   ensureLiveGameOptionalColumn_(LIVE_GAMES_SHEET,"Opponent Roster");
   ensureLiveGameOptionalColumn_(LIVE_GAMES_SHEET,"Tracker Mode");
+  // Existing workbooks already have optional columns after the 25-column core.
+  // Append result capture by name instead of claiming a fixed column position.
+  ensureLiveGameOptionalColumn_(LIVE_GAMES_SHEET,"Game Result");
 }
 
 function ensureLiveGameOptionalColumn_(sheetName,header){const sheet=SpreadsheetApp.getActive().getSheetByName(sheetName);const headers=sheet.getRange(1,1,1,sheet.getLastColumn()).getDisplayValues()[0];if(headers.indexOf(header)<0)sheet.getRange(1,sheet.getLastColumn()+1).setValue(header).setFontWeight("bold");}
@@ -532,13 +535,15 @@ function getLiveGameTracker(gameId) {
   const events = getLiveGameEvents_(gameId);
   const trackerMode = getLiveGameTrackerMode_(game, objectives, selectedStats);
   const analytics = buildLiveAnalyticsSummary_(getLiveAnalyticsPossessions_(gameId), Number(game["Current Period"] || 1));
+  const benchmarkProgram = trackerMode.analytics ? getLiveAnalyticsProgramBenchmark_(String(game.Team || "")) : null;
+  const scores = calculateLiveGameScore_(events);
   if (objectives.length) {
     return {
       game:{gameId:String(game["Game ID"] || ""), gameDate:formatLiveGameDate_(game["Game Date"]),
         team:String(game.Team || ""), opponent:String(game.Opponent || ""), location:String(game.Location || ""),
         format:String(game["Game Format"] || "Quarters"), periodLength:Number(game["Period Length"] || 8),
         status:String(game.Status || "Setup"), currentPeriod:Number(game["Current Period"] || 1),
-        gameType:String(game["Game Type"] || "Official Game"),analyticsEnabled:trackerMode.analytics,objectivesEnabled:trackerMode.objectives},
+        gameType:String(game["Game Type"] || "Official Game"),sport:String(game.Sport||"Basketball"),analyticsEnabled:trackerMode.analytics,objectivesEnabled:trackerMode.objectives},
       players:players,
       objectives:objectives.sort(function(a, b) { return Number(a.order || 0) - Number(b.order || 0); }),
       originalObjectives:originalObjectives,
@@ -546,17 +551,20 @@ function getLiveGameTracker(gameId) {
       objectiveTotals:calculateLiveGameObjectiveTotals_(events, objectives),
       possessions:{our:analytics.offense.possessions, opponent:analytics.defense.possessions, periodOur:analytics.offense.periodPossessions, periodOpponent:analytics.defense.periodPossessions},
       analytics:analytics,
+      analyticsBenchmarks:benchmarkProgram,
+      ourScore:scores.ourScore,
+      opponentScore:scores.opponentScore,
       events:events.slice(-30).reverse(),
       lastSyncAt:events.length ? events[events.length - 1].syncedAt : ""
     };
   }
-  const totals = calculateLiveGameScore_(events);
+  const totals = scores;
   return {
     game:{gameId:String(game["Game ID"] || ""), gameDate:formatLiveGameDate_(game["Game Date"]),
       team:String(game.Team || ""), opponent:String(game.Opponent || ""), location:String(game.Location || ""),
       format:String(game["Game Format"] || "Quarters"), periodLength:Number(game["Period Length"] || 8),
       status:String(game.Status || "Setup"), currentPeriod:Number(game["Current Period"] || 1),
-      gameType:String(game["Game Type"] || "Official Game"),analyticsEnabled:trackerMode.analytics,objectivesEnabled:trackerMode.objectives},
+      gameType:String(game["Game Type"] || "Official Game"),sport:String(game.Sport||"Basketball"),analyticsEnabled:trackerMode.analytics,objectivesEnabled:trackerMode.objectives},
     players:players,
     selectedStats:selectedStats,
     customStats:customStats,
@@ -564,6 +572,7 @@ function getLiveGameTracker(gameId) {
     events:events.slice(-30).reverse(),
     possessions:{our:analytics.offense.possessions, opponent:analytics.defense.possessions, periodOur:analytics.offense.periodPossessions, periodOpponent:analytics.defense.periodPossessions},
     analytics:analytics,
+    analyticsBenchmarks:benchmarkProgram,
     ourScore:totals.ourScore,
     opponentScore:totals.opponentScore
   };
@@ -905,12 +914,20 @@ function buildLiveGameCheckpointReport_(tracker, checkpointType) {
   return{checkpointType:checkpointType,period:period,coachMode:checkpointType==="Timeout"?"timeout":halftime?"halftime":"period",headline:checkpointType==="Timeout"?"Timeout Coach Mode":halftime?"Halftime Coach Mode":"End-of-Period Coach Mode",objectives:rows,recommendations:recommendations.slice(0,3),keepDoing:rows.filter(function(item){return item.status==="winning";}).slice(0,3).map(function(item){return item.summary;}),fixNow:rows.filter(function(item){return item.status==="behind";}).slice(0,2).map(function(item){return item.recommendation;}),recentPulse:recentPulse,topAdjustment:recommendations[0],possessions:tracker.possessions||{our:0,opponent:0},gameProgress:gameProgress};
 }
 
-function finishLiveGame(gameId) {
+function finishLiveGame(gameId, finalResult) {
   requireStaffCapability_("run_sessions");
   initializeLiveGameSheets_();
   const gameRecord = findLiveGameRecord_(gameId);
   requireLiveGameTeamAccess_(gameRecord.game.Team);
   if (String(gameRecord.game.Status || "") === "Completed") return getLiveGamePostgameReport(gameId);
+  finalResult=finalResult||{};
+  const finalOurScore=Number(finalResult.ourScore),finalOpponentScore=Number(finalResult.opponentScore);
+  if(!Number.isInteger(finalOurScore)||finalOurScore<0||!Number.isInteger(finalOpponentScore)||finalOpponentScore<0){
+    throw new Error("Enter both final scores before finishing the game.");
+  }
+  const isBasketball=String(gameRecord.game.Sport||"Basketball").toLowerCase()==="basketball";
+  if(isBasketball&&finalOurScore===finalOpponentScore)throw new Error("A completed basketball game must have a winner. Confirm the final score after overtime.");
+  const authoritativeResult=finalOurScore===finalOpponentScore?"Tie":finalOurScore>finalOpponentScore?"Win":"Loss";
   let tracker;
   let report;
   const lock=LockService.getScriptLock();lock.waitLock(10000);
@@ -923,13 +940,16 @@ function finishLiveGame(gameId) {
       : buildOptionalTrackerPostgameReport_(tracker);
     const now = new Date();
     current.sheet.getRange(current.rowNumber, current.cols.Status + 1).setValue("Completed");
+    current.sheet.getRange(current.rowNumber, current.cols["Our Score"] + 1).setValue(finalOurScore);
+    current.sheet.getRange(current.rowNumber, current.cols["Opponent Score"] + 1).setValue(finalOpponentScore);
+    current.sheet.getRange(current.rowNumber, current.cols["Game Result"] + 1).setValue(authoritativeResult);
     current.sheet.getRange(current.rowNumber, current.cols["Final Report"] + 1).setValue(JSON.stringify(report));
     current.sheet.getRange(current.rowNumber, current.cols["Completed At"] + 1).setValue(now);
     current.sheet.getRange(current.rowNumber, current.cols["Updated At"] + 1).setValue(now);
   }finally{lock.releaseLock();}
   try {
     logCoachIQAudit({action:"FINISH_LIVE_GAME", entityType:"Game", entityId:String(gameId),
-      team:tracker.game.team, beforeValue:"Live", afterValue:{status:"Completed",achieved:report.achieved,scored:report.scored}, success:true, error:""});
+      team:tracker.game.team, beforeValue:"Live", afterValue:{status:"Completed",result:authoritativeResult,ourScore:finalOurScore,opponentScore:finalOpponentScore,achieved:report.achieved,scored:report.scored}, success:true, error:""});
   } catch (auditError) { console.error("Game finished, but audit logging failed: " + auditError.message); }
   return report;
 }
