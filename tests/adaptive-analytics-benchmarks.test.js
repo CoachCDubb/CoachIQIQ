@@ -1,0 +1,26 @@
+const test=require('node:test');
+const assert=require('node:assert/strict');
+const fs=require('node:fs');
+const vm=require('node:vm');
+const service=fs.readFileSync('AnalyticsService.gs','utf8');
+const client=fs.readFileSync('Scripts.html','utf8');
+const game=fs.readFileSync('Game.html','utf8');
+const context={};vm.runInNewContext(service,context);
+const summary=(offensePoints=1,defensePoints=1,options={})=>context.buildLiveAnalyticsSummary_([
+  {teamSide:'offense',period:1,points:offensePoints,transition:options.transition!==false,paintTouch:options.paint!==false,turnover:!!options.turnover,offensiveRebounds:options.oreb==null?1:options.oreb},
+  {teamSide:'defense',period:1,points:defensePoints,transition:options.transition!==false,paintTouch:options.paint!==false,rightHandDrive:options.drive!==false,forcedTurnover:!!options.forced,offensiveRebounds:options.allowed==null?1:options.allowed}
+],1);
+const games=(count,resultFor=i=>i%2?'Loss':'Win',analyticsFor=i=>summary(i%2?0:2,i%2?2:0))=>Array.from({length:count},(_,i)=>({completed:true,result:resultFor(i),completedAt:`2026-09-${String(i+1).padStart(2,'0')}`,analytics:analyticsFor(i)}));
+
+test('starter configuration contains all eleven directional coach-configurable defaults',()=>{const defs=context.getStarterLiveAnalyticsBenchmarks_();assert.equal(defs.length,11);assert.deepEqual(Array.from(defs.filter(x=>x.direction==='lower').map(x=>x.id)),['defensivePppAllowed','transitionPppAllowed','paintTouchPppAllowed','turnoverRate','offensiveReboundsAllowedPer100','rightHandDrivePppAllowed']);assert.match(service,/Coach-configurable starting points/);});
+test('zero denominators remain null and cannot create learned targets',()=>{const result=context.buildLiveAnalyticsProgramBenchmark_(games(10,()=> 'Win',()=>summary(1,1,{transition:false,paint:false,drive:false})));const transition=result.metrics.find(x=>x.id==='transitionPpp');assert.equal(transition.validSampleCount,0);assert.equal(transition.confidenceLabel,'Starter benchmark');assert.equal(transition.insufficient,true);});
+test('fewer than 3 games use starter benchmark only',()=>{const result=context.buildLiveAnalyticsProgramBenchmark_(games(2));assert.ok(result.metrics.every(x=>x.confidenceLabel==='Starter benchmark'));});
+test('3–5 games produce an early signal heavily blended with starter',()=>assert.equal(context.buildLiveAnalyticsProgramBenchmark_(games(4,()=> 'Win')).metrics[0].confidenceLabel,'Early signal'));
+test('6–9 games produce an emerging target',()=>assert.equal(context.buildLiveAnalyticsProgramBenchmark_(games(7,()=> 'Win')).metrics[0].confidenceLabel,'Emerging target'));
+test('10+ valid games produce a bounded program target',()=>{const metric=context.buildLiveAnalyticsProgramBenchmark_(games(10,()=> 'Win',()=>summary(3,0))).metrics[0];assert.equal(metric.confidenceLabel,'Program target');assert.ok(metric.recommendedTarget<=1.2);});
+test('wins-only, losses-only, and mixed distributions remain explicit',()=>{const wins=context.buildLiveAnalyticsProgramBenchmark_(games(4,()=> 'Win'));assert.equal(wins.winCount,4);assert.equal(wins.lossCount,0);assert.equal(wins.metrics[0].losingGameAverage,null);const losses=context.buildLiveAnalyticsProgramBenchmark_(games(4,()=> 'Loss'));assert.equal(losses.metrics[0].confidenceLabel,'Starter benchmark');assert.equal(losses.metrics[0].winningGameAverage,null);const mixed=context.buildLiveAnalyticsProgramBenchmark_(games(6));assert.equal(mixed.winCount,3);assert.equal(mixed.lossCount,3);assert.notEqual(mixed.metrics[0].winningGameAverage,null);assert.notEqual(mixed.metrics[0].losingGameAverage,null);});
+test('server filters wrong-team, wrong-season, and inaccessible teams',()=>{assert.match(service,/filterCoachIQRowsForCurrentSeason_/);assert.match(service,/rowTeam===String\(team\)/);assert.match(service,/accessible&&rowTeam/);assert.match(service,/requireLiveGameTeamAccess_\(team\)/);});
+test('higher and lower status directions are rendered correctly',()=>{const match=client.match(/function liveAnalyticsBenchmarkStatus_\([^\n]+/);const c={};vm.runInNewContext(match[0],c);assert.equal(c.liveAnalyticsBenchmarkStatus_(1.1,1,'higher'),'winning');assert.equal(c.liveAnalyticsBenchmarkStatus_(.9,1,'lower'),'winning');assert.equal(c.liveAnalyticsBenchmarkStatus_(.8,1,'higher'),'behind');});
+test('live benchmark and Program Intelligence rendering are present',()=>{assert.match(game,/liveAnalyticsBenchmarks/);assert.match(game,/Program Intelligence/);assert.match(client,/renderLiveAnalyticsBenchmarks_/);assert.match(client,/validSampleCount/);assert.match(client,/winningGameAverage/);assert.match(client,/losingGameAverage/);});
+test('authoritative final result capture does not infer results from objectives',()=>{const gamesService=fs.readFileSync('GameService.gs','utf8');assert.match(gamesService,/"Game Result"/);assert.match(gamesService,/authoritativeResult=.*finalOurScore>finalOpponentScore/);assert.doesNotMatch(gamesService,/authoritativeResult=.*achieved/);assert.match(client,/Confirm your team's FINAL score/);});
+test('existing Winning Chart stays intact and separate',()=>{assert.match(game,/Winning chart/);assert.match(game,/liveWinningTargets/);assert.match(client,/function renderLiveWinningTargets/);});
