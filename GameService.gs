@@ -294,17 +294,21 @@ function cleanLiveGameGuestPlayers_(players){
 }
 
 function ensureLiveGameSheet_(sheetName, headers) {
+  // Optional Games fields are always appended by name. Never let an accidentally
+  // merged optional header turn into a positional requirement for old workbooks.
+  const optionalHeaders=["Opponent Roster","Tracker Mode","Game Result"];
+  const requiredHeaders=(headers||[]).filter(function(header){return optionalHeaders.indexOf(String(header||""))<0;});
   const spreadsheet = SpreadsheetApp.getActive();
   let sheet = spreadsheet.getSheetByName(sheetName);
   if (!sheet) {
     sheet = spreadsheet.insertSheet(sheetName);
-    sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
+    sheet.getRange(1, 1, 1, requiredHeaders.length).setValues([requiredHeaders]);
     sheet.setFrozenRows(1);
-    sheet.getRange(1, 1, 1, headers.length).setFontWeight("bold");
+    sheet.getRange(1, 1, 1, requiredHeaders.length).setFontWeight("bold");
     return sheet;
   }
-  const actual = sheet.getRange(1, 1, 1, headers.length).getDisplayValues()[0];
-  headers.forEach(function(header, index) {
+  const actual = sheet.getRange(1, 1, 1, requiredHeaders.length).getDisplayValues()[0];
+  requiredHeaders.forEach(function(header, index) {
     const currentHeader = String(actual[index] || "").trim();
     if (!currentHeader) {
       sheet.getRange(1, index + 1).setValue(header).setFontWeight("bold");

@@ -1,6 +1,6 @@
 # CoachIQ Live adaptive possession benchmarks — 2026-10-04
 
-Build **2026.10.04.8** adds adaptive, team-specific guidance to Possession Analytics while leaving the manually configured Winning Chart unchanged.
+Build **2026.10.04.9** adds adaptive, team-specific guidance to Possession Analytics while leaving the manually configured Winning Chart unchanged.
 
 ## Result integrity
 
@@ -34,6 +34,11 @@ possessions. Linked cards are labeled `Auto from Possession Analytics` and omit
 manual +/- controls, preventing duplicate entry and double counting. Percentage,
 player-specific, custom, and unsupported objectives remain manual. No outcome preset
 buttons were added.
+
+As an additional compatibility guard, sheet validation removes `Opponent Roster`,
+`Tracker Mode`, and `Game Result` from positional header checks even if a future
+merge accidentally places one in the fixed header list. These fields are always
+located or appended by name, so an existing column 26 cannot block Live Game.
 
 ## Benchmark method
 
