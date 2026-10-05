@@ -14,7 +14,7 @@ const LIVE_GAME_HEADERS = [
   "Period Length", "Status", "Current Period", "Our Score", "Opponent Score",
   "Roster Player IDs", "Selected Stats", "Created By", "Created At", "Updated At",
   "Game Type", "Custom Stat Definitions", "Tracking Plan", "Final Report", "Completed At",
-  "Active Tracking Plan", "Plan Adjustments", "Sport", "Guest Roster"
+  "Active Tracking Plan", "Plan Adjustments", "Sport", "Guest Roster", "Game Result"
 ];
 
 const LIVE_GAME_EVENT_HEADERS = [
