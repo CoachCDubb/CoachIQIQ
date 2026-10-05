@@ -47,7 +47,7 @@ test('completed possessions clear immediately into a protected background queue'
   const scripts = read('Scripts.html');
   assert.match(scripts, /analyticsQueue:\[\]/);
   assert.match(scripts, /protectedAnalytics:\[\]/);
-  assert.match(scripts, /CoachIQ\.liveGame\.analyticsDraft=emptyLiveAnalyticsDraft_\(role\);applyOptimisticLiveAnalyticsPossession_/);
+  assert.match(scripts, /CoachIQ\.liveGame\.analyticsDraft=emptyLiveAnalyticsDraft_\(nextRole\).*applyOptimisticLiveAnalyticsPossession_/);
   assert.match(scripts, /persistProtectedLiveAnalytics_/);
   assert.match(scripts, /localStorage\.setItem\(key,JSON\.stringify/);
   assert.match(scripts, /flushLiveAnalyticsQueue_/);

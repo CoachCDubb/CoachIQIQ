@@ -105,8 +105,31 @@ test("timeout and halftime checkpoints provide a focused Coach Mode", () => {
   assert.match(server, /keepDoing:/);
   assert.match(server, /fixNow:/);
   assert.match(server, /recentPulse:/);
-  assert.match(client, /Use for Second Half/);
+  assert.match(client, /Update for Second Half/);
   assert.match(styles, /checkpoint-coach-columns/);
+});
+
+test("checkpoint reports are printable and can update the game plan", () => {
+  assert.match(view, /Timeout report/);
+  assert.match(view, /End period \+ report/);
+  assert.match(view, /Update game plan/);
+  assert.match(view, /checkpointPrintButton/);
+  assert.match(view, /Print report/);
+  assert.match(view, /checkpointReportMeta/);
+  assert.match(view, /checkpointBenchmarkReport/);
+  assert.match(view, /Targets to Achieve/);
+  assert.match(view, /not universal high-school standards/);
+  assert.match(client, /function printLiveCheckpointReport\(\)/);
+  assert.match(client, /function renderCheckpointBenchmarkReport_\(report\)/);
+  assert.match(client, /valid n=/);
+  assert.match(client, /checkpoint-print-mode/);
+  assert.match(client, /objectivesEnabled!==false\|\|tracker\.game\.analyticsEnabled!==false/);
+  assert.match(client, /Update for Second Half/);
+  assert.match(server, /!tracker\.game\.analyticsEnabled/);
+  assert.match(server, /analytics:analytics/);
+  assert.match(server, /analyticsBenchmarks:tracker\.analyticsBenchmarks/);
+  assert.match(styles, /body\.checkpoint-print-mode/);
+  assert.match(styles, /checkpoint-benchmark-report/);
 });
 
 test("possession tracking is always available and feeds pace-aware Coach Mode", () => {
@@ -147,5 +170,6 @@ test("desktop objective cards resize to keep up to twelve categories on one scre
   assert.match(styles, /data-objective-count="12"/);
   assert.match(styles, /grid-template-columns:repeat\(3,minmax\(0,1fr\)\)/);
   assert.match(styles, /grid-template-rows:repeat\(4,minmax\(0,1fr\)\)/);
-  assert.match(styles, /dense-objectives \.objective-recent\{display:none\}/);
+  assert.match(styles, /dense-objectives\{grid-template-rows:auto auto auto auto minmax\(0,1fr\) minmax\(66px,90px\)/);
+  assert.match(styles, /dense-objectives \.objective-recent\{display:grid!important\}/);
 });
