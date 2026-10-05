@@ -2687,8 +2687,8 @@ body.live-game-setup-mode #content{padding-top:12px;}
   body.live-game-mode .live-game-tracker[data-objective-count="4"] .objective-tracker-grid{grid-template-rows:repeat(2,minmax(0,1fr))}
   body.live-game-mode .live-game-tracker[data-objective-count="5"] .objective-tracker-grid,
   body.live-game-mode .live-game-tracker[data-objective-count="6"] .objective-tracker-grid{grid-template-rows:repeat(3,minmax(0,1fr))}
-  body.live-game-mode .live-game-tracker.dense-objectives{grid-template-rows:auto auto auto auto minmax(0,1fr)}
-  body.live-game-mode .live-game-tracker.dense-objectives .objective-recent{display:none}
+  body.live-game-mode .live-game-tracker.dense-objectives{grid-template-rows:auto auto auto auto minmax(0,1fr) minmax(66px,90px)}
+  body.live-game-mode .live-game-tracker.dense-objectives .objective-recent{display:grid!important}
 }
 @media screen and (min-width:901px) and (max-height:760px){
   body.live-game-mode .live-possession-bar small{display:none}

@@ -90,6 +90,11 @@ outside possession PPP. Those adjustments use the protected tap queue and Recent
 Activity undo. On iPad-sized landscape layouts, Recent Activity remains visible even
 when the Winning Chart contains a dense objective plan.
 
+Recent Activity is now controlled by either active tracker, rather than only by
+Game-Plan Objectives. Analytics-only games therefore show saved possessions on iPad
+and desktop, and dense plans reserve a compact Recent Activity row at every desktop
+viewport width instead of relying on an iPad width guess.
+
 ## Benchmark method
 
 The eleven values in `getStarterLiveAnalyticsBenchmarks_` are **coach-configurable product defaults**, not universal facts or claimed high-school norms. Targets use only current-season, completed games for the selected team that the signed-in staff member may access. Missing denominators produce `null` metrics and never produce learned guidance.

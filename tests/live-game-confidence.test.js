@@ -147,5 +147,6 @@ test("desktop objective cards resize to keep up to twelve categories on one scre
   assert.match(styles, /data-objective-count="12"/);
   assert.match(styles, /grid-template-columns:repeat\(3,minmax\(0,1fr\)\)/);
   assert.match(styles, /grid-template-rows:repeat\(4,minmax\(0,1fr\)\)/);
-  assert.match(styles, /dense-objectives \.objective-recent\{display:none\}/);
+  assert.match(styles, /dense-objectives\{grid-template-rows:auto auto auto auto minmax\(0,1fr\) minmax\(66px,90px\)/);
+  assert.match(styles, /dense-objectives \.objective-recent\{display:grid!important\}/);
 });

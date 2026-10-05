@@ -701,7 +701,7 @@ function renderLiveGameTracker(data){
   const objectiveGrid=document.getElementById("liveTrackerObjectives");if(objectiveGrid)objectiveGrid.hidden=data.game.objectivesEnabled===false;
   const winningTargets=document.getElementById("liveWinningTargets");if(winningTargets)winningTargets.hidden=data.game.objectivesEnabled===false;
   const objectiveTools=document.getElementById("liveObjectiveGameTools");if(objectiveTools)objectiveTools.hidden=data.game.objectivesEnabled===false;
-  const recent=document.querySelector(".objective-recent");if(recent)recent.hidden=data.game.objectivesEnabled===false;
+  const recent=document.querySelector(".objective-recent");if(recent)recent.hidden=data.game.objectivesEnabled===false&&data.game.analyticsEnabled===false;
   renderLiveTrackerPossessions(data);
   renderLiveWinningTargets(data);
   renderLiveAnalyticsBenchmarks_(data);
