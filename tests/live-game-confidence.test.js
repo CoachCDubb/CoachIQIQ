@@ -116,13 +116,20 @@ test("checkpoint reports are printable and can update the game plan", () => {
   assert.match(view, /checkpointPrintButton/);
   assert.match(view, /Print report/);
   assert.match(view, /checkpointReportMeta/);
+  assert.match(view, /checkpointBenchmarkReport/);
+  assert.match(view, /Targets to Achieve/);
+  assert.match(view, /not universal high-school standards/);
   assert.match(client, /function printLiveCheckpointReport\(\)/);
+  assert.match(client, /function renderCheckpointBenchmarkReport_\(report\)/);
+  assert.match(client, /valid n=/);
   assert.match(client, /checkpoint-print-mode/);
   assert.match(client, /objectivesEnabled!==false\|\|tracker\.game\.analyticsEnabled!==false/);
   assert.match(client, /Update for Second Half/);
   assert.match(server, /!tracker\.game\.analyticsEnabled/);
   assert.match(server, /analytics:analytics/);
+  assert.match(server, /analyticsBenchmarks:tracker\.analyticsBenchmarks/);
   assert.match(styles, /body\.checkpoint-print-mode/);
+  assert.match(styles, /checkpoint-benchmark-report/);
 });
 
 test("possession tracking is always available and feeds pace-aware Coach Mode", () => {

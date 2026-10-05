@@ -969,7 +969,7 @@ function buildLiveGameCheckpointReport_(tracker, checkpointType) {
   let recentPulse="Keep tracking — at least 3 priority taps are needed to show a useful recent trend.";
   if(recent.length>=3&&recentLeaderCount>1)recentPulse="Most common recent tag: "+recentLeader+" ("+recentLeaderCount+" of the last "+recent.length+" priority taps).";
   else if(recent.length>=3)recentPulse="No priority has repeated in the last "+recent.length+" taps — there is not a clear recent trend yet.";
-  return{checkpointType:checkpointType,period:period,coachMode:checkpointType==="Timeout"?"timeout":halftime?"halftime":"period",headline:checkpointType==="Timeout"?"Timeout Coach Mode":halftime?"Halftime Coach Mode":"End-of-Period Coach Mode",game:{gameId:tracker.game.gameId,gameDate:tracker.game.gameDate,team:tracker.game.team,opponent:tracker.game.opponent},generatedAt:formatLiveGameTimestamp_(new Date()),objectives:rows,recommendations:recommendations.slice(0,3),keepDoing:rows.filter(function(item){return item.status==="winning";}).slice(0,3).map(function(item){return item.summary;}),fixNow:rows.filter(function(item){return item.status==="behind";}).slice(0,2).map(function(item){return item.recommendation;}),recentPulse:recentPulse,topAdjustment:recommendations[0],analytics:analytics,possessions:tracker.possessions||{our:0,opponent:0},gameProgress:gameProgress};
+  return{checkpointType:checkpointType,period:period,coachMode:checkpointType==="Timeout"?"timeout":halftime?"halftime":"period",headline:checkpointType==="Timeout"?"Timeout Coach Mode":halftime?"Halftime Coach Mode":"End-of-Period Coach Mode",game:{gameId:tracker.game.gameId,gameDate:tracker.game.gameDate,team:tracker.game.team,opponent:tracker.game.opponent},generatedAt:formatLiveGameTimestamp_(new Date()),objectives:rows,recommendations:recommendations.slice(0,3),keepDoing:rows.filter(function(item){return item.status==="winning";}).slice(0,3).map(function(item){return item.summary;}),fixNow:rows.filter(function(item){return item.status==="behind";}).slice(0,2).map(function(item){return item.recommendation;}),recentPulse:recentPulse,topAdjustment:recommendations[0],analytics:analytics,analyticsBenchmarks:tracker.analyticsBenchmarks||null,possessions:tracker.possessions||{our:0,opponent:0},gameProgress:gameProgress};
 }
 
 function finishLiveGame(gameId, finalResult) {
@@ -997,6 +997,7 @@ function finishLiveGame(gameId, finalResult) {
       ? buildLiveGamePostgameReport_(tracker, getPreviousCompletedReports_(tracker.game.team))
       : buildOptionalTrackerPostgameReport_(tracker);
     report.analytics=tracker.analytics||report.analytics||{};
+    report.analyticsBenchmarks=tracker.analyticsBenchmarks||report.analyticsBenchmarks||null;
     report.possessions=tracker.possessions||report.possessions||{our:0,opponent:0};
     report.finalScore={our:finalOurScore,opponent:finalOpponentScore};
     report.gameResult=authoritativeResult;
@@ -1036,6 +1037,7 @@ function getLiveGamePostgameReport(gameId) {
   const report = parseLiveGameObject_(record.game["Final Report"], null);
   if (!report) throw new Error("This game does not have a completed postgame report.");
   if(!report.analytics)report.analytics=buildLiveAnalyticsSummary_(getLiveAnalyticsPossessions_(gameId),Number(record.game["Current Period"]||1));
+  if(!report.analyticsBenchmarks)report.analyticsBenchmarks=getLiveAnalyticsProgramBenchmark_(String(record.game.Team||""));
   if(!report.possessions)report.possessions={our:Number((report.analytics.offense||{}).possessions||0),opponent:Number((report.analytics.defense||{}).possessions||0)};
   if(!report.finalScore)report.finalScore={our:Number(record.game["Our Score"]||0),opponent:Number(record.game["Opponent Score"]||0)};
   if(!report.gameResult)report.gameResult=String(record.game["Game Result"]||"");

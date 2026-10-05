@@ -105,6 +105,15 @@ control and the checkpoint action are both labeled **Update Game Plan**; updates
 preserve the original plan and apply only from that point forward. CoachIQ guidance
 describes tracked associations and does not claim that a metric caused an outcome.
 
+Printed and on-screen timeout, period, and postgame reports now include **Targets to
+Achieve** for all eleven possession metrics. Each row shows the current value, its
+target (or defensive maximum), the underlying live totals, winning/near-target/behind
+status, valid completed-game sample size, and Starter/Early/Emerging/Program label.
+The report explicitly identifies Starter benchmarks as coach-configurable defaults,
+not universal high-school standards. The exact benchmark snapshot used during the
+game is saved into the completed report; legacy reports receive the currently
+accessible team-and-season benchmark at read time.
+
 ## Benchmark method
 
 The eleven values in `getStarterLiveAnalyticsBenchmarks_` are **coach-configurable product defaults**, not universal facts or claimed high-school norms. Targets use only current-season, completed games for the selected team that the signed-in staff member may access. Missing denominators produce `null` metrics and never produce learned guidance.
