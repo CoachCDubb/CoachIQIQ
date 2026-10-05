@@ -864,7 +864,7 @@ function createLiveGameCheckpoint(gameId, checkpointType) {
     requireLiveGameTeamAccess_(record.game.Team);
     if(String(record.game.Status||"")==="Completed")throw new Error("A completed game cannot create checkpoints.");
     tracker = getLiveGameTracker(gameId);
-    if (!tracker.objectives || !tracker.objectives.length) throw new Error("This game does not have a tracking plan.");
+    if ((!tracker.objectives || !tracker.objectives.length) && !tracker.game.analyticsEnabled) throw new Error("This game does not have an active tracker.");
     report = buildLiveGameCheckpointReport_(tracker, checkpointType);
     const sheet = SpreadsheetApp.getActive().getSheetByName(LIVE_GAME_CHECKPOINTS_SHEET);
     const checkpointId = "GCHK-" + Utilities.getUuid().slice(0, 12).toUpperCase();
@@ -954,7 +954,12 @@ function buildLiveGameCheckpointReport_(tracker, checkpointType) {
     if(status==="behind")recommendations.push(recommendation);
     return{id:objective.id,label:objective.label,categoryKey:normalizeLiveGameCategoryKey_(objective.categoryKey||objective.label),status:status,summary:summary,recommendation:recommendation,our:Number(total.our||0),opponent:Number(total.opponent||0),value:value,target:Number(objective.target||0),margin:margin};
   });
-  if(!recommendations.length)recommendations.push("The game plan is on track. Reinforce the habits creating the advantage.");
+  const analytics=tracker.analytics||{},offense=analytics.offense||{},defense=analytics.defense||{};
+  if(!recommendations.length&&tracker.game.analyticsEnabled){
+    if(offense.ppp!=null)recommendations.push("Review the offensive process behind "+Number(offense.ppp).toFixed(2)+" PPP across "+Number(offense.possessions||0)+" possessions.");
+    if(defense.ppp!=null)recommendations.push("Review the defensive possessions associated with "+Number(defense.ppp).toFixed(2)+" PPP allowed across "+Number(defense.possessions||0)+" possessions.");
+  }
+  if(!recommendations.length)recommendations.push("The tracked game plan is on pace. Reinforce the habits associated with the current results.");
   const halftime=checkpointType==="End Quarter"&&((format.indexOf("half")>=0&&period===1)||(format.indexOf("quarter")>=0&&period===2));
   const recent=(tracker.events||[]).filter(function(event){return event.eventType!==LIVE_GAME_POSSESSION_EVENT;}).slice(0,8),recentCounts={},labels={};
   tracker.objectives.forEach(function(item){labels[item.id]=item.label;});
@@ -964,7 +969,7 @@ function buildLiveGameCheckpointReport_(tracker, checkpointType) {
   let recentPulse="Keep tracking — at least 3 priority taps are needed to show a useful recent trend.";
   if(recent.length>=3&&recentLeaderCount>1)recentPulse="Most common recent tag: "+recentLeader+" ("+recentLeaderCount+" of the last "+recent.length+" priority taps).";
   else if(recent.length>=3)recentPulse="No priority has repeated in the last "+recent.length+" taps — there is not a clear recent trend yet.";
-  return{checkpointType:checkpointType,period:period,coachMode:checkpointType==="Timeout"?"timeout":halftime?"halftime":"period",headline:checkpointType==="Timeout"?"Timeout Coach Mode":halftime?"Halftime Coach Mode":"End-of-Period Coach Mode",objectives:rows,recommendations:recommendations.slice(0,3),keepDoing:rows.filter(function(item){return item.status==="winning";}).slice(0,3).map(function(item){return item.summary;}),fixNow:rows.filter(function(item){return item.status==="behind";}).slice(0,2).map(function(item){return item.recommendation;}),recentPulse:recentPulse,topAdjustment:recommendations[0],possessions:tracker.possessions||{our:0,opponent:0},gameProgress:gameProgress};
+  return{checkpointType:checkpointType,period:period,coachMode:checkpointType==="Timeout"?"timeout":halftime?"halftime":"period",headline:checkpointType==="Timeout"?"Timeout Coach Mode":halftime?"Halftime Coach Mode":"End-of-Period Coach Mode",game:{gameId:tracker.game.gameId,gameDate:tracker.game.gameDate,team:tracker.game.team,opponent:tracker.game.opponent},generatedAt:formatLiveGameTimestamp_(new Date()),objectives:rows,recommendations:recommendations.slice(0,3),keepDoing:rows.filter(function(item){return item.status==="winning";}).slice(0,3).map(function(item){return item.summary;}),fixNow:rows.filter(function(item){return item.status==="behind";}).slice(0,2).map(function(item){return item.recommendation;}),recentPulse:recentPulse,topAdjustment:recommendations[0],analytics:analytics,possessions:tracker.possessions||{our:0,opponent:0},gameProgress:gameProgress};
 }
 
 function finishLiveGame(gameId, finalResult) {

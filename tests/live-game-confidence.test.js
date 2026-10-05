@@ -105,8 +105,24 @@ test("timeout and halftime checkpoints provide a focused Coach Mode", () => {
   assert.match(server, /keepDoing:/);
   assert.match(server, /fixNow:/);
   assert.match(server, /recentPulse:/);
-  assert.match(client, /Use for Second Half/);
+  assert.match(client, /Update for Second Half/);
   assert.match(styles, /checkpoint-coach-columns/);
+});
+
+test("checkpoint reports are printable and can update the game plan", () => {
+  assert.match(view, /Timeout report/);
+  assert.match(view, /End period \+ report/);
+  assert.match(view, /Update game plan/);
+  assert.match(view, /checkpointPrintButton/);
+  assert.match(view, /Print report/);
+  assert.match(view, /checkpointReportMeta/);
+  assert.match(client, /function printLiveCheckpointReport\(\)/);
+  assert.match(client, /checkpoint-print-mode/);
+  assert.match(client, /objectivesEnabled!==false\|\|tracker\.game\.analyticsEnabled!==false/);
+  assert.match(client, /Update for Second Half/);
+  assert.match(server, /!tracker\.game\.analyticsEnabled/);
+  assert.match(server, /analytics:analytics/);
+  assert.match(styles, /body\.checkpoint-print-mode/);
 });
 
 test("possession tracking is always available and feeds pace-aware Coach Mode", () => {

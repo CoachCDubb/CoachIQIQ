@@ -95,6 +95,16 @@ Game-Plan Objectives. Analytics-only games therefore show saved possessions on i
 and desktop, and dense plans reserve a compact Recent Activity row at every desktop
 viewport width instead of relying on an iPad width guess.
 
+Timeout and end-of-period actions now clearly produce a CoachIQ Game Intelligence
+report, including the possession totals available at that checkpoint, descriptive
+recommendations, the matchup, period, and report time. Analytics-only games may create
+these reports even without a Winning Chart. Every timeout, quarter/half, and postgame
+report has a Print report action that expands available objective details and prints a
+clean report rather than the surrounding live-game screen. The persistent in-game
+control and the checkpoint action are both labeled **Update Game Plan**; updates still
+preserve the original plan and apply only from that point forward. CoachIQ guidance
+describes tracked associations and does not claim that a metric caused an outcome.
+
 ## Benchmark method
 
 The eleven values in `getStarterLiveAnalyticsBenchmarks_` are **coach-configurable product defaults**, not universal facts or claimed high-school norms. Targets use only current-season, completed games for the selected team that the signed-in staff member may access. Missing denominators produce `null` metrics and never produce learned guidance.
