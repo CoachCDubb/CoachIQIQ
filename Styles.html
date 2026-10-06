@@ -2771,3 +2771,37 @@ body.live-game-setup-mode #content{padding-top:12px;}
   }
 }
 </style>
+
+<style>
+/* A Sheets dialog can be short even on a large iPad. Let touch users scroll
+   complete objective cards instead of clipping controls to a desktop grid. */
+@media screen and (pointer:coarse){
+  body.live-game-mode #content{overflow:auto;}
+  body.live-game-mode .live-game-page{
+    height:auto;
+    min-height:100%;
+    overflow:visible;
+    padding-bottom:24px;
+  }
+  body.live-game-mode .live-game-tracker,
+  body.live-game-mode .live-game-tracker.dense-objectives{
+    height:auto;
+    min-height:0;
+    grid-template-rows:none;
+    grid-auto-rows:max-content;
+    overflow:visible;
+  }
+  body.live-game-mode .objective-tracker-grid,
+  body.live-game-mode .live-game-tracker[data-objective-count] .objective-tracker-grid{
+    grid-template-rows:none;
+    grid-auto-rows:max-content;
+    min-height:0;
+  }
+  body.live-game-mode .objective-card{
+    min-height:200px;
+    overflow:visible;
+  }
+  body.live-game-mode .objective-tap-buttons button{min-height:44px;}
+  body.live-game-mode .objective-recent{max-height:none;overflow:visible;}
+}
+</style>
