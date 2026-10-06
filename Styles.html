@@ -2719,3 +2719,55 @@ body.live-game-setup-mode #content{padding-top:12px;}
   body.live-game-mode .live-game-tracker[data-objective-count="12"] .objective-card header h3{font-size:12px}
 }
 </style>
+
+<style>
+/* Touch tablets use a full-width page inside the Sheets dialog. Keep navigation
+   in its own row rather than beside Safari's nested scrolling content. */
+@media screen and (min-width:761px) and (max-width:1400px) and (pointer:coarse){
+  body:not(.live-game-mode) #app{
+    display:grid;
+    grid-template-columns:minmax(0,1fr);
+    grid-template-rows:auto minmax(0,1fr);
+    height:100vh;
+    height:100dvh;
+    min-height:0;
+    overflow:hidden;
+  }
+  body:not(.live-game-mode) #app[hidden]{display:none;}
+  body:not(.live-game-mode) #sidebar{
+    display:flex;
+    flex-direction:row;
+    align-items:center;
+    gap:4px;
+    width:100%;
+    min-width:0;
+    height:auto;
+    padding:8px;
+    overflow-x:auto;
+    overflow-y:hidden;
+    box-shadow:none;
+  }
+  body:not(.live-game-mode) #sidebar::after,
+  body:not(.live-game-mode) #sidebar .logo,
+  body:not(.live-game-mode) #sidebar .nav-label,
+  body:not(.live-game-mode) #sidebar .sidebar-footer{display:none;}
+  body:not(.live-game-mode) #sidebar>.nav-item{
+    flex:0 0 auto;
+    min-height:44px;
+    margin:0;
+    padding:8px 10px;
+    font-size:11px;
+  }
+  body:not(.live-game-mode) #sidebar .nav-icon{
+    width:26px;
+    height:26px;
+    flex-basis:26px;
+  }
+  body:not(.live-game-mode) #content{
+    width:100%;
+    min-width:0;
+    min-height:0;
+    overflow:auto;
+  }
+}
+</style>
