@@ -4489,6 +4489,7 @@ function loadCoachTraining(requestId) {
 }
 function trainingStatus_(text){const el=document.getElementById("trainingStatus");if(el)el.textContent=text;}
 function renderCoachTrainingHome() {
+  CoachTraining.simulation=null;
   const data=CoachTraining.data;if(!data)return;
   const reviewed=data.lessons.filter(function(l){return data.progress[l.id];}).length;
   const strong=data.lessons.filter(function(l){return data.progress[l.id]&&data.progress[l.id].latestScore>=80;}).length;
@@ -4506,23 +4507,56 @@ function openCoachTrainingLesson(id){
   google.script.run.withSuccessHandler(function(lesson){if(!isCurrentPage('CoachTraining',requestId))return;CoachTraining.loading=false;CoachTraining.lesson=lesson;CoachTraining.result=null;CoachTraining.attemptId='training_'+Date.now()+'_'+Math.random().toString(36).slice(2);renderCoachTrainingLesson_();}).withFailureHandler(function(error){CoachTraining.loading=false;if(isCurrentPage('CoachTraining',requestId))trainingStatus_((error&&error.message)||'Unable to load challenge. Try again.');}).getCoachTrainingLesson(id);
 }
 function renderCoachTrainingLesson_(){
-  const l=CoachTraining.lesson,p=CoachTraining.data.progress[l.id],box=document.getElementById('trainingChallenge');
+  const l=CoachTraining.lesson,p=CoachTraining.data.progress[l.id]||l.previousProgress,box=document.getElementById('trainingChallenge');
   document.getElementById('trainingHome').hidden=true;box.hidden=false;trainingStatus_('');
   box.innerHTML='<button type="button" class="btn" onclick="renderCoachTrainingHome()">← Learning tracks</button><div class="page-kicker">'+escapeHtmlValue(l.level)+' · Fictional scenario</div><h3>'+escapeHtmlValue(l.title)+'</h3><p class="training-scenario">'+escapeHtmlValue(l.scenario)+'</p><form onsubmit="submitCoachTraining(event)"><fieldset><legend>Choose your best first response</legend>'+l.options.map(function(o){return '<label class="training-option"><input required type="radio" name="trainingChoice" value="'+o.id+'"><span>'+escapeHtmlValue(o.text)+'</span></label>';}).join('')+'</fieldset><label class="training-reasoning">Explain your reasoning<textarea id="trainingReasoning" required minlength="20" maxlength="1200" rows="4" placeholder="What cue drove your choice? What is the tradeoff, and what would you watch next?"></textarea></label><p>Reflection prompt: '+escapeHtmlValue(l.reflection)+'</p><button id="trainingSubmit" class="btn btn-primary" type="submit">Check decision & save reflection</button></form><div id="trainingFeedback" aria-live="polite"></div>';
   if(p){const note=document.createElement('details');const title=document.createElement('summary');title.textContent='Your previous reflection · '+p.latestScore+'%';const text=document.createElement('p');text.textContent=p.reasoning;note.append(title,text);box.append(note);}
   box.scrollIntoView({block:'start'});
 }
 function submitCoachTraining(event){
-  event.preventDefault();if(CoachTraining.loading||CoachTraining.result)return;
+  event.preventDefault();
+  if(CoachTraining.simulation){submitTrainingSimulation();return;}if(CoachTraining.loading||CoachTraining.result)return;
   const choice=document.querySelector('input[name="trainingChoice"]:checked');if(!choice)return;
   const reasoning=document.getElementById('trainingReasoning').value.trim();if(reasoning.length<20){trainingStatus_('Please explain your reasoning in at least 20 characters.');return;}
   const id=CoachTraining.lesson.id,requestId=PageNavigation.requestId;
   CoachTraining.loading=true;document.getElementById('trainingSubmit').disabled=true;trainingStatus_('Saving your decision…');
   google.script.run.withSuccessHandler(function(result){if(!isCurrentPage('CoachTraining',requestId))return;CoachTraining.loading=false;CoachTraining.result=result;CoachTraining.data.progress[id]=result.progress;trainingStatus_('Decision and reflection saved.');
     document.querySelectorAll('#trainingChallenge form input,#trainingChallenge form textarea').forEach(function(el){el.disabled=true;});
-    document.getElementById('trainingFeedback').innerHTML='<div class="training-verdict"><strong>'+result.progress.latestScore+'% · Fit to this scenario</strong><p>'+escapeHtmlValue(result.feedback)+'</p></div><h4>Compare the decisions</h4>'+result.options.map(function(o){return '<div class="training-explanation"><strong>'+escapeHtmlValue(o.text)+'</strong><span>'+o.score+'% fit</span><p>'+escapeHtmlValue(o.feedback)+'</p></div>';}).join('')+'<h4>What to measure next</h4><p>'+escapeHtmlValue(result.measure)+'</p><h4>Take it to practice</h4><p>'+escapeHtmlValue(result.practice)+'</p><h4>Discuss with your staff</h4><p>'+escapeHtmlValue(result.reflection)+'</p><button type="button" class="btn" onclick="openCoachTrainingLesson(\''+id+'\')">Try this challenge again</button><button type="button" class="btn btn-primary" onclick="renderCoachTrainingHome();startRecommendedTraining()">Next recommended challenge</button>';
+    document.getElementById('trainingFeedback').innerHTML='<div class="training-verdict"><strong>'+result.progress.latestScore+'% · Fit to this scenario</strong><p>'+escapeHtmlValue(result.feedback)+'</p></div><h4>Compare the decisions</h4>'+result.options.map(function(o){return '<div class="training-explanation"><strong>'+escapeHtmlValue(o.text)+'</strong><span>'+o.score+'% fit</span><p>'+escapeHtmlValue(o.feedback)+'</p></div>';}).join('')+'<h4>What to measure next</h4><p>'+escapeHtmlValue(result.measure)+'</p><h4>Take it to practice</h4><p>'+escapeHtmlValue(result.practice)+'</p><h4>Discuss with your staff</h4><p>'+escapeHtmlValue(result.reflection)+'</p><button type="button" class="btn" onclick="'+(id.indexOf('case_')===0?'openTrainingGameCase()':"openCoachTrainingLesson('"+id+"')")+'">Try this challenge again</button><button type="button" class="btn btn-primary" onclick="renderCoachTrainingHome();startRecommendedTraining()">Next recommended challenge</button>';
     document.getElementById('trainingFeedback').scrollIntoView({block:'start'});
   }).withFailureHandler(function(error){CoachTraining.loading=false;if(!isCurrentPage('CoachTraining',requestId))return;document.getElementById('trainingSubmit').disabled=false;trainingStatus_((error&&error.message)||'Save failed. Your response is still here; try again.');}).submitCoachTrainingAttempt({lessonId:id,choice:Number(choice.value),reasoning:reasoning,attemptId:CoachTraining.attemptId});
 }
 
+</script>
+
+<script>
+function startTrainingSimulation(){
+  if(CoachTraining.loading)return;CoachTraining.loading=true;trainingStatus_('Preparing game simulation…');const requestId=PageNavigation.requestId;
+  google.script.run.withSuccessHandler(function(view){if(!isCurrentPage('CoachTraining',requestId))return;CoachTraining.loading=false;showTrainingSimulation(view);}).withFailureHandler(function(e){CoachTraining.loading=false;if(isCurrentPage('CoachTraining',requestId))trainingStatus_(e.message||'Unable to start simulation.');}).startCoachTrainingSimulation();
+}
+function showTrainingSimulation(view){
+  CoachTraining.simulation=view;CoachTraining.result=null;
+  if(!view.completed){CoachTraining.lesson=view.lesson;renderCoachTrainingLesson_();document.getElementById('trainingReasoning').maxLength=600;return;}
+  const box=document.getElementById('trainingChallenge');box.hidden=false;document.getElementById('trainingHome').hidden=true;
+  box.innerHTML='<h3>Simulation debrief</h3><p>Average decision fit: '+view.score+'%. These are teaching branches, not predicted game outcomes. Written reasoning is saved but not automatically graded.</p>'+view.answers.map(function(a,i){return '<section class="training-explanation"><h4>Decision '+(i+1)+': '+escapeHtmlValue(a.title)+'</h4><p>'+a.score+'% · '+escapeHtmlValue(a.feedback)+'</p><strong>Your reasoning</strong><p>'+escapeHtmlValue(a.reasoning)+'</p></section>';}).join('')+'<button class="btn btn-primary" onclick="startTrainingSimulation()">New simulation</button><button class="btn" onclick="renderCoachTrainingHome()">Learning tracks</button>';
+  trainingStatus_('Simulation saved.');box.scrollIntoView({block:'start'});
+}
+function submitTrainingSimulation(){
+  if(CoachTraining.loading||CoachTraining.result)return;
+  const choice=document.querySelector('input[name="trainingChoice"]:checked'),reason=document.getElementById('trainingReasoning').value.trim();if(!choice||reason.length<20){trainingStatus_('Choose a response and explain your decision in at least 20 characters.');return;}
+  CoachTraining.loading=true;document.getElementById('trainingSubmit').disabled=true;const requestId=PageNavigation.requestId,view=CoachTraining.simulation;
+  google.script.run.withSuccessHandler(function(result){if(!isCurrentPage('CoachTraining',requestId))return;CoachTraining.loading=false;CoachTraining.result=result;CoachTraining.nextSimulation=result.next;trainingStatus_('Decision saved.');document.querySelectorAll('#trainingChallenge form input,#trainingChallenge form textarea').forEach(function(e){e.disabled=true;});
+    document.getElementById('trainingFeedback').innerHTML='<div class="training-verdict"><strong>'+result.answer.score+'% decision fit</strong><p>'+escapeHtmlValue(result.answer.feedback)+'</p></div>'+result.options.map(function(o){return '<div class="training-explanation"><strong>'+escapeHtmlValue(o.text)+'</strong><p>'+escapeHtmlValue(o.feedback)+'</p></div>';}).join('')+'<h4>What to monitor</h4><p>'+escapeHtmlValue(result.measure)+'</p><h4>Practice application</h4><p>'+escapeHtmlValue(result.practice)+'</p><button class="btn btn-primary" onclick="showTrainingSimulation(CoachTraining.nextSimulation)">'+(result.next.completed?'See simulation debrief':'See the next game decision')+'</button>';
+    document.getElementById('trainingFeedback').scrollIntoView({block:'start'});
+  }).withFailureHandler(function(e){CoachTraining.loading=false;if(isCurrentPage('CoachTraining',requestId)){document.getElementById('trainingSubmit').disabled=false;trainingStatus_(e.message||'Save failed; try again.');}}).submitCoachTrainingSimulation({sessionId:view.sessionId,round:view.round,choice:Number(choice.value),reasoning:reason});
+}
+function loadTrainingGameCases(){
+  const requestId=PageNavigation.requestId;trainingStatus_('Loading accessible completed games…');
+  google.script.run.withSuccessHandler(function(games){if(!isCurrentPage('CoachTraining',requestId))return;trainingStatus_('');document.getElementById('trainingGameCases').innerHTML=games.length?'<label>Completed game<select id="trainingGameSelect">'+games.map(function(g){return '<option value="'+escapeHtmlValue(g.gameId)+'">'+escapeHtmlValue(g.gameDate+' · '+g.team+' vs. '+g.opponent)+'</option>';}).join('')+'</select></label><button class="btn" onclick="openTrainingGameCase()">Review evidence</button>':'<p>No accessible completed reports in the current season. Game simulations are available without recorded data.</p>';}).withFailureHandler(function(e){if(isCurrentPage('CoachTraining',requestId))trainingStatus_(e.message||'Unable to load game reports.');}).getCoachTrainingGameCases();
+}
+function openTrainingGameCase(){const id=document.getElementById('trainingGameSelect').value,requestId=PageNavigation.requestId;google.script.run.withSuccessHandler(function(lesson){if(!isCurrentPage('CoachTraining',requestId))return;CoachTraining.simulation=null;CoachTraining.lesson=lesson;CoachTraining.result=null;CoachTraining.attemptId='game_'+Date.now()+'_'+Math.random().toString(36).slice(2);renderCoachTrainingLesson_();}).withFailureHandler(function(e){if(isCurrentPage('CoachTraining',requestId))trainingStatus_(e.message||'Unable to open game evidence.');}).getCoachTrainingGameCase(id);}
+</script>
+
+<script>
+function resumeTrainingSimulation(){const requestId=PageNavigation.requestId;google.script.run.withSuccessHandler(function(view){if(isCurrentPage('CoachTraining',requestId))showTrainingSimulation(view);}).withFailureHandler(function(e){if(isCurrentPage('CoachTraining',requestId))trainingStatus_(e.message||'Unable to resume.');}).getCoachTrainingSimulation();}
 </script>

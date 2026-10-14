@@ -31,3 +31,15 @@ Before live use, verify in a safety copy:
 5. Tablet users can scroll through all options, feedback, and next-challenge controls.
 
 At implementation, the existing `adaptive-analytics-benchmarks.test.js` Game Result header assertion still fails on main. It is unrelated to training and was left unchanged.
+
+## Game decision lab
+
+**Start game simulation** creates a three-decision session. Opening score margin and clock vary, and an offensive response routes the coach to a different tactical problem before a final-possession decision. These are explicit teaching branches, not predictions that a coaching choice guarantees a basket or a stop. The reviewed scenario engine has finite templates and variations; it does not promise unlimited unique questions. The final decision intentionally jumps to a new late-game state.
+
+The latest simulation is stored privately in User Properties for this workbook and can be resumed with **Resume last simulation**, including its completed debrief. Starting another simulation replaces that session. Simulation reflections accept 20–600 characters to keep the bounded three-decision record within Apps Script's per-property limit. Replay of the immediately preceding round returns the saved decision rather than advancing twice. The debrief averages choice-fit scores and preserves the three reflections; written reasoning is not automatically graded.
+
+**Review a recorded game** requires the existing `run_sessions` capability and uses accessible, current-season, non-archived completed reports. Only basketball reports can become cases. Report evidence includes saved objective summaries and, when present, positive charted possession counts with recorded PPP. It never infers a missing clock, foul situation, lineup, film event, or possession sequence. Reports with insufficient evidence display an actionable message instead of a fictional reconstruction. The activity asks the coach to choose an evidence-review approach and reflect on a testable adjustment; it is not automatic diagnosis of the actual game.
+
+The latest game case and its reflection are retained as a bounded private record, separate from the 18 curriculum lessons and simulation session. Opening a new case replaces the previous case; these activities do not inflate curriculum completion. Access is rechecked on case submission. Reading cases does not initialize or repair game sheets.
+
+Additional validation covers branching, stale-round rejection, replay, three-step completion, cross-account isolation, and case evidence/access handling. Local browser checks run the complete three-round simulation and debrief at 600, 1024, and 1366 CSS pixels. Actual Google authorization, saved report compatibility, and iPad Safari still require a safety-copy smoke test.
