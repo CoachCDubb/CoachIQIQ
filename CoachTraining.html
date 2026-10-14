@@ -1,0 +1,11 @@
+<section class="coach-training" aria-labelledby="trainingTitle">
+  <header class="page-header"><div><div class="page-kicker">Develop your coaching</div><h2 id="trainingTitle">Coach Training</h2><p class="page-subtitle">Read the game. Explain your decision. Build a better next possession.</p></div></header>
+  <div class="training-intro"><strong>A basketball learning program for every staff</strong><p>18 challenges across six tracks. Work through foundation, applied, and advanced situations using fictional basketball examples. No film library needed.</p><p>Scores describe how well a choice fits the stated situation. They are practice feedback, not coaching certification. Your written reasoning is saved for reflection; it is not automatically graded.</p></div>
+  <div id="trainingStatus" role="status" aria-live="polite">Loading your training…</div>
+  <div id="trainingHome" hidden>
+    <div id="trainingSummary" class="training-summary"></div>
+    <div class="training-toolbar"><button type="button" class="btn btn-primary" onclick="startRecommendedTraining()">Continue learning</button><button type="button" class="btn" onclick="startRandomTraining()">Random challenge</button><label>Learning track<select id="trainingFilter" onchange="renderCoachTrainingHome()"><option value="">All tracks</option></select></label></div>
+    <div id="trainingModules" class="training-modules"></div>
+  </div>
+  <article id="trainingChallenge" class="training-challenge" hidden></article>
+</section>
