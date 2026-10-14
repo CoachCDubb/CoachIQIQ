@@ -43,6 +43,7 @@ function include(filename) {
     .getContent();
 }
 function getPage(pageName) {
+  if (pageName === "CoachTraining") requireCoachTrainingAccess_();
   if (pageName === "Staff" || pageName === "Settings" || pageName === "SeasonHistory") {
     requireStaffCapability_("manage_settings");
   }
@@ -61,6 +62,7 @@ function getCoachIQPageBundle() {
   const access = getCurrentStaffAccess_();
   const capabilities = access.capabilities || [];
   const allowed = {
+    CoachTraining:!access.configured || access.role !== "Unassigned",
     Dashboard:true, Players:true, Leaderboard:true, GettingStarted:true, PlayerProfile:true,
     Sessions:capabilities.indexOf("run_sessions") >= 0,
     Game:capabilities.indexOf("run_sessions") >= 0,
