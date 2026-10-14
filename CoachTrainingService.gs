@@ -620,7 +620,7 @@ function requireCoachTrainingAccess_() {
 }
 
 function coachTrainingKey_(lessonId) {
-  return "coach-training-v1:" + SpreadsheetApp.getActive().getId() + ":" + lessonId;
+  return "coach-training-v1:" + SpreadsheetApp.getActive().getId() + ":" + (/^case_/.test(lessonId)?"case-progress":lessonId);
 }
 
 function readCoachTrainingProgress_() {
@@ -660,7 +660,14 @@ function getCoachTrainingLesson(lessonId) {
 function submitCoachTrainingAttempt(data) {
   requireCoachTrainingAccess_();
   data = data || {};
-  const lesson = COACH_TRAINING_LESSONS.find(function(item) { return item.id === data.lessonId; });
+  let lesson = COACH_TRAINING_LESSONS.find(function(item) { return item.id === data.lessonId; });
+  if (!lesson && /^case_/.test(String(data.lessonId || ''))) {
+    requireStaffCapability_('run_sessions');
+    const saved=JSON.parse(PropertiesService.getUserProperties().getProperty(coachTrainingKey_('current-case'))||'null');
+    if (!saved || saved.lesson.id!==data.lessonId || !getCompletedLiveGames_().some(function(g){return g.gameId===saved.gameId;})) throw new Error('Reopen an accessible game report to continue.');
+    requireLiveGameTeamAccess_(findLiveGameRecord_(saved.gameId).game.Team);
+    lesson=saved.lesson;
+  }
   if (!lesson || !Number.isInteger(data.choice) || !lesson.options[data.choice]) throw new Error("Choose a valid answer.");
   const reasoning = String(data.reasoning || "").trim();
   if (reasoning.length < 20 || reasoning.length > 1200) throw new Error("Explain your decision in 20–1200 characters.");
@@ -672,8 +679,9 @@ function submitCoachTrainingAttempt(data) {
     const properties = PropertiesService.getUserProperties(), key = coachTrainingKey_(lesson.id);
     let previous = {};
     try { previous = JSON.parse(properties.getProperty(key) || "{}"); } catch(error) {}
+    if (previous.lessonId && previous.lessonId !== lesson.id) previous = {};
     if (previous.attemptId === attemptId) return coachTrainingFeedback_(lesson,previous);
-    const record = {attemptId:attemptId,choice:data.choice,latestScore:lesson.options[data.choice].score,
+    const record = {lessonId:lesson.id,attemptId:attemptId,choice:data.choice,latestScore:lesson.options[data.choice].score,
       bestScore:Math.max(Number(previous.bestScore || 0),lesson.options[data.choice].score),
       attempts:Math.min(Number(previous.attempts || 0)+1,9999),reasoning:reasoning,updatedAt:new Date().toISOString()};
     properties.setProperty(key,JSON.stringify(record));
@@ -684,4 +692,105 @@ function submitCoachTrainingAttempt(data) {
 function coachTrainingFeedback_(lesson,record) {
   return {lessonId:lesson.id,progress:record,feedback:lesson.options[record.choice].feedback,
     options:lesson.options,reflection:lesson.reflection,measure:lesson.measure,practice:lesson.practice};
+}
+
+/** Three-decision practice sessions, generated from reviewed tactical branches. */
+function startCoachTrainingSimulation() {
+  requireCoachTrainingAccess_();
+  const lock=LockService.getUserLock();lock.waitLock(10000);
+  try {
+    const initial=Math.random()<0.5?'offense-1':'offense-2';
+    const points=2+Math.floor(Math.random()*5),seconds=110+Math.floor(Math.random()*61);
+    const session={id:Utilities.getUuid(),round:0,lessonIds:[initial],answers:[],contexts:[
+      'Simulated fourth quarter: down '+points+', '+Math.floor(seconds/60)+':'+String(seconds%60).padStart(2,'0')+' remaining. One timeout. Your center has four fouls and your backup is a weaker passer. The tactical constraints below describe the current possession. Decide which player should execute the adjustment and what you will monitor.'],completed:false};
+    PropertiesService.getUserProperties().setProperty(coachTrainingKey_('simulation'),JSON.stringify(session));
+    return coachTrainingSimulationView_(session);
+  } finally {lock.releaseLock();}
+}
+function coachTrainingSimulationView_(session) {
+  if(session.completed)return {sessionId:session.id,completed:true,score:Math.round(session.answers.reduce(function(n,a){return n+a.score;},0)/session.answers.length),answers:session.answers};
+  const lesson=getCoachTrainingLesson(session.lessonIds[session.round]);
+  lesson.scenario=session.contexts[session.round]+'\n\n'+lesson.scenario;
+  lesson.level='Game simulation · Decision '+(session.round+1)+' of 3';
+  return {sessionId:session.id,round:session.round,completed:false,lesson:lesson};
+}
+function submitCoachTrainingSimulation(data) {
+  requireCoachTrainingAccess_();data=data||{};
+  const reason=String(data.reasoning||'').trim();
+  if(reason.length<20||reason.length>600||!Number.isInteger(data.choice)||data.choice<0||data.choice>3)throw new Error('Choose a response and explain your decision in 20–600 characters.');
+  const lock=LockService.getUserLock();lock.waitLock(10000);
+  try {
+    const props=PropertiesService.getUserProperties(),key=coachTrainingKey_('simulation');
+    const session=JSON.parse(props.getProperty(key)||'null');
+    if(!session||session.id!==data.sessionId)throw new Error('This simulation has been replaced. Start a new one.');
+    if(Number.isInteger(data.round)&&data.round===session.round-1&&session.answers[data.round])return coachTrainingSimulationResponse_(session,data.round);
+    if(session.completed||data.round!==session.round)throw new Error('That decision is no longer active.');
+    const lesson=COACH_TRAINING_LESSONS.find(function(l){return l.id===session.lessonIds[session.round];});
+    const option=lesson.options[data.choice];
+    session.answers.push({title:lesson.title,choice:data.choice,score:option.score,reasoning:reason,feedback:option.feedback});
+    if(session.round===0){
+      const good=option.score>=70;
+      session.lessonIds.push(good?'defense-1':(lesson.id==='offense-1'?'offense-2':'offense-1'));
+      session.contexts.push(good?'Branch: your staff organized the offensive counter. On the next defensive sequence the opponent puts your foul-troubled center into a ball screen with a pull-up threat. Choose a coverage and assign the recovery. This is a teaching branch, not a predicted outcome.':'Branch: the opponent anticipates your first approach. At the next stoppage, reset the attack against a different coverage. Explain the correction without blaming the player. This is a teaching branch, not a predicted outcome.');
+    }else if(session.round===1){
+      session.lessonIds.push('management-3');
+      session.contexts.push(option.score>=70?'Time jump: the game reaches its final possession. The opponent now denies your primary creator; coordinate a counter and the plan after the shot.':'Time jump: your previous adjustment did not fully address the stated constraint. The game reaches its final possession. Simplify the call, name a second option, and explain how you will check player understanding.');
+    }
+    const answered=session.round;session.round++;session.completed=session.round===3;
+    props.setProperty(key,JSON.stringify(session));
+    return coachTrainingSimulationResponse_(session,answered);
+  }finally{lock.releaseLock();}
+}
+function coachTrainingSimulationResponse_(session,answered) {
+  const lesson=COACH_TRAINING_LESSONS.find(function(l){return l.id===session.lessonIds[answered];});
+  return {answer:session.answers[answered],options:lesson.options,measure:lesson.measure,practice:lesson.practice,next:coachTrainingSimulationView_(session)};
+}
+
+/** Read-only postgame evidence. No sheet creation or automatic repair. */
+function getCoachTrainingGameCases() {
+  requireCoachTrainingAccess_();requireStaffCapability_('run_sessions');
+  return getCompletedLiveGames_();
+}
+function getCoachTrainingGameCase(gameId) {
+  requireCoachTrainingAccess_();requireStaffCapability_('run_sessions');
+  const available=getCompletedLiveGames_().find(function(g){return g.gameId===gameId;});
+  if(!available)throw new Error('Choose an accessible completed game from the current season.');
+  const record=findLiveGameRecord_(gameId);requireLiveGameTeamAccess_(record.game.Team);
+  if(String(record.game.Sport||'Basketball').toLowerCase()!=='basketball')throw new Error('Choose a basketball game for this training activity.');
+  const report=parseLiveGameObject_(record.game['Final Report'],null);
+  if(!report)throw new Error('This game has no saved final report.');
+  const lesson=getCoachTrainingLesson('analytics-3');
+  const facts=(report.objectives||[]).slice(0,8).map(function(o){return String(o.label||'Objective')+': '+String(o.outcome||o.status||'Tracked')+(o.summary?' · '+String(o.summary).slice(0,240):'');});
+  ['offense','defense'].forEach(function(side){
+    const a=(report.analytics||{})[side]||{};
+    if(typeof a.possessions==='number'&&Number.isFinite(a.possessions)&&a.possessions>0&&typeof a.ppp==='number'&&Number.isFinite(a.ppp))facts.push((side==='offense'?'Offense':'Defense')+': '+a.possessions+' charted possessions, '+a.ppp.toFixed(2)+' points per possession'+(side==='defense'?' allowed':''));
+  });
+  if(!facts.length)throw new Error('This report has no recorded objective outcomes or possession analytics. Use a simulation until you have a completed report with training evidence.');
+  lesson.title='Postgame evidence review: '+available.team+' vs. '+available.opponent;
+  lesson.level='Actual game data · Staff reflection';
+  lesson.scenario='Saved report from '+available.gameDate+'. Recorded report evidence:\n'+facts.join('\n')+'\n\nThese summary labels do not establish why the results occurred. No clock, foul situation, or possession sequence is inferred. Which first step best supports a defensible adjustment?';
+  lesson.options=[{id:0,text:'Check definitions, sample sizes, and possession context; choose a testable adjustment'},{id:1,text:'Take the missed targets into a focused practice experiment and review the evidence'},{id:2,text:'Change the entire scheme solely because a target was missed'},{id:3,text:'Treat a target outcome as proof of the cause'}];
+  lesson.reflection='Name one recorded outcome, the evidence you still need, and an adjustment you could test.';
+  lesson.id='case_'+Utilities.getUuid();
+  const feedback=[
+    'Summary outcomes are descriptive. Check how each target was defined, how many opportunities were recorded, and whether the same personnel and situations were compared. Choose an adjustment you can test, not a causal claim.',
+    'A focused practice experiment can be useful. First verify the underlying evidence and decide what observation would support changing the game plan.',
+    'A missed target alone does not show that the entire scheme failed. Separate execution, matchup, opportunity count, and the target definition.',
+    'A target outcome records what was charted, not why it happened. Additional possession context is needed before claiming a cause.'
+  ];
+  const full=Object.assign({},lesson,{options:lesson.options.map(function(o,i){return {text:o.text,score:[100,70,30,0][i],feedback:feedback[i]};}),measure:'Choose one recorded objective and verify its definition, opportunity count, and context. Compare the next games using the same definition.',practice:'Design a short live drill around a verified problem, state the expected change, and chart whether the intended behavior improves.'});
+  const properties=PropertiesService.getUserProperties();
+  let previousCase=null,previousProgress=null;
+  try {previousCase=JSON.parse(properties.getProperty(coachTrainingKey_('current-case'))||'null');previousProgress=JSON.parse(properties.getProperty(coachTrainingKey_('case-progress'))||'null');}catch(error){}
+  properties.setProperty(coachTrainingKey_('current-case'),JSON.stringify({gameId:gameId,lesson:full}));
+  if(previousCase&&previousCase.gameId===gameId&&previousProgress)lesson.previousProgress=previousProgress;
+
+  return lesson;
+}
+
+function getCoachTrainingSimulation() {
+  requireCoachTrainingAccess_();
+  const raw=PropertiesService.getUserProperties().getProperty(coachTrainingKey_('simulation'));
+  if(!raw)throw new Error('No saved simulation yet. Start a new one.');
+  return coachTrainingSimulationView_(JSON.parse(raw));
 }

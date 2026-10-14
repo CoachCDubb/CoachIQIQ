@@ -35,3 +35,23 @@ test('unassigned staff and unavailable identities cannot read or submit training
 test('storage failures release the user lock',()=>{
   const h=harness();h.context.PropertiesService.getUserProperties=()=>({getProperty:()=>null,setProperty:()=>{throw new Error('Quota exceeded');}});assert.throws(()=>h.context.submitCoachTrainingAttempt(submission()),/Quota exceeded/);assert.equal(h.locks.acquired,h.locks.released);
 });
+test('simulations branch on decisions, reject stale rounds and complete three steps',()=>{
+  const h=harness(),c=h.context;c.Utilities={getUuid:()=> 'simulation-123'};
+  const first=c.startCoachTrainingSimulation();assert.equal(first.round,0);
+  const submit=(round,choice)=>c.submitCoachTrainingSimulation({sessionId:first.sessionId,round,choice,reasoning:'Name the role, communicate the coverage and check the next possession.'});
+  const a=submit(0,3);assert.equal(a.next.round,1);assert.match(a.next.lesson.scenario,/anticipates/);
+  const replay=submit(0,0);assert.equal(replay.answer.score,0);assert.equal(replay.next.round,1);
+  assert.throws(()=>submit(2,0),/no longer active/);
+  submit(1,0);const done=submit(2,0);assert.equal(done.next.completed,true);assert.equal(done.next.answers.length,3);assert.equal(done.next.score,67);
+});
+test('simulation progress cannot be read or submitted by another coach or workbook',()=>{
+  const h=harness(),c=h.context;c.Utilities={getUuid:()=> 'simulation-123'};const first=c.startCoachTrainingSimulation();h.user('coach-b');assert.throws(()=>c.submitCoachTrainingSimulation({sessionId:first.sessionId,round:0,choice:0,reasoning:'A valid coaching decision and an explanation.'}),/replaced/);
+});
+test('actual game cases use recorded labels without inventing possession context and recheck access',()=>{
+  const h=harness(),c=h.context;let permitted=true;
+  c.Utilities={getUuid:()=> 'case-123'};c.requireStaffCapability_=()=>{};c.getCompletedLiveGames_=()=>permitted?[{gameId:'g1',team:'Varsity',opponent:'Visitors',gameDate:'2026-10-14'}]:[];
+  c.findLiveGameRecord_=()=>({game:{Team:'Varsity',Sport:'Basketball','Final Report':'report'}});c.requireLiveGameTeamAccess_=()=>{};c.parseLiveGameObject_=()=>({objectives:[{label:'Rebounds',outcome:'Missed'}]});
+  const l=c.getCoachTrainingGameCase('g1');assert.match(l.scenario,/Rebounds: Missed/);assert.match(l.scenario,/No clock/);assert.equal(l.options[0].score,undefined);
+  const r=c.submitCoachTrainingAttempt(submission({lessonId:l.id}));assert.equal(r.progress.latestScore,100);assert.match(r.feedback,/Summary outcomes/);
+  permitted=false;assert.throws(()=>c.submitCoachTrainingAttempt(submission({lessonId:l.id,attemptId:'attempt_again'})),/accessible/);
+});
