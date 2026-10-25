@@ -74,12 +74,14 @@ function cleanLiveAnalyticsPossession_(payload, currentPeriod) {
 function cleanLiveAnalyticsPlayEvents_(events, teamSide) {
   if(events==null)return [];
   if(!Array.isArray(events)||events.length>100)throw new Error("A possession can contain up to 100 play events.");
-  const types=["paintTouch","offensiveRebound","deflection","driveKick","miss2","miss3","putback","andOne","made1","made2","made3"];
+  const types=["paintTouch","offensiveRebound","deflection","driveKick","miss2","miss3","putback","andOne","made1","made2","made3","cut","setPlay","ato","pickRoll","postUp","isolation","customTag"];
   return events.map(function(event){
     if(!event||types.indexOf(event.type)<0)throw new Error("Choose a valid play event.");
     const jersey=String(event.jersey||"").trim();
     if(jersey&&!/^[0-9]{1,3}$/.test(jersey))throw new Error("Use a jersey number of 1–3 digits.");
-    return {type:event.type,jersey:jersey,playerSide:event.type==="deflection"?(teamSide==="defense"?"us":"opponent"):(teamSide==="offense"?"us":"opponent")};
+    const label=event.type==="customTag"?String(event.label||"").trim():"";
+    if(event.type==="customTag"&&(!label||label.length>40||/[\x00-\x1f]/.test(label)))throw new Error("Custom tags need a name of 1–40 characters.");
+    return {type:event.type,label:label,jersey:jersey,playerSide:event.type==="deflection"?(teamSide==="defense"?"us":"opponent"):(teamSide==="offense"?"us":"opponent")};
   });
 }
 function buildLiveAnalyticsPlayerTotals_(possessions) {
@@ -94,6 +96,16 @@ function buildLiveAnalyticsPlayerTotals_(possessions) {
     if(/^made[123]$/.test(event.type))player.points+=Number(event.type.slice(-1));
   });});
   return Object.keys(totals).sort().map(function(key){return totals[key];});
+}
+
+function buildLiveScoringTagSummary_(possessions){
+  const labels={driveKick:"Drive & kick",putback:"Putback",cut:"Cut",setPlay:"Set play",ato:"ATO",pickRoll:"Pick & roll",postUp:"Post-up",isolation:"Isolation"},totals={};
+  possessions.forEach(function(item){const seen={};(item.playEvents||[]).forEach(function(event){
+    const label=event.type==="customTag"?event.label:labels[event.type];if(!label)return;
+    const key=JSON.stringify([item.teamSide,event.type,label]);if(seen[key])return;seen[key]=true;
+    const total=totals[key]||(totals[key]={teamSide:item.teamSide,label:label,possessions:0,points:0});total.possessions++;total.points+=Number(item.points||0);
+  });});
+  return Object.keys(totals).map(function(key){const total=totals[key];total.ppp=liveAnalyticsRate_(total.points,total.possessions);return total;});
 }
 
 function getLiveAnalyticsPossessions_(gameId) {
@@ -128,6 +140,7 @@ function buildLiveAnalyticsSummary_(possessions, currentPeriod) {
     possessionDifference:Math.abs(sides.offense.possessions - sides.defense.possessions),
     possessionLog:(possessions || []).slice(),
     playerTotals:buildLiveAnalyticsPlayerTotals_(possessions || []),
+    scoringTags:buildLiveScoringTagSummary_(possessions || []),
     recent:(possessions || []).slice(-8).reverse()};
 }
 
