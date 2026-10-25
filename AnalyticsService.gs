@@ -6,7 +6,7 @@ const LIVE_ANALYTICS_SHEET = "Live Analytics Possessions";
 const LIVE_ANALYTICS_HEADERS = [
   "Possession ID", "Game ID", "Sequence", "Timestamp", "Period", "Team Side",
   "Points", "Transition", "Paint Touch", "Right-Hand Drive", "Turnover",
-  "Forced Turnover", "Offensive Rebounds", "Recorded By", "Voided", "Source"
+  "Forced Turnover", "Offensive Rebounds", "Recorded By", "Voided", "Source", "Play Events"
 ];
 
 function initializeLiveAnalyticsSheet_() {
@@ -35,7 +35,7 @@ function recordLiveAnalyticsPossession(gameId, payload) {
       sheet.appendRow([possession.possessionId, String(gameId), sequence, new Date(), possession.period,
         possession.teamSide, possession.points, possession.transition, possession.paintTouch,
         possession.rightHandDrive, possession.turnover, possession.forcedTurnover,
-        possession.offensiveRebounds, Session.getActiveUser().getEmail() || "", false, "Live"]);
+        possession.offensiveRebounds, Session.getActiveUser().getEmail() || "", false, "Live", JSON.stringify(possession.playEvents)]);
     }
   } finally { lock.releaseLock(); }
   return getLiveGameTracker(gameId);
@@ -54,14 +54,46 @@ function cleanLiveAnalyticsPossession_(payload, currentPeriod) {
   const turnover = teamSide === "offense" && payload.turnover === true;
   const forcedTurnover = teamSide === "defense" && payload.forcedTurnover === true;
   if ((turnover || forcedTurnover) && points !== 0) throw new Error("A turnover possession must end with 0 points.");
+  const playEvents = cleanLiveAnalyticsPlayEvents_(payload.playEvents, teamSide);
+  const reboundEvents = playEvents.filter(function(event){return event.type==="offensiveRebound";});
+  if(reboundEvents.length && reboundEvents.length!==offensiveRebounds)throw new Error("Rebound events must match the possession rebound count.");
+  const scores=playEvents.filter(function(event){return /^made[123]$/.test(event.type);});
+  if(scores.length>1||(scores.length===1&&Number(scores[0].type.slice(-1))!==points))throw new Error("Scoring event must match total possession points.");
   return {
+    playEvents:playEvents,
     possessionId:/^LAP-[A-Za-z0-9-]{8,80}$/.test(String(payload.possessionId || ""))
       ? String(payload.possessionId) : "LAP-" + Utilities.getUuid().slice(0, 18).toUpperCase(),
     teamSide:teamSide, points:points, period:period,
-    transition:payload.transition === true, paintTouch:payload.paintTouch === true,
+    transition:payload.transition === true, paintTouch:payload.paintTouch === true || playEvents.some(function(event){return event.type==="paintTouch";}),
     rightHandDrive:teamSide === "defense" && payload.rightHandDrive === true,
     turnover:turnover, forcedTurnover:forcedTurnover, offensiveRebounds:offensiveRebounds
   };
+}
+
+// Append-only JSON column preserves the original workbook columns and old possessions.
+function cleanLiveAnalyticsPlayEvents_(events, teamSide) {
+  if(events==null)return [];
+  if(!Array.isArray(events)||events.length>100)throw new Error("A possession can contain up to 100 play events.");
+  const types=["paintTouch","offensiveRebound","deflection","driveKick","miss2","miss3","putback","andOne","made1","made2","made3"];
+  return events.map(function(event){
+    if(!event||types.indexOf(event.type)<0)throw new Error("Choose a valid play event.");
+    const jersey=String(event.jersey||"").trim();
+    if(jersey&&!/^[0-9]{1,3}$/.test(jersey))throw new Error("Use a jersey number of 1–3 digits.");
+    return {type:event.type,jersey:jersey,playerSide:event.type==="deflection"?(teamSide==="defense"?"us":"opponent"):(teamSide==="offense"?"us":"opponent")};
+  });
+}
+function buildLiveAnalyticsPlayerTotals_(possessions) {
+  const totals={};
+  possessions.forEach(function(item){(item.playEvents||[]).forEach(function(event){
+    if(!event.jersey)return;
+    const playerSide=event.playerSide||(item.teamSide==="offense"?"us":"opponent"),key=playerSide+":"+event.jersey;
+    const player=totals[key]||(totals[key]={jersey:event.jersey,playerSide:playerSide,offensiveRebounds:0,paintTouches:0,deflections:0,points:0});
+    if(event.type==="offensiveRebound")player.offensiveRebounds++;
+    if(event.type==="paintTouch")player.paintTouches++;
+    if(event.type==="deflection")player.deflections++;
+    if(/^made[123]$/.test(event.type))player.points+=Number(event.type.slice(-1));
+  });});
+  return Object.keys(totals).sort().map(function(key){return totals[key];});
 }
 
 function getLiveAnalyticsPossessions_(gameId) {
@@ -73,7 +105,8 @@ function getLiveAnalyticsPossessions_(gameId) {
       possessionId:String(row[0] || ""), sequence:Number(row[2] || 0), timestamp:formatLiveGameTimestamp_(row[3]),
       period:Number(row[4] || 1), teamSide:String(row[5] || ""), points:Number(row[6] || 0),
       transition:row[7] === true, paintTouch:row[8] === true, rightHandDrive:row[9] === true,
-      turnover:row[10] === true, forcedTurnover:row[11] === true, offensiveRebounds:Number(row[12] || 0)
+      turnover:row[10] === true, forcedTurnover:row[11] === true, offensiveRebounds:Number(row[12] || 0),
+      playEvents:parseLiveGameJson_(row[16], [])
     }; });
 }
 
@@ -93,6 +126,8 @@ function buildLiveAnalyticsSummary_(possessions, currentPeriod) {
   return {offense:sides.offense, defense:sides.defense,
     netPpp:roundLiveAnalytics_(sides.offense.ppp - sides.defense.ppp),
     possessionDifference:Math.abs(sides.offense.possessions - sides.defense.possessions),
+    possessionLog:(possessions || []).slice(),
+    playerTotals:buildLiveAnalyticsPlayerTotals_(possessions || []),
     recent:(possessions || []).slice(-8).reverse()};
 }
 
