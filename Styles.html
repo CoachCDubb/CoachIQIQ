@@ -2869,3 +2869,17 @@ body.live-game-mode .live-analytics-special-tools>div{flex-wrap:wrap;min-width:0
 body.live-game-mode .objectives-disabled .live-analytics-objective-note{display:none}
 body.live-game-mode .live-game-page{width:100%;min-width:0;max-width:100%;box-sizing:border-box}
 </style>
+<style>
+body.live-game-mode .live-play-tools>.live-play-rosters{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+.live-play-rosters label{display:grid;gap:6px;min-width:0}
+.live-play-rosters select{min-width:0;width:100%;max-width:100%;min-height:44px;padding:8px;font:inherit;font-size:12px;border:1px solid var(--line);background:#fff;color:var(--ink);box-sizing:border-box}
+.live-scoring-tags{border-top:1px solid var(--line);padding-top:10px}
+.live-scoring-tags summary{font-weight:800;cursor:pointer;padding:8px 0}
+.live-scoring-tags>div{display:flex;flex-wrap:wrap;gap:8px;margin:8px 0}
+.live-scoring-tags input{width:min(100%,220px);max-width:100%;box-sizing:border-box}
+.live-scoring-tags small{display:block;margin-top:8px}
+.live-roster-upload{display:grid;gap:6px;margin:12px 0}
+.live-roster-upload input{max-width:100%}
+.live-roster-upload small{font-weight:400}
+@media(max-width:600px){body.live-game-mode .live-play-tools>.live-play-rosters{grid-template-columns:minmax(0,1fr)}}
+</style>
