@@ -2813,3 +2813,59 @@ body.live-game-setup-mode #content{padding-top:12px;}
 <style>
 .live-play-tools{display:grid;gap:10px;padding:12px;border:1px solid var(--border);border-radius:10px;margin-bottom:12px}.live-play-tools label{font-weight:700}.live-play-tools input{width:95px;padding:10px;margin-left:8px;font:inherit;border:1px solid var(--border);border-radius:6px}.live-play-tools>div{display:flex;flex-wrap:wrap;gap:8px}.live-play-tools button{min-height:44px;padding:10px 14px;border:1px solid var(--border);border-radius:8px;background:var(--surface);color:var(--text);font-weight:700}.live-play-tools small{line-height:1.5;color:var(--muted)}.possession-play-sequence,.possession-log-row>div{display:flex;align-items:center;flex-wrap:wrap;gap:5px;margin-top:10px}.play-chip{display:inline-block;padding:5px 8px;border-radius:6px;font-size:12px;font-weight:700;background:#eef2f6;color:#27354b}.play-chip.paint{background:#ede9fe;color:#5b21b6}.play-chip.rebound{background:#fef3c7;color:#92400e}.play-chip.deflection{background:#dbeafe;color:#1e40af}.play-chip.score{background:#dcfce7;color:#166534}.play-chip.miss{background:#fee2e2;color:#991b1b}.play-arrow{color:var(--muted)}.possession-log-row{padding:14px;margin:10px 0;border:1px solid var(--border);border-left:4px solid #059669;border-radius:8px;break-inside:avoid}.possession-log-row.defense{border-left-color:#2563eb}.possession-log-row[hidden]{display:none}.possession-log-row>strong{font-size:13px}.possession-insight{padding:14px;line-height:1.6;background:var(--primary-light);border-radius:8px}.possession-table-wrap{overflow-x:auto}.possession-player-table{width:100%;border-collapse:collapse;margin:10px 0 20px}.possession-player-table th,.possession-player-table td{text-align:left;padding:10px;border-bottom:1px solid var(--border);font-size:12px}.possession-period-filter{display:flex;align-items:center;gap:8px;margin:12px 0}.live-play-tools button:focus-visible{outline:3px solid var(--primary);outline-offset:2px}@media print{.possession-period-filter{display:none}.play-chip{print-color-adjust:exact;-webkit-print-color-adjust:exact}.possession-log{overflow:visible}}
 </style>
+
+<style>
+/* Possession sequences need their own rows, including inside a Sheets dialog. */
+body.live-game-mode #content{overflow:auto}
+body.live-game-mode .live-game-page{height:auto;min-height:100%;overflow:visible}
+body.live-game-mode .live-game-tracker,
+body.live-game-mode .live-game-tracker.dense-objectives{height:auto;min-height:0;grid-template-columns:minmax(0,1fr);grid-template-rows:none;grid-auto-rows:auto;overflow:visible}
+body.live-game-mode .live-game-tracker>*,
+body.live-game-mode .live-analytics-head>*,
+body.live-game-mode .objective-tracker-header>*{min-width:0;max-width:100%;box-sizing:border-box}
+body.live-game-mode .objective-tracker-header{position:static;flex-wrap:wrap;margin:0;padding:14px 16px;gap:12px}
+body.live-game-mode .objective-tracker-header>div:first-child{flex:1 1 280px}
+body.live-game-mode .objective-tracker-header h2{overflow-wrap:anywhere}
+body.live-game-mode .objective-tracker-actions{flex:1 1 420px;justify-content:flex-start;min-width:0}
+body.live-game-mode .objective-tracker-game-tools,
+body.live-game-mode .objective-tracker-game-tools>span,
+body.live-game-mode .objective-tracker-session-tools{display:flex;flex-wrap:wrap;align-items:center;gap:6px;min-width:0}
+body.live-game-mode .objective-tracker-actions button{min-height:44px;white-space:normal}
+body.live-game-mode .live-tracker-save-state{flex-wrap:wrap;gap:8px}
+body.live-game-mode .live-tracker-save-state>span{display:flex;flex-wrap:wrap;gap:8px;min-width:0}
+body.live-game-mode .live-analytics-head{display:flex;flex-wrap:wrap;align-items:flex-start;gap:12px}
+body.live-game-mode .live-analytics-head>div:first-child{flex:1 1 320px}
+body.live-game-mode .live-analytics-roles{display:flex;flex-wrap:wrap;gap:6px}
+body.live-game-mode .live-analytics-controls{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));align-items:start;gap:12px}
+body.live-game-mode .live-analytics-controls[hidden]{display:none}
+body.live-game-mode .live-analytics-controls>*{min-width:0;max-width:100%;box-sizing:border-box}
+body.live-game-mode .live-play-tools{grid-column:1/-1;margin:0;padding:12px;gap:8px}
+body.live-game-mode .live-play-tools>div{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:8px}
+body.live-game-mode .live-play-tools button{font-size:12px;white-space:normal}
+body.live-game-mode .live-analytics-tags{grid-column:auto;display:flex;flex-wrap:wrap}
+body.live-game-mode .live-analytics-oreb{justify-self:start}
+body.live-game-mode .live-analytics-outcomes{grid-column:1/-1;display:flex;flex-wrap:wrap;align-items:center;gap:8px}
+body.live-game-mode .live-analytics-outcomes>span{flex-basis:100%;font-size:11px}
+body.live-game-mode .live-analytics-outcomes button{flex:1 1 48px;min-height:44px;min-width:0}
+body.live-game-mode .live-analytics-outcomes .turnover{flex:2 1 110px}
+body.live-game-mode .live-analytics-undo-tools,
+body.live-game-mode .live-analytics-draft-summary{grid-column:1/-1}
+body.live-game-mode .live-analytics-summary{display:flex;flex-wrap:wrap;gap:10px}
+body.live-game-mode .objective-tracker-grid{grid-auto-rows:auto!important;grid-template-rows:none!important}
+body.live-game-mode .objective-card{overflow:visible}
+body.live-game-mode .objective-recent{max-height:none;overflow:visible}
+body.live-game-mode .live-winning-targets{grid-template-columns:minmax(0,1fr)}
+body.live-game-mode .live-winning-target-rows{min-width:0}
+body.live-game-mode .live-winning-target-row{min-width:0}
+@media(max-width:600px){
+ body.live-game-mode .live-analytics-controls{grid-template-columns:minmax(0,1fr)}
+ body.live-game-mode .live-analytics-tags{grid-column:1/-1}
+ body.live-game-mode .objective-tracker-header{padding:12px}
+}
+</style>
+<style>
+body.live-game-mode .live-analytics button{min-height:44px;font-size:11px}
+body.live-game-mode .live-analytics-special-tools>div{flex-wrap:wrap;min-width:0}
+body.live-game-mode .objectives-disabled .live-analytics-objective-note{display:none}
+body.live-game-mode .live-game-page{width:100%;min-width:0;max-width:100%;box-sizing:border-box}
+</style>

@@ -140,7 +140,7 @@ function createLiveGameSetup(data) {
   const guestPlayers = cleanLiveGameGuestPlayers_(data.guestPlayers);
   const allRosterIds = rosterIds.concat(guestPlayers.map(function(player){return player.id;}));
   const enableAnalytics = data.enableAnalytics === true;
-  const enableObjectives = data.enableObjectives === true;
+  let enableObjectives = data.enableObjectives === true;
   const selectedStats = enableObjectives && Array.isArray(data.selectedStats) ? data.selectedStats.map(String) : [];
   const customStats = cleanLiveGameCustomStats_(data.customStats);
   const trackingPlan = enableObjectives ? cleanLiveGameTrackingPlan_(data.trackingObjectives) : [];
@@ -151,7 +151,7 @@ function createLiveGameSetup(data) {
   if (!opponent) throw new Error("Enter the opponent.");
   if (!Number.isInteger(periodLength) || periodLength < 1 || periodLength > 60) throw new Error("Period length must be between 1 and 60 minutes.");
   if (!allRosterIds.length) throw new Error("Select or manually add at least one available player.");
-  if (enableObjectives && !trackingPlan.length && !selectedStats.length) throw new Error("Add at least one game-plan objective or turn Game Plan Objectives off.");
+  if (!trackingPlan.length && !selectedStats.length) enableObjectives = false;
   trackingPlan.forEach(function(objective) {
     if (objective.subject === "our_player" && allRosterIds.indexOf(objective.playerId) < 0) {
       throw new Error(objective.playerLabel + " must be included on the available roster.");
