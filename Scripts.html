@@ -291,7 +291,7 @@ function renderLiveGameReadiness(){
   const objectivesEnabled=!!((document.getElementById("liveGameEnableObjectives")||{}).checked);
   const checks=[{label:"Matchup",ready:!!opponent||scrimmage,detail:opponent||(scrimmage?"Intrasquad":"Opponent needed")},
     {label:"Available roster",ready:roster>0,detail:roster+" selected"},
-    {label:"Tonight's tools",ready:!objectivesEnabled||objectives>0,detail:(analytics?"Analytics":"No analytics")+" · "+(objectivesEnabled?objectives+" objective"+(objectives===1?"":"s"):"No objectives")}];
+    {label:"Tonight's tools",ready:true,detail:(analytics?"Analytics":"No analytics")+" · "+(objectivesEnabled?objectives+" objective"+(objectives===1?"":"s"):"No objectives")}];
   const ready=checks.every(function(item){return item.ready;});
   summary.innerHTML='<div><span>Pregame readiness</span><strong>'+(ready?'Ready for game day':'Finish the essentials')+'</strong></div><ul>'+checks.map(function(item){return '<li class="'+(item.ready?'ready':'needed')+'"><b>'+(item.ready?'✓':'!')+' '+escapeHtmlValue(item.label)+'</b><small>'+escapeHtmlValue(item.detail)+'</small></li>';}).join("")+'</ul>';
 }
@@ -582,7 +582,7 @@ function applyLiveGameSportPreset_(sport,initialLoad){
   if(metric){
     metric.innerHTML=setup.sportObjectives.map(function(objective){return `<option>${escapeHtmlValue(objective.label)}</option>`;}).join("")+'<option value="Custom">Custom Category</option>';
   }
-  CoachIQ.liveGame.objectives=cloneLiveGamePlan(setup.sportObjectives);
+  if(initialLoad)CoachIQ.liveGame.objectives=[];
   updateObjectiveBuilderFields();
   renderLiveGameObjectives();
 }
@@ -599,8 +599,7 @@ function submitLiveGameSetup(event){
   event.preventDefault();
   const button = document.getElementById("saveLiveGameSetupButton");
   const enableAnalytics=!!document.getElementById("liveGameEnableAnalytics").checked;
-  const enableObjectives=!!document.getElementById("liveGameEnableObjectives").checked;
-  if(enableObjectives&&!CoachIQ.liveGame.objectives.length){ showToast("Add a winning objective or turn Game-Plan Objectives off.", "error"); return; }
+  const enableObjectives=!!document.getElementById("liveGameEnableObjectives").checked&&CoachIQ.liveGame.objectives.length>0;
   const playerIds = Array.from(document.querySelectorAll(".live-game-player-check:checked")).map(function(input){ return input.value; });
   const selectedGuestIds=Array.from(document.querySelectorAll(".live-game-guest-check:checked")).map(function(input){return input.value;});
   const payload = {
