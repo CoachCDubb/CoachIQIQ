@@ -21,6 +21,7 @@ function recordLiveAnalyticsPossession(gameId, payload) {
   initializeLiveGameSheets_();
   const gameRecord = findLiveGameRecord_(gameId);
   requireLiveGameTeamAccess_(gameRecord.game.Team);
+  if(String(gameRecord.game.Status)==="Offline Importing")throw new Error("An offline import is in progress for this game.");
   if (!getLiveGameTrackerMode_(gameRecord.game, parseLiveGameJson_(gameRecord.game["Active Tracking Plan"], []), []).analytics) {
     throw new Error("Possession Analytics is turned off for this game.");
   }
@@ -30,6 +31,7 @@ function recordLiveAnalyticsPossession(gameId, payload) {
   const lock = LockService.getScriptLock();
   lock.waitLock(10000);
   try {
+    const status=String(findLiveGameRecord_(gameId).game.Status);if(status==="Completed"||status==="Offline Importing")throw new Error("This game cannot accept new possessions in its current state.");
     const rows = sheet.getLastRow() > 1
       ? sheet.getRange(2, 1, sheet.getLastRow() - 1, LIVE_ANALYTICS_HEADERS.length).getValues() : [];
     const duplicate = rows.some(function(row) { return String(row[0] || "") === possession.possessionId; });

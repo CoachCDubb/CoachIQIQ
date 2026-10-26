@@ -183,7 +183,7 @@ function getLiveGameScoutingComparison(gameId,selectedReportId){
   requireStaffCapability_("run_sessions");const record=findLiveGameRecord_(gameId);requireLiveGameTeamAccess_(record.game.Team);if(String(record.game.Status||"")!=="Completed")throw new Error("Finish the game before opening the scouting comparison.");
   const report=getLiveGamePostgameReport(gameId),mode=parseLiveGameObject_(record.game["Tracker Mode"],{});
   report.analytics=buildLiveAnalyticsSummary_(getLiveAnalyticsPossessions_(gameId),Number(record.game["Current Period"]||1));
-  let snapshot=null,sourceMode="pregame";
+  let snapshot=null,sourceMode=mode.scoutingSourceMode==="offline"?"offline":"pregame";
   if(selectedReportId){snapshot=captureGameScoutingReport_(selectedReportId,String(record.game.Team||""),String(record.game.Opponent||""));sourceMode="retrospective";}
   else if(mode.scoutingSnapshotId){snapshot=readGameReportSnapshot_(gameId,"scouting",mode.scoutingSnapshotId);if(snapshot&&(snapshot.reportId!==mode.scoutingReportId||snapshot.team!==String(record.game.Team||"")||snapshot.opponent.trim().toLowerCase()!==String(record.game.Opponent||"").trim().toLowerCase()))throw new Error("The saved scouting snapshot does not match this game.");}
   if(snapshot)report.scoutingComparison=buildGameScoutingComparison_(snapshot,report,sourceMode);

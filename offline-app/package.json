@@ -1,0 +1,12 @@
+{
+  "name": "coachiq-gameday-offline",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "node tools/build.cjs",
+    "test": "node --test --test-isolation=none tests/*.test.mjs"
+  },
+  "devDependencies": {
+    "fake-indexeddb": "^6.2.6"
+  }
+}

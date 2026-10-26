@@ -723,7 +723,9 @@ function recordLiveGameObjectiveEvents(gameId, events) {
   const lock = LockService.getScriptLock();
   lock.waitLock(10000);
   try {
-    if (String(findLiveGameRecord_(gameId).game.Status || "") === "Completed") {
+    const currentStatus=String(findLiveGameRecord_(gameId).game.Status||"");
+    if(currentStatus==="Offline Importing")throw new Error("An offline import is in progress for this game.");
+    if (currentStatus === "Completed") {
       throw new Error("A completed game cannot accept more events.");
     }
     const rows = eventSheet.getLastRow() > 1
