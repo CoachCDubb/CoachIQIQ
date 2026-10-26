@@ -111,44 +111,47 @@ function captureGameScoutingReport_(reportId,team,opponent){
   if(report.status==="Archived")throw new Error("Choose an active scouting report.");
   return{reportId:report.reportId,team:report.team,opponent:report.opponent,gameDate:report.gameDate,status:report.status,identity:report.identity,keysToVictory:report.keysToVictory,sections:report.sections,updatedAt:report.updatedAt,capturedAt:new Date().toISOString()};
 }
-function scoutingComparisonMetrics_(){return[{id:"points",label:"Points"},{id:"paintTouch",label:"Paint-touch possessions"},{id:"offensiveRebound",label:"Offensive rebounds"},{id:"turnover",label:"Turnovers"},{id:"transition",label:"Transition possessions"},{id:"deflection",label:"Deflections"},{id:"cut",label:"Cut possessions"},{id:"driveKick",label:"Drive & kick"},{id:"setPlay",label:"Set play"},{id:"ato",label:"ATO"},{id:"putback",label:"Putback"},{id:"pickRoll",label:"Pick & roll"},{id:"postUp",label:"Post-up"},{id:"isolation",label:"Isolation"},{id:"rightHandDrive",label:"Right-hand drive"},{id:"stops",label:"Defensive stops"},{id:"kills",label:"Defensive kills"},{id:"customTag",label:"Custom tag"}];}
+function scoutingComparisonMetrics_(){return[{id:"points",label:"Points"},{id:"paintTouch",label:"Paint-touch possessions"},{id:"paintTouches",label:"Total recorded paint touches"},{id:"offensiveRebound",label:"Offensive rebounds"},{id:"turnover",label:"Turnovers"},{id:"transition",label:"Transition possessions"},{id:"deflection",label:"Deflections"},{id:"cut",label:"Cut possessions"},{id:"driveKick",label:"Drive & kick"},{id:"setPlay",label:"Set play"},{id:"ato",label:"ATO"},{id:"putback",label:"Putback"},{id:"pickRoll",label:"Pick & roll"},{id:"postUp",label:"Post-up"},{id:"isolation",label:"Isolation"},{id:"rightHandDrive",label:"Right-hand drive"},{id:"stops",label:"Defensive stops"},{id:"kills",label:"Defensive kills"},{id:"customTag",label:"Custom tag"}];}
 function cleanScoutingComparison_(raw){
   raw=raw||{};const metric=String(raw.metric||"");if(!metric)return null;
   if(!scoutingComparisonMetrics_().some(function(item){return item.id===metric;}))throw new Error("Choose a valid postgame comparison measure.");
   const label=metric==="customTag"?safeScoutingText_(raw.label,40):"";if(metric==="customTag"&&!label)throw new Error("Name the custom tag for comparison.");
   return{metric:metric,team:raw.team==="opponent"?"opponent":"us",label:label};
 }
-function scoutingMetricForLabel_(label){const key=String(label||"").toLowerCase().replace(/[^a-z0-9]/g,"");const map={points:"points",painttouches:"paintTouch",painttouch:"paintTouch",offensiverebounds:"offensiveRebound",oreb:"offensiveRebound",turnovers:"turnover",transition:"transition",deflections:"deflection",cuts:"cut",cut:"cut",drivekick:"driveKick",driveandkick:"driveKick",setplay:"setPlay",ato:"ato",putback:"putback",kills:"kills",stops:"stops"};return Object.prototype.hasOwnProperty.call(map,key)?map[key]:"";}
+function scoutingMetricForLabel_(label){const key=String(label||"").toLowerCase().replace(/[^a-z0-9]/g,"");const map={totalpainttouches:"paintTouches",recordedpainttouches:"paintTouches",points:"points",painttouches:"paintTouch",painttouch:"paintTouch",offensiverebounds:"offensiveRebound",oreb:"offensiveRebound",turnovers:"turnover",transition:"transition",deflections:"deflection",cuts:"cut",cut:"cut",drivekick:"driveKick",driveandkick:"driveKick",setplay:"setPlay",ato:"ato",putback:"putback",kills:"kills",stops:"stops"};return Object.prototype.hasOwnProperty.call(map,key)?map[key]:"";}
 function scoutingGameEvidence_(analytics,choice,finalScore){
   const reverse=["deflection","stops","kills"].indexOf(choice.metric)>=0;
   const side=(choice.team==="us")!==reverse?"offense":"defense",metric=choice.metric;
   const entries=(analytics.possessionLog||[]).map(function(item,index){return{item:item,number:index+1};}).filter(function(entry){return entry.item.teamSide===side;});
   const automatic=["points","turnover","stops","kills"].indexOf(metric)>=0;
-  let count=0,covered=0,points=0,scored=0,currentStops=0,kills=0;const numbers=[];
+  let count=0,covered=0,points=0,scored=0,currentStops=0,kills=0,legacyPaintCounts=0;const numbers=[];
   entries.forEach(function(entry){
     const item=entry.item,matches=(item.playEvents||[]).filter(function(event){return event.type===metric&&(metric!=="customTag"||event.label===choice.label);});
     let present=matches.length>0;
+    if(metric==="paintTouches"){present=livePaintTouchCount_(item)>0;if(present&&!(item.playEvents||[]).some(function(event){return event.type==="paintTouch";}))legacyPaintCounts++;}
     if(["paintTouch","transition","rightHandDrive"].indexOf(metric)>=0)present=item[metric]===true||present;
     if(metric==="offensiveRebound")present=Number(item.offensiveRebounds||0)>0;
     if(metric==="turnover")present=side==="offense"?item.turnover===true:item.forcedTurnover===true;
     if(metric==="points")present=true;
     if(metric==="stops"||metric==="kills")present=Number(item.points||0)===0;
-    if(automatic||present||(metric!=="customTag"&&Array.isArray(item.trackedTags)&&item.trackedTags.indexOf(metric)>=0))covered++;
+    if(automatic||present||(metric!=="customTag"&&Array.isArray(item.trackedTags)&&item.trackedTags.indexOf(metric==="paintTouches"?"paintTouch":metric)>=0))covered++;
     if(Number(item.points||0)===0){currentStops++;if(currentStops%3===0)kills++;}else currentStops=0;
     if(present){
-      count+=metric==="points"?Number(item.points||0):metric==="offensiveRebound"?Number(item.offensiveRebounds||0):metric==="deflection"?matches.length:1;
+      count+=metric==="paintTouches"?livePaintTouchCount_(item):metric==="points"?Number(item.points||0):metric==="offensiveRebound"?Number(item.offensiveRebounds||0):metric==="deflection"?matches.length:1;
       points+=Number(item.points||0);if(Number(item.points||0)>0)scored++;numbers.push(entry.number);
     }
   });
   if(metric==="kills")count=kills;
   const scoreKey=choice.team==="us"?"our":"opponent",hasFinalPoints=metric==="points"&&finalScore&&typeof finalScore[scoreKey]==="number";
   if(hasFinalPoints)count=finalScore[scoreKey];
-  const status=hasFinalPoints?"measured":!entries.length||!covered?"untracked":covered<entries.length?"partial":"measured";
+  let status=hasFinalPoints?"measured":!entries.length||!covered?"untracked":covered<entries.length?"partial":"measured";
+  if(metric==="paintTouches"&&legacyPaintCounts)status="partial";
   const catalog=scoutingComparisonMetrics_().find(function(item){return item.id===metric;}),label=metric==="customTag"?choice.label:(catalog||{}).label||metric,prefix=choice.team==="us"?"Our team":"Opponent";
   let text;
   if(hasFinalPoints)text=prefix+" final confirmed score: "+count+" points.";
   else if(status==="untracked")text="No "+label.toLowerCase()+" tracking evidence is available for "+prefix.toLowerCase()+". No result is inferred.";
   else text=prefix+" · "+count+" observed "+label.toLowerCase()+". "+(automatic?"Across "+entries.length+" recorded possessions.":"Tracking coverage "+covered+"/"+entries.length+" relevant possessions.")+(metric!=="points"?" Tagged/stopped possessions: "+points+" points, scored on "+scored+"/"+numbers.length+".":"")+(status==="partial"?" Partial evidence; untracked possessions are not assumed to be zero.":"");
+  if(metric==="paintTouches")text+=" Counts use recorded touch events; older boolean-only rows establish at least one touch, and additional historical touches cannot be reconstructed.";
   return{status:status,value:count,metric:metric,team:choice.team,label:label,covered:covered,total:entries.length,numbers:hasFinalPoints?[]:numbers,text:text};
 }
 function buildGameScoutingComparison_(snapshot,report,sourceMode){
@@ -210,7 +213,7 @@ function scoutingSectionGameContext_(section,analytics){
   return "No explicit tracked measure linked. Review this scouting note against the game evidence; it is not automatically graded.";
 }
 
-function scoutingWatchTypes_(){return ["paintTouch","offensiveRebound","transition","driveKick","cut","setPlay","ato","putback","pickRoll","postUp","isolation","rightHandDrive","customTag"];}
+function scoutingWatchTypes_(){return ["paintTouch","paintTouches","offensiveRebound","transition","driveKick","cut","setPlay","ato","putback","pickRoll","postUp","isolation","rightHandDrive","customTag"];}
 function cleanScoutingWatch_(section){
   if(!section||section.watch!==true)return false;
   const choice=cleanScoutingComparison_(section.comparison);
@@ -220,9 +223,9 @@ function cleanScoutingWatch_(section){
 }
 function scoutingWatchlistFromSections_(sections){
   const seen=Object.create(null),list=[];
-  (Array.isArray(sections)?sections:[]).forEach(function(section){if(!cleanScoutingWatch_(section))return;const choice=cleanScoutingComparison_(section.comparison),key=JSON.stringify([choice.team,choice.metric,choice.label]);if(seen[key])return;seen[key]=true;
+  (Array.isArray(sections)?sections:[]).forEach(function(section){if(!cleanScoutingWatch_(section))return;const choice=cleanScoutingComparison_(section.comparison),key=JSON.stringify([choice.team,choice.metric==="paintTouches"?"paintTouch":choice.metric,choice.label]);if(seen[key])return;seen[key]=true;
     const label=choice.metric==="customTag"?choice.label:(scoutingComparisonMetrics_().find(function(item){return item.id===choice.metric;})||{}).label;
-    list.push({type:choice.metric,label:label,side:choice.team==="opponent"?"defense":"offense",title:safeScoutingText_(section.title,80),response:safeScoutingText_(section.watchResponse,240)});
+    list.push({type:choice.metric==="paintTouches"?"paintTouch":choice.metric,label:label,side:choice.team==="opponent"?"defense":"offense",title:safeScoutingText_(section.title,80),response:safeScoutingText_(section.watchResponse,240)});
   });if(list.length>3)throw new Error("Choose up to 3 scouting watchlist priorities.");return list;
 }
 function mergeScoutingWatchFocus_(focus,watchlist){

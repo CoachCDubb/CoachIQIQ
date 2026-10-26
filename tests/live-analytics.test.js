@@ -27,7 +27,7 @@ test('tracker uses role-specific tags and a single possession outcome', () => {
   assert.match(game, /End possession/);
   assert.match(game, /finishLiveAnalyticsPossession\(3/);
   assert.match(scripts, /Any Right-Hand Drive/);
-  assert.match(scripts, /Any Paint Touch Allowed/);
+  assert.match(scripts, /\+ Paint touch allowed/);
   assert.match(scripts, /recordLiveAnalyticsPossession/);
   assert.match(scripts, /voidLatestLiveAnalyticsPossession/);
 });
@@ -37,7 +37,7 @@ test('tracker explains possession-level tags and permits rebound correction', ()
   const scripts = read('Scripts.html');
   assert.match(game, /Tap what mattered, then points to save one possession/i);
   assert.match(game, /removeLiveAnalyticsRebound/);
-  assert.match(scripts, /Any Paint Touch/);
+  assert.match(scripts, /\+ Paint touch/);
   assert.match(scripts, /aria-pressed/);
   assert.match(scripts, /function removeLiveAnalyticsRebound/);
   assert.match(scripts, /Math\.max\(0,Number\(draft\.offensiveRebounds\|\|0\)-1\)/);
