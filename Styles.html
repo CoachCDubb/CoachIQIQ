@@ -2903,3 +2903,17 @@ body.live-game-mode .live-analytics-objective-note{display:none}
 .live-focus-editor p,.live-focus-setup p{font-size:12px;line-height:1.5}
 </style>
 <style>.checkpoint-extra-metrics{grid-column:1/-1}.checkpoint-extra-metrics>summary{cursor:pointer;font-weight:700;padding:10px 0}</style>
+<style>
+.live-kill-status{padding:8px 12px;color:#166534;background:#dcfce7;border-left:4px solid #16a34a;font-size:12px;font-weight:800}
+.checkpoint-intelligence{margin:18px 0;padding:16px;border:1px solid var(--line);background:#f8fafc}
+.checkpoint-kill-summary{padding:12px;margin:10px 0;background:#dbeafe;color:#1e3a8a;font-weight:800;line-height:1.5}
+#checkpointIntelligenceCards{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+#checkpointIntelligenceCards article{padding:12px;background:#fff;border-left:4px solid #64748b;break-inside:avoid}
+#checkpointIntelligenceCards article.positive{border-color:#16a34a}
+#checkpointIntelligenceCards article.attention{border-color:#d97706}
+#checkpointIntelligenceCards strong{font-size:13px;color:#172b46}
+#checkpointIntelligenceCards p,.checkpoint-intelligence>details p{font-size:12px;line-height:1.6;margin:8px 0}
+#checkpointIntelligenceCards small{font-size:11px;color:#526175}
+.checkpoint-intelligence summary{cursor:pointer;margin-top:12px;font-weight:700}
+@media(max-width:650px){#checkpointIntelligenceCards{grid-template-columns:minmax(0,1fr)}}
+</style>

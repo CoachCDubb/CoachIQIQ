@@ -6,7 +6,7 @@ const LIVE_ANALYTICS_SHEET = "Live Analytics Possessions";
 const LIVE_ANALYTICS_HEADERS = [
   "Possession ID", "Game ID", "Sequence", "Timestamp", "Period", "Team Side",
   "Points", "Transition", "Paint Touch", "Right-Hand Drive", "Turnover",
-  "Forced Turnover", "Offensive Rebounds", "Recorded By", "Voided", "Source", "Play Events"
+  "Forced Turnover", "Offensive Rebounds", "Recorded By", "Voided", "Source", "Play Events", "Tracked Tags"
 ];
 
 function initializeLiveAnalyticsSheet_() {
@@ -35,7 +35,7 @@ function recordLiveAnalyticsPossession(gameId, payload) {
       sheet.appendRow([possession.possessionId, String(gameId), sequence, new Date(), possession.period,
         possession.teamSide, possession.points, possession.transition, possession.paintTouch,
         possession.rightHandDrive, possession.turnover, possession.forcedTurnover,
-        possession.offensiveRebounds, Session.getActiveUser().getEmail() || "", false, "Live", JSON.stringify(possession.playEvents)]);
+        possession.offensiveRebounds, Session.getActiveUser().getEmail() || "", false, "Live", JSON.stringify(possession.playEvents), JSON.stringify(possession.trackedTags)]);
     }
   } finally { lock.releaseLock(); }
   return getLiveGameTracker(gameId);
@@ -61,6 +61,7 @@ function cleanLiveAnalyticsPossession_(payload, currentPeriod) {
   if(scores.length>1||(scores.length===1&&Number(scores[0].type.slice(-1))!==points))throw new Error("Scoring event must match total possession points.");
   return {
     playEvents:playEvents,
+    trackedTags:cleanLiveAnalyticsTrackedTags_(payload.trackedTags),
     possessionId:/^LAP-[A-Za-z0-9-]{8,80}$/.test(String(payload.possessionId || ""))
       ? String(payload.possessionId) : "LAP-" + Utilities.getUuid().slice(0, 18).toUpperCase(),
     teamSide:teamSide, points:points, period:period,
@@ -71,6 +72,48 @@ function cleanLiveAnalyticsPossession_(payload, currentPeriod) {
 }
 
 // Append-only JSON column preserves the original workbook columns and old possessions.
+function cleanLiveAnalyticsTrackedTags_(tags){
+  if(tags==null)return null;
+  const allowed=["paintTouch","offensiveRebound","transition","deflection","driveKick","cut","setPlay","ato","putback","pickRoll","postUp","isolation","rightHandDrive","customTag"];
+  if(!Array.isArray(tags)||tags.length>6||tags.some(function(tag){return allowed.indexOf(tag)<0;}))throw new Error("Choose valid tracked possession tags.");
+  return tags.filter(function(tag,index){return tags.indexOf(tag)===index;});
+}
+
+/** Exact patterns from completed possessions; no model-generated facts or causal claims. */
+function buildLivePossessionIntelligence_(possessions){
+  const kills={total:0,currentStops:0,longestStops:0,totalStops:0,progress:0},paint={},patterns={},insights=[],recommendations=[];
+  ["offense","defense"].forEach(function(side){paint[side]={withTouch:{possessions:0,scored:0,points:0},withoutTouch:{possessions:0,scored:0,points:0},unknown:0,currentNoTouch:0,longestNoTouch:0};});
+  const labels={paintTouch:"Paint touch",offensiveRebound:"OREB",transition:"Transition",rightHandDrive:"Right-hand drive",deflection:"Deflection",driveKick:"Drive & kick",cut:"Cut",setPlay:"Set play",ato:"ATO",putback:"Putback",pickRoll:"Pick & roll",postUp:"Post-up",isolation:"Isolation"};
+  (possessions||[]).forEach(function(item,index){
+    if(!paint[item.teamSide])return;const points=Number(item.points||0),side=item.teamSide,p=paint[side];
+    const covered=item.paintTouch===true||(Array.isArray(item.trackedTags)&&item.trackedTags.indexOf("paintTouch")>=0);
+    if(covered){const bucket=item.paintTouch?p.withTouch:p.withoutTouch;bucket.possessions++;bucket.points+=points;if(points>0)bucket.scored++;p.currentNoTouch=item.paintTouch?0:p.currentNoTouch+1;p.longestNoTouch=Math.max(p.longestNoTouch,p.currentNoTouch);}else{p.unknown++;p.currentNoTouch=0;}
+    if(side==="defense"){
+      if(points===0){kills.totalStops++;kills.currentStops++;kills.longestStops=Math.max(kills.longestStops,kills.currentStops);if(kills.currentStops%3===0)kills.total++;}else kills.currentStops=0;
+    }
+    const tags={};Object.keys(labels).forEach(function(type){if(item[type]===true||(type==="offensiveRebound"&&Number(item.offensiveRebounds||0)>0))tags[JSON.stringify([type,labels[type]])]={type:type,label:labels[type]};});
+    (item.playEvents||[]).forEach(function(event){const label=event.type==="customTag"?event.label:labels[event.type];if(label)tags[JSON.stringify([event.type,label])]={type:event.type,label:label};});
+    Object.keys(tags).forEach(function(key){const tag=tags[key],groupKey=JSON.stringify([side,key]),group=patterns[groupKey]||(patterns[groupKey]={side:side,type:tag.type,label:tag.label,possessions:0,scored:0,points:0,logNumbers:[]});group.possessions++;group.points+=points;if(points>0)group.scored++;group.logNumbers.push(index+1);});
+  });
+  kills.progress=kills.currentStops%3;
+  if(kills.totalStops)insights.push({kind:"positive",title:"Defensive kills",text:kills.total+" kill"+(kills.total===1?"":"s")+" earned · "+kills.totalStops+" total stops · longest run "+kills.longestStops+". Current run: "+kills.currentStops+" consecutive stops; "+kills.progress+"/3 toward the next kill.",logNumbers:[]});
+  if(kills.progress===2)recommendations.push("One more stop earns the next kill: you have 2 consecutive stops toward it.");
+  ["offense","defense"].forEach(function(side){
+    const p=paint[side],who=side==="defense"?"Opponent":"Your team",withTouch=p.withTouch,without=p.withoutTouch;
+    if(withTouch.possessions){const all=withTouch.scored===withTouch.possessions;insights.push({kind:side==="defense"&&all?"attention":"neutral",title:who+" paint-touch scoring",text:(all?who+" scored on every recorded paint-touch possession: ":who+" scored on ")+withTouch.scored+"/"+withTouch.possessions+" · "+withTouch.points+" points · "+(withTouch.points/withTouch.possessions).toFixed(2)+" PPP."+(withTouch.possessions<3?" Small sample.":""),logNumbers:[]});}
+    if(without.possessions)insights.push({kind:"neutral",title:who+" without a paint touch",text:who+" scored on "+without.scored+"/"+without.possessions+" confirmed no-paint-touch possessions · "+without.points+" points · "+(without.points/without.possessions).toFixed(2)+" PPP.",logNumbers:[]});
+    if(side==="defense"&&p.currentNoTouch>=3)insights.push({kind:"positive",title:"Paint kept out",text:"No opponent paint touch on the last "+p.currentNoTouch+" defensive possessions. This is separate from stops: points allowed still determine kills.",logNumbers:[]});
+    if(side==="defense"&&withTouch.possessions>=3&&withTouch.scored===withTouch.possessions&&without.possessions<3)recommendations.push("Opponent scored on all "+withTouch.possessions+" recorded paint-touch possessions. Prioritize paint containment and keep tracking the next defensive possessions.");
+    if(side==="defense"&&withTouch.possessions>=3&&without.possessions>=3&&withTouch.points/withTouch.possessions>without.points/without.possessions)recommendations.push("Prioritize keeping the ball out of the paint: opponent PPP is "+(withTouch.points/withTouch.possessions).toFixed(2)+" with a paint touch versus "+(without.points/without.possessions).toFixed(2)+" without, across "+withTouch.possessions+" and "+without.possessions+" tracked possessions.");
+  });
+  const tagPatterns=Object.keys(patterns).map(function(key){return patterns[key];});
+  tagPatterns.filter(function(group){return group.type!=="paintTouch";}).forEach(function(group){insights.push({kind:"neutral",title:(group.side==="defense"?"Opponent":"Your team")+" · "+group.label,text:"Scored on "+group.scored+"/"+group.possessions+" tagged possessions · "+group.points+" points · "+(group.points/group.possessions).toFixed(2)+" PPP."+(group.possessions<3?" Small sample.":""),logNumbers:group.logNumbers});});
+  const offensivePattern=tagPatterns.filter(function(group){return group.side==="offense"&&group.type!=="paintTouch"&&group.type!=="deflection"&&group.possessions>=3&&group.scored/group.possessions>=2/3;}).sort(function(a,b){return b.points/b.possessions-a.points/a.possessions;})[0];
+  if(offensivePattern)recommendations.push("Keep looking for "+offensivePattern.label+" opportunities: your team scored on "+offensivePattern.scored+"/"+offensivePattern.possessions+" tagged possessions for "+offensivePattern.points+" points.");
+  if(!recommendations.length&&kills.currentStops>=3)recommendations.push("Stay with the defensive approach through this "+kills.currentStops+"-stop run; finish the next possession without allowing points.");
+  return {kills:kills,paint:paint,insights:insights,tagPatterns:tagPatterns,recommendations:recommendations,definition:"A stop is a completed defensive possession with zero points allowed. Three consecutive stops earn one kill; six earn two. Offensive possessions, timeouts and period breaks do not reset the run. Any points allowed on a defensive possession reset it. Runs use recorded defensive possessions; missing possessions cannot be inferred.",coverageNote:"No-paint-touch claims use possessions where paint tracking was enabled. Untracked or older unknown tags are not treated as no paint touch. Tag groups can overlap. These are tracked associations, not proof of cause."};
+}
+
 function cleanLiveAnalyticsPlayEvents_(events, teamSide) {
   if(events==null)return [];
   if(!Array.isArray(events)||events.length>100)throw new Error("A possession can contain up to 100 play events.");
@@ -118,7 +161,8 @@ function getLiveAnalyticsPossessions_(gameId) {
       period:Number(row[4] || 1), teamSide:String(row[5] || ""), points:Number(row[6] || 0),
       transition:row[7] === true, paintTouch:row[8] === true, rightHandDrive:row[9] === true,
       turnover:row[10] === true, forcedTurnover:row[11] === true, offensiveRebounds:Number(row[12] || 0),
-      playEvents:parseLiveGameJson_(row[16], [])
+      playEvents:parseLiveGameJson_(row[16], []),
+      trackedTags:parseLiveGameJson_(row[17], null)
     }; });
 }
 
@@ -141,6 +185,7 @@ function buildLiveAnalyticsSummary_(possessions, currentPeriod) {
     possessionLog:(possessions || []).slice(),
     playerTotals:buildLiveAnalyticsPlayerTotals_(possessions || []),
     scoringTags:buildLiveScoringTagSummary_(possessions || []),
+    intelligence:buildLivePossessionIntelligence_(possessions || []),
     recent:(possessions || []).slice(-8).reverse()};
 }
 
