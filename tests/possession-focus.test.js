@@ -19,7 +19,7 @@ test('saving game focus preserves tracker options and rejects completed games',(
  ctx.saveLivePossessionFocus('g',[{type:'cut'}]);assert.equal(value.analytics,true);assert.equal(value.objectives,false);assert.equal(value.focus[0].type,'cut');assert.equal(released,true);
  completed=true;assert.throws(()=>ctx.saveLivePossessionFocus('g',[]),/completed game/);
 });
-test('hidden detailed controls never credit stale selected roster players',()=>{const ctx=load(['liveAnalyticsPlayEvent_'],{getLiveAnalyticsRole_:()=> 'offense',document:{getElementById:id=>id==='liveAnalyticsDetails'?{open:false}:{value:'12'}}});assert.equal(ctx.liveAnalyticsPlayEvent_('made2').jersey,'');});
+test('legacy hidden detailed controls never credit stale selected roster players',()=>{const ctx=load(['liveAnalyticsPlayEvent_'],{getLiveAnalyticsRole_:()=> 'offense',document:{getElementById:id=>id==='liveAnalyticsPlayerCredit'?null:id==='liveAnalyticsDetails'?{open:false}:{value:'12'}}});assert.equal(ctx.liveAnalyticsPlayEvent_('made2').jersey,'');});
 test('team defaults follow the latest accessible game and preserve points-only choices',()=>{
  const ctx=server(),headers=['Team','Tracker Mode'],rows=[['Varsity','{"focus":[{"type":"paintTouch"}]}'],['JV','{"focus":[{"type":"cut"}]}'],['Varsity','{"focus":[]}']];
  Object.assign(ctx,{SpreadsheetApp:{getActive:()=>({getSheetByName:()=>({getLastRow:()=>4,getDataRange:()=>({getValues:()=>[headers,...rows]})})})},getCurrentStaffAccess_:()=>({configured:true,role:'Assistant',teams:['Varsity']}),filterCoachIQRowsForCurrentSeason_:(headers,values)=>values,isLiveGameArchived_:()=>false});

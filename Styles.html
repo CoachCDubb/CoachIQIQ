@@ -3127,4 +3127,22 @@ body.checkpoint-open #content{overflow:hidden}
   #liveGameCheckpointReport .checkpoint-report{flex:0 1 auto;min-height:0;max-height:calc(100vh - var(--checkpoint-dialog-gap) - var(--checkpoint-dialog-gap));max-height:calc(100dvh - var(--checkpoint-dialog-gap) - var(--checkpoint-dialog-gap));overflow-y:auto;overflow-x:hidden;-webkit-overflow-scrolling:touch;padding-bottom:max(24px,env(safe-area-inset-bottom,0px))}
   @media(max-width:700px){#liveGameCheckpointReport{--checkpoint-dialog-gap:8px}}
 }
+
+/* Possession-only tracking uses a single flow, independent of objective cards. */
+body.live-game-mode .live-analytics-controls{display:flex;flex-direction:column;align-items:stretch;gap:12px}
+body.live-game-mode .live-analytics-controls[hidden]{display:none}
+body.live-game-mode .live-analytics-controls>*{width:100%;min-width:0;max-width:100%;box-sizing:border-box}
+body.live-game-mode .live-analytics-head>div:first-child{display:block}
+body.live-game-mode .live-analytics-head strong{display:block;overflow-wrap:anywhere;margin:4px 0}
+.live-analytics-player-credit{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:10px;align-items:end;padding:12px;border:1px solid var(--line);border-radius:10px;background:#fff}
+.live-analytics-player-credit .live-play-rosters{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;grid-column:1/-1}
+.live-analytics-player-credit label{min-width:0;font-size:12px;font-weight:700}
+.live-analytics-player-credit>label{display:grid;gap:6px}
+.live-analytics-player-credit input{width:100%;min-width:0;max-width:180px;min-height:44px;padding:8px;border:1px solid var(--line);box-sizing:border-box;font:inherit}
+.live-analytics-player-credit .live-player-credit-clear{grid-column:2;grid-row:2;min-height:44px}
+.live-analytics-player-credit>small{grid-column:1/-1;color:var(--ink-soft);font-size:11px;line-height:1.5}
+body.live-game-mode .live-analytics-details .live-play-tools{width:100%;min-width:0;box-sizing:border-box}
+body.live-game-mode .live-focus-tags{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(140px,100%),1fr))}
+body.live-game-mode .live-analytics-outcomes{flex-shrink:0}
+@media(max-width:600px){.live-analytics-player-credit{grid-template-columns:minmax(0,1fr)}.live-analytics-player-credit .live-play-rosters{grid-template-columns:minmax(0,1fr)}.live-analytics-player-credit .live-player-credit-clear{grid-column:auto;grid-row:auto}}
 </style>
