@@ -9,8 +9,10 @@ const LIVE_ANALYTICS_HEADERS = [
   "Forced Turnover", "Offensive Rebounds", "Recorded By", "Voided", "Source", "Play Events", "Tracked Tags"
 ];
 
+var coachIQAnalyticsSheetForRequest_ = null;
 function initializeLiveAnalyticsSheet_() {
-  return ensureLiveGameSheet_(LIVE_ANALYTICS_SHEET, LIVE_ANALYTICS_HEADERS);
+  if(!coachIQAnalyticsSheetForRequest_)coachIQAnalyticsSheetForRequest_=ensureLiveGameSheet_(LIVE_ANALYTICS_SHEET, LIVE_ANALYTICS_HEADERS);
+  return coachIQAnalyticsSheetForRequest_;
 }
 
 function recordLiveAnalyticsPossession(gameId, payload) {
@@ -151,22 +153,23 @@ function buildLiveScoringTagSummary_(possessions){
   return Object.keys(totals).map(function(key){const total=totals[key];total.ppp=liveAnalyticsRate_(total.points,total.possessions);return total;});
 }
 
-function getLiveAnalyticsPossessions_(gameId) {
-  const sheet = initializeLiveAnalyticsSheet_();
-  if (sheet.getLastRow() < 2) return [];
-  return sheet.getRange(2, 1, sheet.getLastRow() - 1, LIVE_ANALYTICS_HEADERS.length).getValues()
-    .filter(function(row) { return String(row[1] || "") === String(gameId) && row[14] !== true; })
-    .map(function(row) { return {
-      possessionId:String(row[0] || ""), sequence:Number(row[2] || 0), timestamp:formatLiveGameTimestamp_(row[3]),
-      period:Number(row[4] || 1), teamSide:String(row[5] || ""), points:Number(row[6] || 0),
-      transition:row[7] === true, paintTouch:row[8] === true, rightHandDrive:row[9] === true,
-      turnover:row[10] === true, forcedTurnover:row[11] === true, offensiveRebounds:Number(row[12] || 0),
-      playEvents:parseLiveGameJson_(row[16], []),
-      trackedTags:parseLiveGameJson_(row[17], null)
-    }; });
+function liveAnalyticsPossessionFromRow_(row){return {
+  possessionId:String(row[0]||""),sequence:Number(row[2]||0),timestamp:formatLiveGameTimestamp_(row[3]),
+  period:Number(row[4]||1),teamSide:String(row[5]||""),points:Number(row[6]||0),
+  transition:row[7]===true,paintTouch:row[8]===true,rightHandDrive:row[9]===true,
+  turnover:row[10]===true,forcedTurnover:row[11]===true,offensiveRebounds:Number(row[12]||0),
+  playEvents:parseLiveGameJson_(row[16],[]),trackedTags:parseLiveGameJson_(row[17],null)
+};}
+function getLiveAnalyticsPossessionsByGames_(gameIds){
+  const groups=Object.create(null);(gameIds||[]).forEach(function(id){groups[String(id)]=[];});
+  if(!Object.keys(groups).length)return groups;
+  const sheet=initializeLiveAnalyticsSheet_(),lastRow=sheet.getLastRow();if(lastRow<2)return groups;
+  sheet.getRange(2,1,lastRow-1,LIVE_ANALYTICS_HEADERS.length).getValues().forEach(function(row){const id=String(row[1]||"");if(groups[id]&&row[14]!==true)groups[id].push(liveAnalyticsPossessionFromRow_(row));});
+  return groups;
 }
+function getLiveAnalyticsPossessions_(gameId){return getLiveAnalyticsPossessionsByGames_([gameId])[String(gameId)]||[];}
 
-function buildLiveAnalyticsSummary_(possessions, currentPeriod) {
+function buildLiveAnalyticsSummary_(possessions, currentPeriod, options) {
   const sides = {offense:emptyLiveAnalyticsSide_(), defense:emptyLiveAnalyticsSide_()};
   (possessions || []).forEach(function(item) {
     const side = sides[item.teamSide]; if (!side) return;
@@ -179,14 +182,16 @@ function buildLiveAnalyticsSummary_(possessions, currentPeriod) {
     if (item.forcedTurnover) side.forcedTurnovers++;
   });
   Object.keys(sides).forEach(function(key) { addLiveAnalyticsRates_(sides[key]); });
-  return {offense:sides.offense, defense:sides.defense,
+  const result={offense:sides.offense, defense:sides.defense,
     netPpp:roundLiveAnalytics_(sides.offense.ppp - sides.defense.ppp),
-    possessionDifference:Math.abs(sides.offense.possessions - sides.defense.possessions),
+    possessionDifference:Math.abs(sides.offense.possessions - sides.defense.possessions)};
+  if(options&&options.metricsOnly)return result;
+  return Object.assign(result,{
     possessionLog:(possessions || []).slice(),
     playerTotals:buildLiveAnalyticsPlayerTotals_(possessions || []),
     scoringTags:buildLiveScoringTagSummary_(possessions || []),
     intelligence:buildLivePossessionIntelligence_(possessions || []),
-    recent:(possessions || []).slice(-8).reverse()};
+    recent:(possessions || []).slice(-8).reverse()});
 }
 
 function emptyLiveAnalyticsSide_() { return {possessions:0,periodPossessions:0,points:0,offensiveRebounds:0,transitionPossessions:0,
@@ -291,6 +296,16 @@ function getLiveAnalyticsProgramBenchmark_(team) {
     return accessible&&!isLiveGameArchived_(row,cols)&&rowTeam===String(team)&&String(row[cols.Sport]||"Basketball").toLowerCase()==="basketball"&&String(row[cols.Status]||"")==="Completed"&&
       (String(row[cols["Game Result"]]||"")==="Win"||String(row[cols["Game Result"]]||"")==="Loss");
   });
-  return buildLiveAnalyticsProgramBenchmark_(rows.map(function(row){return{completed:true,result:String(row[cols["Game Result"]]||""),
-    completedAt:formatLiveGameTimestamp_(row[cols["Completed At"]]),analytics:buildLiveAnalyticsSummary_(getLiveAnalyticsPossessions_(String(row[cols["Game ID"]]||"")),1)};}));
+  // Authorization/season/archive filtering above always happens before any cache lookup.
+  let cache=null,key="";
+  try{if(typeof CacheService!=="undefined"){
+    cache=CacheService.getUserCache();const signature=JSON.stringify(["benchmarks-v3",String(team),rows.map(function(row){return [row[cols["Game ID"]],row[cols["Game Result"]],row[cols["Completed At"]],row[cols["Updated At"]]];})]);
+    key="coachiq-bench-"+Utilities.base64EncodeWebSafe(Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256,signature));
+    const cached=cache.get(key);if(cached)return JSON.parse(cached);
+  }}catch(error){cache=null;}
+  const grouped=getLiveAnalyticsPossessionsByGames_(rows.map(function(row){return String(row[cols["Game ID"]]||"");}));
+  const benchmark=buildLiveAnalyticsProgramBenchmark_(rows.map(function(row){return{completed:true,result:String(row[cols["Game Result"]]||""),
+    completedAt:formatLiveGameTimestamp_(row[cols["Completed At"]]),analytics:buildLiveAnalyticsSummary_(grouped[String(row[cols["Game ID"]]||"")]||[],1,{metricsOnly:true})};}));
+  if(cache)try{cache.put(key,JSON.stringify(benchmark),300);}catch(error){}
+  return benchmark;
 }

@@ -1,9 +1,11 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 
 <head>
 
   <base target="_top">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>CoachIQ</title>
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -25,7 +27,8 @@
 
       <?!= include('Header'); ?>
 
-      <div id="page-content"></div>
+      <div id="pageNavigationStatus" class="page-navigation-status" role="status" hidden></div>
+      <div id="page-content" aria-busy="false"></div>
 
     </main>
 
