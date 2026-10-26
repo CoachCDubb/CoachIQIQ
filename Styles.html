@@ -3072,4 +3072,12 @@ body.checkpoint-open #content{overflow:hidden}
 #checkpointRetrospectiveScouting{min-width:0;width:100%;padding:9px;border:1px solid #cbd7e5;background:#fff;font:inherit}
 @media(max-width:650px){.scouting-comparison-columns{grid-template-columns:minmax(0,1fr)}.checkpoint-scouting-comparison{margin:16px}.live-game-history-row{grid-template-columns:repeat(3,minmax(0,1fr))}.live-game-history-row>button:first-child{grid-column:1/-1}.live-game-scout-button{max-width:none}}
 @media print{.checkpoint-scouting-comparison{margin:14px 0}.scouting-comparison-fields{display:none}.scouting-comparison-row{break-inside:auto}}
+
+.intelligence-view-switch{display:flex;flex-wrap:wrap;gap:10px;margin:0 0 20px}
+.intelligence-view-switch .btn{min-height:48px}
+.intelligence-view-switch [aria-pressed="true"]{background:var(--primary,#245da8);color:#fff;border-color:var(--primary,#245da8)}
+.intelligence-page [hidden]{display:none!important}
+.intelligence-team-filter{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:18px;font-weight:700}
+.intelligence-team-filter select{min-height:48px;max-width:100%;padding:10px;border:1px solid #cbd5e1;border-radius:8px;background:#fff;color:#172033}
+#intelligenceLoading:not(:empty){padding:12px 0;font-weight:600}
 </style>
