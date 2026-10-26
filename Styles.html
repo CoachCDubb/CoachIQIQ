@@ -3039,3 +3039,37 @@ body.checkpoint-open #content{overflow:hidden}
  .checkpoint-side-overview article{break-inside:avoid}
 }
 </style>
+<style>
+.live-game-scouting-link{display:grid;gap:7px;margin:14px 0;padding:12px;border:1px solid var(--line);border-radius:8px;background:#f8fafc}
+.live-game-scouting-link label{display:grid;gap:6px;font-size:12px;font-weight:700}
+.live-game-scouting-link select{width:100%;min-width:0;min-height:42px;padding:8px;border:1px solid var(--line);background:#fff;font:inherit}
+.live-game-scouting-link small{font-size:11px;color:var(--ink-soft);line-height:1.5}
+.scouting-comparison-fields{margin:10px 0;padding:10px;border:1px solid var(--line);border-radius:7px;background:#f8fafc}
+.scouting-comparison-fields summary{cursor:pointer;font-size:11px;font-weight:750}
+.scouting-comparison-fields label{display:grid;gap:6px;font-size:11px;margin:10px 0}
+.scouting-comparison-fields select,.scouting-comparison-fields input{width:100%;min-width:0;padding:8px;font:inherit;background:#fff;border:1px solid var(--line);box-sizing:border-box}
+.scouting-comparison-fields small{display:block;font-size:10px;line-height:1.5;color:var(--ink-soft)}
+.live-game-history-row{grid-template-columns:minmax(0,1fr) auto auto auto}
+.live-game-scout-button{padding:10px;border:1px solid #cbd7e5;border-radius:7px;background:#edf4fd;color:#1e4679;font:inherit;font-size:11px;font-weight:750;cursor:pointer;max-width:150px;white-space:normal}
+.checkpoint-footer-actions button[hidden]{display:none!important}
+.checkpoint-scouting-comparison{margin:20px 26px;padding:16px;border:1px solid #cbd7e5;border-radius:10px;background:#f8fafc}
+.checkpoint-scouting-comparison[hidden]{display:none}
+.checkpoint-scouting-comparison>summary{cursor:pointer;font-size:16px;font-weight:750;color:#17324f}
+.checkpoint-scouting-comparison p{font-size:12px;line-height:1.65}
+.scouting-comparison-source{padding:12px;background:#eaf2ff;border-left:3px solid #2563eb;border-radius:6px}
+.scouting-comparison-note{color:#64748b}
+.scouting-comparison-notes{white-space:pre-wrap;overflow-wrap:anywhere}
+.scouting-comparison-row{padding:12px;margin:10px 0;border:1px solid #dbe4ee;border-radius:8px;background:#fff}
+.scouting-comparison-row>summary{display:flex;flex-wrap:wrap;justify-content:space-between;gap:8px;cursor:pointer;font-size:13px}
+.scouting-comparison-status{padding:3px 7px;border-radius:5px;background:#eef2f7;color:#475569;font-size:10px;font-weight:750}
+.scouting-comparison-status.met{background:#dcfce7;color:#166534}
+.scouting-comparison-status.not_met,.scouting-comparison-status.partial{background:#fef3c7;color:#92400e}
+.scouting-comparison-columns{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px;margin-top:14px}
+.scouting-comparison-columns article{min-width:0;padding:12px;border-radius:6px;background:#f8fafc}
+.scouting-comparison-columns article>span{font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.06em;color:#526175}
+.scouting-comparison-columns small{font-size:11px;color:#64748b}
+#checkpointScoutingComparisonContent>label{display:grid;gap:8px;margin:12px 0;font-size:12px}
+#checkpointRetrospectiveScouting{min-width:0;width:100%;padding:9px;border:1px solid #cbd7e5;background:#fff;font:inherit}
+@media(max-width:650px){.scouting-comparison-columns{grid-template-columns:minmax(0,1fr)}.checkpoint-scouting-comparison{margin:16px}.live-game-history-row{grid-template-columns:repeat(3,minmax(0,1fr))}.live-game-history-row>button:first-child{grid-column:1/-1}.live-game-scout-button{max-width:none}}
+@media print{.checkpoint-scouting-comparison{margin:14px 0}.scouting-comparison-fields{display:none}.scouting-comparison-row{break-inside:auto}}
+</style>
