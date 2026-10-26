@@ -196,7 +196,7 @@ function createLiveGameSetup(data) {
     ];
     while(row.length<sheet.getLastColumn())row.push("");
     row[headers.indexOf("Opponent Roster")]=JSON.stringify(opponentRoster);
-    row[headers.indexOf("Tracker Mode")]=JSON.stringify({analytics:enableAnalytics,objectives:enableObjectives,focus:cleanLivePossessionFocus_(data.possessionFocus),scoutingReportId:scoutingSnapshot?scoutingSnapshot.reportId:"",scoutingSnapshotId:scoutingSnapshot?writeGameReportSnapshot_(gameId,"scouting",scoutingSnapshot):""});
+    row[headers.indexOf("Tracker Mode")]=JSON.stringify({analytics:enableAnalytics,objectives:enableObjectives,focus:mergeScoutingWatchFocus_(data.possessionFocus,scoutingSnapshot?scoutingWatchlistFromSections_(scoutingSnapshot.sections):[]),watchlist:scoutingSnapshot?scoutingWatchlistFromSections_(scoutingSnapshot.sections):[],scoutingReportId:scoutingSnapshot?scoutingSnapshot.reportId:"",scoutingSnapshotId:scoutingSnapshot?writeGameReportSnapshot_(gameId,"scouting",scoutingSnapshot):""});
     setCoachIQSeasonOnRow_(headers,row,getCoachIQCurrentSeason_());
     sheet.appendRow(row);
   } finally {
@@ -572,6 +572,7 @@ function getLiveGameTracker(gameId) {
       players:players,
     opponentRoster:parseLiveGameJson_(game["Opponent Roster"], []),
     possessionFocus:cleanLivePossessionFocus_(parseLiveGameObject_(game["Tracker Mode"],{}).focus),
+    scoutingWatchlist:parseLiveGameObject_(game["Tracker Mode"],{}).watchlist||[],
       objectives:objectives.sort(function(a, b) { return Number(a.order || 0) - Number(b.order || 0); }),
       originalObjectives:originalObjectives,
       planAdjustments:parseLiveGameJson_(game["Plan Adjustments"], []),
@@ -596,6 +597,7 @@ function getLiveGameTracker(gameId) {
     players:players,
     opponentRoster:parseLiveGameJson_(game["Opponent Roster"], []),
     possessionFocus:cleanLivePossessionFocus_(parseLiveGameObject_(game["Tracker Mode"],{}).focus),
+    scoutingWatchlist:parseLiveGameObject_(game["Tracker Mode"],{}).watchlist||[],
     objectives:[],
     objectiveTotals:{},
     selectedStats:selectedStats,
@@ -999,7 +1001,8 @@ function buildLiveGameCheckpointReport_(tracker, checkpointType) {
   if(recent.length>=3&&recentLeaderCount>1)recentPulse="Most common recent tag: "+recentLeader+" ("+recentLeaderCount+" of the last "+recent.length+" priority taps).";
   else if(recent.length>=3)recentPulse="No priority has repeated in the last "+recent.length+" taps — there is not a clear recent trend yet.";
   if(!(tracker.objectives||[]).length)recentPulse=Number(offense.possessions||0)+" offensive possessions · "+Number(offense.points||0)+" points · "+Number(defense.possessions||0)+" defensive possessions · "+Number(defense.points||0)+" points allowed. Review the possession log for play patterns.";
-  return{checkpointType:checkpointType,period:period,coachMode:checkpointType==="Timeout"?"timeout":halftime?"halftime":"period",headline:checkpointType==="Timeout"?"Timeout Coach Mode":halftime?"Halftime Coach Mode":"End-of-Period Coach Mode",game:{gameId:tracker.game.gameId,gameDate:tracker.game.gameDate,team:tracker.game.team,opponent:tracker.game.opponent,format:tracker.game.format},generatedAt:formatLiveGameTimestamp_(new Date()),objectives:rows,recommendations:recommendations.slice(0,3),keepDoing:(intelligence.insights||[]).filter(function(item){return item.kind==="positive";}).map(function(item){return item.text;}).concat(rows.filter(function(item){return item.status==="winning";}).map(function(item){return item.summary;})).slice(0,3),fixNow:(intelligence.insights||[]).filter(function(item){return item.kind==="attention";}).map(function(item){return item.text;}).concat(rows.filter(function(item){return item.status==="behind";}).map(function(item){return item.recommendation;})).slice(0,2),recentPulse:recentPulse,topAdjustment:recommendations[0],analytics:analytics,score:{our:Number(offense.points||0)+Number(tracker.ourScore||0),opponent:Number(defense.points||0)+Number(tracker.opponentScore||0)},possessionFocus:tracker.possessionFocus,analyticsBenchmarks:tracker.analyticsBenchmarks||null,possessions:tracker.possessions||{our:0,opponent:0},gameProgress:gameProgress};
+  const decision=buildLiveNextAdjustment_(analytics,tracker.scoutingWatchlist||[],recommendations,rows);
+  return{nextAdjustment:decision.nextAdjustment,scoutingWatchlist:decision.watchlist,checkpointType:checkpointType,period:period,coachMode:checkpointType==="Timeout"?"timeout":halftime?"halftime":"period",headline:checkpointType==="Timeout"?"Timeout Coach Mode":halftime?"Halftime Coach Mode":"End-of-Period Coach Mode",game:{gameId:tracker.game.gameId,gameDate:tracker.game.gameDate,team:tracker.game.team,opponent:tracker.game.opponent,format:tracker.game.format},generatedAt:formatLiveGameTimestamp_(new Date()),objectives:rows,recommendations:recommendations.slice(0,3),keepDoing:(intelligence.insights||[]).filter(function(item){return item.kind==="positive";}).map(function(item){return item.text;}).concat(rows.filter(function(item){return item.status==="winning";}).map(function(item){return item.summary;})).slice(0,3),fixNow:(intelligence.insights||[]).filter(function(item){return item.kind==="attention";}).map(function(item){return item.text;}).concat(rows.filter(function(item){return item.status==="behind";}).map(function(item){return item.recommendation;})).slice(0,2),recentPulse:recentPulse,topAdjustment:decision.nextAdjustment.action,analytics:analytics,score:{our:Number(offense.points||0)+Number(tracker.ourScore||0),opponent:Number(defense.points||0)+Number(tracker.opponentScore||0)},possessionFocus:tracker.possessionFocus,analyticsBenchmarks:tracker.analyticsBenchmarks||null,possessions:tracker.possessions||{our:0,opponent:0},gameProgress:gameProgress};
 }
 
 function finishLiveGame(gameId, finalResult) {
@@ -1028,6 +1031,7 @@ function finishLiveGame(gameId, finalResult) {
       : buildOptionalTrackerPostgameReport_(tracker);
     report.analytics=tracker.analytics||report.analytics||{};
     report.possessionFocus=tracker.possessionFocus;
+    const decision=buildLiveNextAdjustment_(report.analytics,tracker.scoutingWatchlist||[],report.recommendations||[],report.objectives||[]);report.scoutingWatchlist=decision.watchlist;report.nextAdjustment=decision.nextAdjustment;
     report.period=tracker.game.currentPeriod;
     report.analyticsBenchmarks=tracker.analyticsBenchmarks||report.analyticsBenchmarks||null;
     report.possessions=tracker.possessions||report.possessions||{our:0,opponent:0};
