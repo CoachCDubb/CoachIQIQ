@@ -4,6 +4,7 @@
 const LIVE_GAMES_SHEET = "Games";
 // Apps Script globals reset for each server invocation; never a cross-user cache.
 var coachIQLiveSheetsInitialized_ = false;
+var coachIQRecordedEventIdsForRequest_ = Object.create(null);
 const LIVE_GAME_EVENTS_SHEET = "Game Events";
 const LIVE_GAME_CHECKPOINTS_SHEET = "Game Checkpoints";
 const LIVE_GAME_TEMPLATES_SHEET = "Game Plan Templates";
@@ -583,6 +584,8 @@ function getLiveGameTracker(gameId) {
       analyticsBenchmarks:benchmarkProgram,
       ourScore:scores.ourScore,
       opponentScore:scores.opponentScore,
+      recordedEventIds:coachIQRecordedEventIdsForRequest_[String(gameId)]||events.map(function(e){return e.eventId;}),
+      recordedPossessionIds:coachIQRecordedPossessionIdsForRequest_[String(gameId)]||[],
       events:events.slice(-30).reverse(),
       lastSyncAt:events.length ? events[events.length - 1].syncedAt : ""
     };
@@ -604,6 +607,8 @@ function getLiveGameTracker(gameId) {
     selectedStats:selectedStats,
     customStats:customStats,
     actions:buildLiveGameActions_(selectedStats, customStats),
+    recordedEventIds:coachIQRecordedEventIdsForRequest_[String(gameId)]||events.map(function(e){return e.eventId;}),
+    recordedPossessionIds:coachIQRecordedPossessionIdsForRequest_[String(gameId)]||[],
     events:events.slice(-30).reverse(),
     possessions:{our:analytics.offense.possessions, opponent:analytics.defense.possessions, periodOur:analytics.offense.periodPossessions, periodOpponent:analytics.defense.periodPossessions},
     analytics:analytics,
@@ -1213,9 +1218,10 @@ function buildLiveGameActions_(selectedStats, customStats) {
 
 function getLiveGameEvents_(gameId) {
   const sheet = SpreadsheetApp.getActive().getSheetByName(LIVE_GAME_EVENTS_SHEET);
+  coachIQRecordedEventIdsForRequest_[String(gameId)]=[];
   if (!sheet || sheet.getLastRow() < 2) return [];
-  return sheet.getRange(2, 1, sheet.getLastRow() - 1, LIVE_GAME_EVENT_HEADERS.length).getValues()
-    .filter(function(row) { return String(row[1] || "") === String(gameId) && row[11] !== true; })
+  const rows=sheet.getRange(2, 1, sheet.getLastRow() - 1, LIVE_GAME_EVENT_HEADERS.length).getValues();coachIQRecordedEventIdsForRequest_[String(gameId)]=rows.filter(function(row){return String(row[1]||"")===String(gameId);}).map(function(row){return String(row[0]||"");});
+  return rows.filter(function(row) { return String(row[1] || "") === String(gameId) && row[11] !== true; })
     .map(function(row) {
       return {eventId:String(row[0] || ""), sequence:Number(row[2] || 0), timestamp:formatLiveGameTimestamp_(row[3]),
         period:Number(row[4] || 1), gameClock:String(row[5] || ""), side:String(row[6] || "Us"),

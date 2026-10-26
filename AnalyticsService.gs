@@ -10,6 +10,7 @@ const LIVE_ANALYTICS_HEADERS = [
 ];
 
 var coachIQAnalyticsSheetForRequest_ = null;
+var coachIQRecordedPossessionIdsForRequest_ = Object.create(null);
 function initializeLiveAnalyticsSheet_() {
   if(!coachIQAnalyticsSheetForRequest_)coachIQAnalyticsSheetForRequest_=ensureLiveGameSheet_(LIVE_ANALYTICS_SHEET, LIVE_ANALYTICS_HEADERS);
   return coachIQAnalyticsSheetForRequest_;
@@ -166,10 +167,10 @@ function liveAnalyticsPossessionFromRow_(row){return {
   playEvents:parseLiveGameJson_(row[16],[]),trackedTags:parseLiveGameJson_(row[17],null)
 };}
 function getLiveAnalyticsPossessionsByGames_(gameIds){
-  const groups=Object.create(null);(gameIds||[]).forEach(function(id){groups[String(id)]=[];});
+  const groups=Object.create(null);(gameIds||[]).forEach(function(id){groups[String(id)]=[];coachIQRecordedPossessionIdsForRequest_[String(id)]=[];});
   if(!Object.keys(groups).length)return groups;
   const sheet=initializeLiveAnalyticsSheet_(),lastRow=sheet.getLastRow();if(lastRow<2)return groups;
-  sheet.getRange(2,1,lastRow-1,LIVE_ANALYTICS_HEADERS.length).getValues().forEach(function(row){const id=String(row[1]||"");if(groups[id]&&row[14]!==true)groups[id].push(liveAnalyticsPossessionFromRow_(row));});
+  sheet.getRange(2,1,lastRow-1,LIVE_ANALYTICS_HEADERS.length).getValues().forEach(function(row){const id=String(row[1]||"");if(groups[id]){coachIQRecordedPossessionIdsForRequest_[id].push(String(row[0]||""));if(row[14]!==true)groups[id].push(liveAnalyticsPossessionFromRow_(row));}});
   if(typeof applyLivePossessionEdits_==="function")applyLivePossessionEdits_(groups);
   return groups;
 }
