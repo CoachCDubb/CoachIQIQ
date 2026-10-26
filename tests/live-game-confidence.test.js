@@ -31,8 +31,9 @@ test("taps receive immediate feedback and duplicate-tap suppression", () => {
 test("undo and finish require explicit risk-aware confirmation", () => {
   assert.match(client, /Undo latest tap\?/);
   assert.match(server, /Only the latest active event can be undone/);
-  assert.match(client, /Finish and permanently lock this game\?/);
+  assert.match(client, /Finish this game\?/);
   assert.match(client, /Sync & Finish Game/);
+  assert.match(client, /confirmed final score stays as entered/);
 });
 
 test("server preserves idempotency and serializes concurrent mutations", () => {
