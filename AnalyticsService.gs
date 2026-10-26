@@ -170,6 +170,7 @@ function getLiveAnalyticsPossessionsByGames_(gameIds){
   if(!Object.keys(groups).length)return groups;
   const sheet=initializeLiveAnalyticsSheet_(),lastRow=sheet.getLastRow();if(lastRow<2)return groups;
   sheet.getRange(2,1,lastRow-1,LIVE_ANALYTICS_HEADERS.length).getValues().forEach(function(row){const id=String(row[1]||"");if(groups[id]&&row[14]!==true)groups[id].push(liveAnalyticsPossessionFromRow_(row));});
+  if(typeof applyLivePossessionEdits_==="function")applyLivePossessionEdits_(groups);
   return groups;
 }
 function getLiveAnalyticsPossessions_(gameId){return getLiveAnalyticsPossessionsByGames_([gameId])[String(gameId)]||[];}
