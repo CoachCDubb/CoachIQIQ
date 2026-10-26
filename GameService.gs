@@ -94,6 +94,7 @@ function getLiveGameSetupData() {
     });
 
   return {
+    teamPossessionFocus:getTeamPossessionFocus_(),
     sport: settings.sport || "Basketball",
     season:getCoachIQCurrentSeason_(),
     schoolName:settings.schoolName || "",
@@ -190,7 +191,7 @@ function createLiveGameSetup(data) {
     ];
     while(row.length<sheet.getLastColumn())row.push("");
     row[headers.indexOf("Opponent Roster")]=JSON.stringify(opponentRoster);
-    row[headers.indexOf("Tracker Mode")]=JSON.stringify({analytics:enableAnalytics,objectives:enableObjectives});
+    row[headers.indexOf("Tracker Mode")]=JSON.stringify({analytics:enableAnalytics,objectives:enableObjectives,focus:cleanLivePossessionFocus_(data.possessionFocus)});
     setCoachIQSeasonOnRow_(headers,row,getCoachIQCurrentSeason_());
     sheet.appendRow(row);
   } finally {
@@ -577,6 +578,7 @@ function getLiveGameTracker(gameId) {
         gameType:String(game["Game Type"] || "Official Game"),sport:String(game.Sport||"Basketball"),analyticsEnabled:trackerMode.analytics,objectivesEnabled:trackerMode.objectives},
       players:players,
     opponentRoster:parseLiveGameJson_(game["Opponent Roster"], []),
+    possessionFocus:cleanLivePossessionFocus_(parseLiveGameObject_(game["Tracker Mode"],{}).focus),
       objectives:objectives.sort(function(a, b) { return Number(a.order || 0) - Number(b.order || 0); }),
       originalObjectives:originalObjectives,
       planAdjustments:parseLiveGameJson_(game["Plan Adjustments"], []),
@@ -600,6 +602,7 @@ function getLiveGameTracker(gameId) {
       gameType:String(game["Game Type"] || "Official Game"),sport:String(game.Sport||"Basketball"),analyticsEnabled:trackerMode.analytics,objectivesEnabled:trackerMode.objectives},
     players:players,
     opponentRoster:parseLiveGameJson_(game["Opponent Roster"], []),
+    possessionFocus:cleanLivePossessionFocus_(parseLiveGameObject_(game["Tracker Mode"],{}).focus),
     objectives:[],
     objectiveTotals:{},
     selectedStats:selectedStats,
@@ -612,6 +615,34 @@ function getLiveGameTracker(gameId) {
     ourScore:totals.ourScore,
     opponentScore:totals.opponentScore
   };
+}
+
+function cleanLivePossessionFocus_(focus){
+  if(focus==null)return [{type:"paintTouch",label:"Paint touch"},{type:"offensiveRebound",label:"OREB"}];
+  if(!Array.isArray(focus)||focus.length>6)throw new Error("Choose up to 6 possession tags.");
+  const labels={paintTouch:"Paint touch",offensiveRebound:"OREB",transition:"Transition",deflection:"Deflection",driveKick:"Drive & kick",cut:"Cut",setPlay:"Set play",ato:"ATO",putback:"Putback",pickRoll:"Pick & roll",postUp:"Post-up",isolation:"Isolation",rightHandDrive:"Right-hand drive"},seen={};
+  return focus.map(function(item){
+    if(!item||typeof item.type!=="string"||(!Object.prototype.hasOwnProperty.call(labels,item.type)&&item.type!=="customTag"))throw new Error("Choose a valid possession tag.");
+    const label=item.type==="customTag"?String(item.label||"").trim():labels[item.type];
+    if(!label||label.length>40||/[\x00-\x1f]/.test(label))throw new Error("Tag names must be 1–40 characters.");
+    const key=JSON.stringify([item.type,label]);if(seen[key])throw new Error("Choose each tag once.");seen[key]=true;return {type:item.type,label:label};
+  });
+}
+function getTeamPossessionFocus_(){
+  const sheet=SpreadsheetApp.getActive().getSheetByName(LIVE_GAMES_SHEET);if(!sheet||sheet.getLastRow()<2)return {};
+  const values=sheet.getDataRange().getValues(),headers=values.shift(),cols=liveGameHeaderMap_(headers),access=getCurrentStaffAccess_(),result={};
+  filterCoachIQRowsForCurrentSeason_(headers,values).forEach(function(row){
+    const team=String(row[cols.Team]||"");if(!team||isLiveGameArchived_(row,cols))return;
+    if(access.configured&&access.role!=="Head Coach"&&access.teams.length&&access.teams.indexOf(team)<0)return;
+    const mode=parseLiveGameObject_(row[cols["Tracker Mode"]],{});if(Array.isArray(mode.focus))result[team]=cleanLivePossessionFocus_(mode.focus);
+  });return result;
+}
+function saveLivePossessionFocus(gameId,focus){
+  requireStaffCapability_("run_sessions");initializeLiveGameSheets_();const cleaned=cleanLivePossessionFocus_(focus),lock=LockService.getScriptLock();lock.waitLock(10000);
+  try{const record=findLiveGameRecord_(gameId);requireLiveGameTeamAccess_(record.game.Team);if(String(record.game.Status||"")==="Completed")throw new Error("A completed game cannot be changed.");
+    const mode=parseLiveGameObject_(record.game["Tracker Mode"],{});mode.focus=cleaned;
+    SpreadsheetApp.getActive().getSheetByName(LIVE_GAMES_SHEET).getRange(record.rowNumber,record.cols["Tracker Mode"]+1).setValue(JSON.stringify(mode));
+  }finally{lock.releaseLock();}return cleaned;
 }
 
 function getLiveGameTrackerMode_(game, objectives, selectedStats) {
@@ -974,7 +1005,7 @@ function buildLiveGameCheckpointReport_(tracker, checkpointType) {
   if(recent.length>=3&&recentLeaderCount>1)recentPulse="Most common recent tag: "+recentLeader+" ("+recentLeaderCount+" of the last "+recent.length+" priority taps).";
   else if(recent.length>=3)recentPulse="No priority has repeated in the last "+recent.length+" taps — there is not a clear recent trend yet.";
   if(!(tracker.objectives||[]).length)recentPulse=Number(offense.possessions||0)+" offensive possessions · "+Number(offense.points||0)+" points · "+Number(defense.possessions||0)+" defensive possessions · "+Number(defense.points||0)+" points allowed. Review the possession log for play patterns.";
-  return{checkpointType:checkpointType,period:period,coachMode:checkpointType==="Timeout"?"timeout":halftime?"halftime":"period",headline:checkpointType==="Timeout"?"Timeout Coach Mode":halftime?"Halftime Coach Mode":"End-of-Period Coach Mode",game:{gameId:tracker.game.gameId,gameDate:tracker.game.gameDate,team:tracker.game.team,opponent:tracker.game.opponent},generatedAt:formatLiveGameTimestamp_(new Date()),objectives:rows,recommendations:recommendations.slice(0,3),keepDoing:rows.filter(function(item){return item.status==="winning";}).slice(0,3).map(function(item){return item.summary;}),fixNow:rows.filter(function(item){return item.status==="behind";}).slice(0,2).map(function(item){return item.recommendation;}),recentPulse:recentPulse,topAdjustment:recommendations[0],analytics:analytics,analyticsBenchmarks:tracker.analyticsBenchmarks||null,possessions:tracker.possessions||{our:0,opponent:0},gameProgress:gameProgress};
+  return{checkpointType:checkpointType,period:period,coachMode:checkpointType==="Timeout"?"timeout":halftime?"halftime":"period",headline:checkpointType==="Timeout"?"Timeout Coach Mode":halftime?"Halftime Coach Mode":"End-of-Period Coach Mode",game:{gameId:tracker.game.gameId,gameDate:tracker.game.gameDate,team:tracker.game.team,opponent:tracker.game.opponent},generatedAt:formatLiveGameTimestamp_(new Date()),objectives:rows,recommendations:recommendations.slice(0,3),keepDoing:rows.filter(function(item){return item.status==="winning";}).slice(0,3).map(function(item){return item.summary;}),fixNow:rows.filter(function(item){return item.status==="behind";}).slice(0,2).map(function(item){return item.recommendation;}),recentPulse:recentPulse,topAdjustment:recommendations[0],analytics:analytics,possessionFocus:tracker.possessionFocus,analyticsBenchmarks:tracker.analyticsBenchmarks||null,possessions:tracker.possessions||{our:0,opponent:0},gameProgress:gameProgress};
 }
 
 function finishLiveGame(gameId, finalResult) {

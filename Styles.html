@@ -2883,3 +2883,23 @@ body.live-game-mode .live-play-tools>.live-play-rosters{display:grid;grid-templa
 .live-roster-upload small{font-weight:400}
 @media(max-width:600px){body.live-game-mode .live-play-tools>.live-play-rosters{grid-template-columns:minmax(0,1fr)}}
 </style>
+<style>
+body.live-game-mode .live-focus-tags{grid-column:1/-1;display:flex;flex-wrap:wrap;gap:10px}
+body.live-game-mode .live-focus-tags button{flex:1 1 135px;min-height:58px;padding:12px 18px;font-size:16px;border:2px solid #b9cbe2;border-radius:8px}
+body.live-game-mode .live-focus-tags button.active{color:#fff;border-color:var(--primary);background:var(--primary)}
+body.live-game-mode .live-focus-editor,body.live-game-mode .live-analytics-details{grid-column:1/-1;border-top:1px solid var(--line);padding-top:8px}
+.live-focus-editor summary,.live-analytics-details summary,.live-focus-setup summary,.live-focus-numbers>summary{cursor:pointer;font-weight:700;padding:8px 0}
+.live-focus-setup{padding:14px;background:#fff;border:1px solid var(--line);margin:12px 0}
+.live-focus-choices{display:flex;flex-wrap:wrap;gap:8px;margin:10px 0}
+.live-focus-choices label{display:flex;align-items:center;gap:7px;padding:10px;border:1px solid var(--line);border-radius:6px;font-size:12px}
+.live-focus-choices input{width:18px;height:18px}
+.live-focus-editor>label,.live-focus-setup>label{display:inline-flex;align-items:center;gap:8px;flex-wrap:wrap}
+.live-focus-editor input[type=text],.live-focus-setup input{max-width:100%;box-sizing:border-box}
+body.live-game-mode .live-analytics-details>.live-analytics-tags,body.live-game-mode .live-analytics-details>.live-analytics-oreb{display:inline-flex;gap:6px;margin:10px 6px 10px 0;flex-wrap:wrap}
+body.live-game-mode .live-analytics-details .live-play-tools{margin-top:10px}
+body.live-game-mode .live-analytics-outcomes button{min-height:58px;font-size:18px}
+body.live-game-mode .live-analytics-roles button{font-size:11px;min-height:40px}
+body.live-game-mode .live-analytics-objective-note{display:none}
+.live-focus-editor p,.live-focus-setup p{font-size:12px;line-height:1.5}
+</style>
+<style>.checkpoint-extra-metrics{grid-column:1/-1}.checkpoint-extra-metrics>summary{cursor:pointer;font-weight:700;padding:10px 0}</style>

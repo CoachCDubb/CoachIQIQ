@@ -253,6 +253,7 @@ function populateLiveGameSetup(setup){
   renderLiveGameTemplateOptions();
   renderLiveGameOpponentRosterOptions();
   applyPendingScoutingPlan_(setup,teamSelect);
+  renderLiveFocusSetup_();
   updateLiveGameTrackingOptions();
   updateLiveGameType();
   if(loading){ loading.hidden = true; }
@@ -451,7 +452,7 @@ function removeManualLiveGamePlayer(id){
   renderLiveGameRoster();renderLiveGameObjectives();
 }
 
-function handleLiveGameTeamChange(){renderLiveGameRoster();renderLiveGameTemplateOptions();}
+function handleLiveGameTeamChange(){renderLiveGameRoster();renderLiveGameTemplateOptions();renderLiveFocusSetup_();}
 function renderLiveGameTemplateOptions(){
   const select=document.getElementById("liveGameTemplateSelect");const team=document.getElementById("liveGameTeam");if(!select||!team){return;}
   const templates=((CoachIQ.liveGame.setup||{}).gamePlanTemplates||[]).filter(function(item){return item.team===team.value;});
@@ -616,6 +617,7 @@ function submitLiveGameSetup(event){
     opponentRoster:CoachIQ.liveGame.opponentRoster||[],
     selectedStats:[],
     customStats:[],
+    possessionFocus:CoachIQ.liveGame.setupFocus,
     enableAnalytics:enableAnalytics,
     enableObjectives:enableObjectives,
     trackingObjectives:enableObjectives?CoachIQ.liveGame.objectives:[]
@@ -728,6 +730,43 @@ function renderLiveTrackerPossessions(data){
 }
 function recordLivePossession(side,button){recordLiveObjectiveChange("system_possession",side,1,"",button);}
 
+function liveFocusCatalog_(){return [{type:"paintTouch",label:"Paint touch"},{type:"offensiveRebound",label:"OREB"},{type:"transition",label:"Transition"},{type:"deflection",label:"Deflection"},{type:"driveKick",label:"Drive & kick"},{type:"cut",label:"Cut"},{type:"setPlay",label:"Set play"},{type:"ato",label:"ATO"},{type:"putback",label:"Putback"},{type:"pickRoll",label:"Pick & roll"},{type:"postUp",label:"Post-up"},{type:"isolation",label:"Isolation"},{type:"rightHandDrive",label:"Right-hand drive"}];}
+function defaultLiveFocus_(){return liveFocusCatalog_().slice(0,2);}
+function renderLiveFocusChoices_(prefix,focus){
+  const container=document.getElementById(prefix+"FocusChoices");if(!container)return;
+  const catalog=liveFocusCatalog_().concat((focus||[]).filter(function(tag){return tag.type==="customTag";}));
+  const seen={};container.innerHTML=catalog.filter(function(tag){const key=JSON.stringify([tag.type,tag.label]);if(seen[key])return false;seen[key]=true;return true;}).map(function(tag){const checked=(focus||[]).some(function(item){return item.type===tag.type&&item.label===tag.label;});return '<label><input class="live-focus-option" type="checkbox" data-type="'+escapeHtmlValue(tag.type)+'" data-label="'+escapeHtmlValue(tag.label)+'" '+(checked?'checked':'')+' onchange="changeLiveFocusChoice_(this,\''+prefix+'\')">'+escapeHtmlValue(tag.label)+'</label>';}).join('');
+}
+function readLiveFocusChoices_(prefix){return Array.from(document.querySelectorAll('#'+prefix+'FocusChoices .live-focus-option:checked')).map(function(input){return{type:input.dataset.type,label:input.dataset.label};});}
+function changeLiveFocusChoice_(input,prefix){if(readLiveFocusChoices_(prefix).length>6){input.checked=false;showToast("Choose up to 6 tags to keep the tracker focused.");return;}if(prefix==="setup")CoachIQ.liveGame.setupFocus=readLiveFocusChoices_(prefix);}
+function addLiveFocusChoice_(prefix){
+  const input=document.getElementById(prefix+"FocusCustom"),label=input.value.trim(),focus=readLiveFocusChoices_(prefix);
+  if(!label||label.length>40||/[\x00-\x1f]/.test(label)){showToast("Use a tag name of 1–40 characters.","error");return;}
+  if(focus.length>=6){showToast("Uncheck a tag before adding another.");return;}
+  if(!focus.some(function(tag){return tag.type==="customTag"&&tag.label===label;}))focus.push({type:"customTag",label:label});
+  renderLiveFocusChoices_(prefix,focus);input.value="";if(prefix==="setup")CoachIQ.liveGame.setupFocus=focus;
+}
+function renderLiveFocusSetup_(){
+  const team=(document.getElementById("liveGameTeam")||{}).value,defaults=(CoachIQ.liveGame.setup||{}).teamPossessionFocus||{};
+  CoachIQ.liveGame.setupFocus=Array.isArray(defaults[team])?defaults[team]:defaultLiveFocus_();renderLiveFocusChoices_("setup",CoachIQ.liveGame.setupFocus);
+}
+function renderLiveFocusTracker_(data,draft){
+  const focus=Array.isArray(data.possessionFocus)?data.possessionFocus:defaultLiveFocus_(),role=draft.teamSide,container=document.getElementById("liveFocusTags");
+  if(container)container.innerHTML=focus.map(function(tag,index){if(tag.type==="rightHandDrive"&&role!=="defense")return '';const count=tag.type==="offensiveRebound"?Number(draft.offensiveRebounds||0):0,active=count>0||draft[tag.type]===true||(draft.playEvents||[]).some(function(event){return event.type===tag.type&&(tag.type!=="customTag"||event.label===tag.label);});return '<button type="button" class="'+(active?'active':'')+'" aria-pressed="'+active+'" onclick="tapLiveFocusTag_('+index+')">'+escapeHtmlValue(tag.label)+(role==="defense"&&["paintTouch","offensiveRebound","transition","rightHandDrive"].indexOf(tag.type)>=0?' allowed':'')+(count?' ×'+count:active?' ✓':'')+'</button>';}).join('')||'<span>Points only · choose points to record each possession.</span>';
+  const editor=document.getElementById("liveFocusEditor"),key=JSON.stringify([(data.game||{}).gameId,focus]);if(editor&&editor.dataset.focusKey!==key){renderLiveFocusChoices_("live",focus);editor.dataset.focusKey=key;}
+}
+function tapLiveFocusTag_(index){
+  const tracker=CoachIQ.liveGame.tracker||{},focus=Array.isArray(tracker.possessionFocus)?tracker.possessionFocus:defaultLiveFocus_(),tag=focus[index],draft=CoachIQ.liveGame.analyticsDraft;if(!tag||!draft)return;
+  if(tag.type==="offensiveRebound"){addLiveAnalyticsRebound();return;}
+  if(["paintTouch","transition","rightHandDrive"].indexOf(tag.type)>=0){toggleLiveAnalyticsTag(tag.type);return;}
+  const active=(draft.playEvents||[]).some(function(event){return event.type===tag.type&&(tag.type!=="customTag"||event.label===tag.label);});
+  if(active){rememberLiveAnalyticsSelection_();draft.playEvents=draft.playEvents.filter(function(event){return !(event.type===tag.type&&(tag.type!=="customTag"||event.label===tag.label));});renderLiveAnalyticsTracker_(tracker);}else addLiveAnalyticsPlay_(tag.type,tag.label);
+}
+function saveLiveFocus_(){
+  const tracker=CoachIQ.liveGame.tracker;if(!tracker)return;const focus=readLiveFocusChoices_("live"),button=document.getElementById("saveLiveFocusButton"),gameId=tracker.game.gameId;
+  if(focus.length>6){showToast("Choose up to 6 tags.");return;}button.disabled=true;
+  google.script.run.withSuccessHandler(function(saved){button.disabled=false;if(CoachIQ.liveGame.tracker&&CoachIQ.liveGame.tracker.game.gameId===gameId){CoachIQ.liveGame.tracker.possessionFocus=saved;renderLiveAnalyticsTracker_(CoachIQ.liveGame.tracker);document.getElementById("liveFocusEditor").open=false;}showToast("Tonight's tracking tags saved.");}).withFailureHandler(function(error){button.disabled=false;showToast(error.message||"Unable to save tags.","error");}).saveLivePossessionFocus(gameId,focus);
+}
 function emptyLiveAnalyticsDraft_(role){return{teamSide:role,transition:false,paintTouch:false,rightHandDrive:false,offensiveRebounds:0,playEvents:[]};}
 function setLiveAnalyticsRole(role){
   if(["offense","defense"].indexOf(role)<0)return;
@@ -742,7 +781,7 @@ function undoLiveAnalyticsSelection_(){const history=CoachIQ.liveGame.analyticsD
 function getLiveAnalyticsRole_(){
   if(CoachIQ.liveGame.analyticsRole)return CoachIQ.liveGame.analyticsRole;
   try{const saved=localStorage.getItem("coachiq_live_analytics_role");if(saved==="offense"||saved==="defense")CoachIQ.liveGame.analyticsRole=saved;}catch(error){}
-  return CoachIQ.liveGame.analyticsRole;
+  return CoachIQ.liveGame.analyticsRole||"offense";
 }
 function renderLiveAnalyticsTracker_(data){
   const controls=document.getElementById("liveAnalyticsControls");if(!controls)return;
@@ -761,9 +800,10 @@ function renderLiveAnalyticsTracker_(data){
   const draftSummary=document.getElementById("liveAnalyticsDraftSummary");if(draftSummary){const tracked=[];if(draft.transition)tracked.push(role==="defense"?"Transition allowed":"Transition");if(draft.paintTouch)tracked.push(role==="defense"?"Paint touch allowed":"Paint touch");if(role==="defense"&&draft.rightHandDrive)tracked.push("Right-hand drive allowed");if(Number(draft.offensiveRebounds||0))tracked.push(Number(draft.offensiveRebounds)+(role==="defense"?" offensive rebound"+(Number(draft.offensiveRebounds)===1?"":"s")+" allowed":" offensive rebound"+(Number(draft.offensiveRebounds)===1?"":"s")));draftSummary.innerHTML='<strong>Tracking this possession</strong><span>'+(role==="defense"?'Defense':'Offense')+' · '+escapeHtmlValue(tracked.length?tracked.join(" · "):"Half court · no added tags")+'</span><small>Choose points'+(role==="defense"?' allowed':'')+' or '+(role==="defense"?'Forced TO':'Turnover')+' to save it.</small>';}
   const jersey=document.getElementById("livePlayJersey"),hint=document.getElementById("livePlayPlayerHint");if(jersey&&jersey.dataset.side!==role){jersey.value="";jersey.dataset.side=role;}if(hint)hint.textContent=role==="defense"?"Use the opponent player for shots, paint touches and rebounds; our player for deflections. Roster selection takes priority over a manual jersey.":"Use our player for shots, paint touches and rebounds; opponent player for deflections. Roster selection takes priority over a manual jersey.";
   if(draftSummary&&(draft.playEvents||[]).length)draftSummary.innerHTML+='<div class="possession-play-sequence">'+liveAnalyticsPlayChips_(draft.playEvents)+'</div>';
+  renderLiveFocusTracker_(data,draft);
   const side=role==="offense"?offense:defense;const fmt=function(value){return value==null?"—":Number(value).toFixed(2);};
   document.getElementById("liveAnalyticsSummary").innerHTML='<span><b>'+Number(side.points||0)+'</b> '+(role==="defense"?'points allowed':'points')+'</span><span><b>'+side.possessions+'</b> possessions</span><span><b>'+fmt(side.ppp)+'</b> PPP</span><span><b>'+fmt(side.transitionPpp)+'</b> transition</span><span><b>'+fmt(side.paintTouchPpp)+'</b> paint touch</span><span><b>'+fmt(side[role==="offense"?"turnoverRate":"forcedTurnoverRate"]==null?null:Number(side[role==="offense"?"turnoverRate":"forcedTurnoverRate"])*100)+'%</b> '+(role==="offense"?'turnover':'forced TO')+' rate</span>'+(role==="defense"?'<span><b>'+fmt(side.rightHandDrivePpp)+'</b> right hand</span>':'');
-  const headline=document.getElementById("liveAnalyticsHeadline");if(headline)headline.textContent=analytics.possessionDifference>1?"Check counts now — offense and defense differ by "+analytics.possessionDifference+".":(role==="offense"?"Offense · half court is default · tap each tag once if it happened · then choose the outcome.":"Defense · half court is default · tap each tag once if it happened · then choose the outcome.");
+  const headline=document.getElementById("liveAnalyticsHeadline");if(headline)headline.textContent=analytics.possessionDifference>1?"Check counts now — offense and defense differ by "+analytics.possessionDifference+".":(role==="offense"?"Offense · tap what mattered, then points. Counts and side changes are automatic.":"Defense · tap what mattered, then points allowed. Counts and side changes are automatic.");
 }
 function liveAnalyticsBenchmarkStatus_(value,target,direction){if(value==null||target==null)return"behind";const winning=direction==="lower"?value<=target:value>=target;if(winning)return"winning";const distance=Math.abs(value-target),range=Math.max(Math.abs(target),.01);return distance/range<=.05?"near-target":"behind";}
 function formatLiveBenchmarkValue_(value,unit){if(value==null)return"—";if(unit==="rate")return(Number(value)*100).toFixed(1)+"%";return Number(value).toFixed(unit==="per 100"?1:2);}
@@ -802,6 +842,7 @@ function addLiveCustomPlayTag_(){
 }
 function liveAnalyticsPlayEvent_(type){
   const role=getLiveAnalyticsRole_(),playerSide=type==="deflection"?(role==="defense"?"us":"opponent"):(role==="offense"?"us":"opponent");
+  const details=document.getElementById("liveAnalyticsDetails");if(details&&!details.open)return{type:type,jersey:"",playerSide:playerSide};
   const roster=document.getElementById(playerSide==="us"?"livePlayOurPlayer":"livePlayOpponentPlayer"),input=document.getElementById("livePlayJersey");
   const jersey=String((roster&&roster.value)||(input&&input.value)||"").trim();
   if(jersey&&!/^[0-9]{1,3}$/.test(jersey)){showToast("Enter a jersey number of 1–3 digits, or leave blank.","error");return null;}
@@ -821,7 +862,15 @@ function liveAnalyticsPlayChips_(events){
   const labels={paintTouch:"Paint touch",offensiveRebound:"OREB",deflection:"Deflection",driveKick:"Drive & kick",miss2:"Missed 2",miss3:"Missed 3",putback:"Putback",andOne:"And-one",made1:"Scored 1",made2:"Scored 2",made3:"Scored 3",cut:"Cut",setPlay:"Set play",ato:"ATO",pickRoll:"Pick & roll",postUp:"Post-up",isolation:"Isolation"};
   return (events||[]).map(function(event){const color=event.type==="offensiveRebound"?"rebound":event.type==="paintTouch"?"paint":event.type==="deflection"?"deflection":/^made/.test(event.type)?"score":/^miss/.test(event.type)?"miss":"action";return '<span class="play-chip '+color+'">'+escapeHtmlValue(((event.type==="customTag"?event.label:labels[event.type])||event.type)+(event.jersey?' · '+(event.playerSide==="opponent"?'Opp ':'Us ')+'#'+event.jersey:''))+'</span>';}).join('<span class="play-arrow" aria-hidden="true"> → </span>');
 }
-function renderCheckpointPossessionReview_(analytics,period){
+function renderLiveFocusReport_(analytics,focus){
+  const log=analytics.possessionLog||[],rows=focus.map(function(tag){return ["offense","defense"].map(function(side){
+    const possessions=log.filter(function(item){if(item.teamSide!==side)return false;if(["paintTouch","transition","rightHandDrive"].indexOf(tag.type)>=0)return item[tag.type]===true;if(tag.type==="offensiveRebound")return Number(item.offensiveRebounds||0)>0;return (item.playEvents||[]).some(function(event){return event.type===tag.type&&(tag.type!=="customTag"||event.label===tag.label);});});
+    const points=possessions.reduce(function(sum,item){return sum+Number(item.points||0);},0),rebounds=tag.type==="offensiveRebound"?possessions.reduce(function(sum,item){return sum+Number(item.offensiveRebounds||0);},0):null;
+    return '<tr><th scope="row">'+escapeHtmlValue(tag.label)+(rebounds!=null?' ('+rebounds+' rebounds)':'')+'</th><td>'+(side==="offense"?'Us':'Opponent')+'</td><td>'+possessions.length+'</td><td>'+points+'</td><td>'+formatCheckpointAnalyticsValue_(possessions.length?points/possessions.length:null)+'</td></tr>';
+  }).join('');}).join('');
+  return '<h4>What mattered tonight</h4><p>'+Number((analytics.offense||{}).possessions||0)+' offensive / '+Number((analytics.defense||{}).possessions||0)+' defensive possessions recorded.</p>'+(rows?'<div class="possession-table-wrap"><table class="possession-player-table"><thead><tr><th>Tag</th><th>Team</th><th>Tagged possessions</th><th>Points</th><th>PPP</th></tr></thead><tbody>'+rows+'</tbody></table></div><small>Game-to-date totals for recorded tags. Rows can overlap. Unselected or unrecorded tags have no evidence; changing focus does not fill earlier gaps.</small>':'<p>Points-only tracking. Every possession is listed below.</p>');
+}
+function renderCheckpointPossessionReview_(analytics,period,focus){
   const container=document.getElementById("checkpointPossessionReview");if(!container)return;
   const log=analytics.possessionLog||[],players=analytics.playerTotals||[],offense=analytics.offense||{};
   const withCount=Number(offense.paintTouchPossessions||0),withoutCount=Number(offense.possessions||0)-withCount;
@@ -830,7 +879,7 @@ function renderCheckpointPossessionReview_(analytics,period){
   const totals=players.map(function(player){return '<tr><th scope="row">'+(player.playerSide==="opponent"?'Opponent':'Us')+' #'+escapeHtmlValue(player.jersey)+'</th><td>'+Number(player.offensiveRebounds||0)+'</td><td>'+Number(player.paintTouches||0)+'</td><td>'+Number(player.deflections||0)+'</td><td>'+Number(player.points||0)+'</td></tr>';}).join('');
   const tagRows=(analytics.scoringTags||[]).map(function(tag){return '<tr><th scope="row">'+escapeHtmlValue(tag.label)+'</th><td>'+(tag.teamSide==="defense"?'Opponent':'Us')+'</td><td>'+Number(tag.possessions||0)+'</td><td>'+Number(tag.points||0)+'</td><td>'+formatCheckpointAnalyticsValue_(tag.ppp)+'</td></tr>';}).join('');
   const tagTable=tagRows?'<h4>Scoring tags · game to date</h4><small>Points on possessions with each tag; a possession may have multiple tags, so rows overlap.</small><div class="possession-table-wrap"><table class="possession-player-table"><thead><tr><th>Tag</th><th>Team</th><th>Possessions</th><th>Points</th><th>PPP</th></tr></thead><tbody>'+tagRows+'</tbody></table></div>':'';
-  container.innerHTML=insight+tagTable+'<h4>Player contributions · game to date</h4><small>Only plays with a jersey are credited. OREB and paint touches on defense belong to the opponent.</small>'+(totals?'<div class="possession-table-wrap"><table class="possession-player-table"><thead><tr><th>Player</th><th>OREB</th><th>Paint touches</th><th>Deflections</th><th>Points</th></tr></thead><tbody>'+totals+'</tbody></table></div>':'<p>No player-attributed plays yet.</p>')+'<h4>Every possession · '+log.length+' total</h4><label class="possession-period-filter"><input type="checkbox" onchange="filterCheckpointPossessions_(this.checked,'+Number(period||1)+')"> Show report period only</label><div class="possession-log">'+log.map(function(item,index){let events=(item.playEvents||[]).slice();const legacy=[];if(item.transition)legacy.push({type:"Transition"});if(item.paintTouch&&!events.some(function(event){return event.type==="paintTouch";}))legacy.push({type:"paintTouch"});if(item.rightHandDrive)legacy.push({type:"Right-hand drive"});if(item.offensiveRebounds&&!events.some(function(event){return event.type==="offensiveRebound";}))legacy.push({type:item.offensiveRebounds+" OREB"});events=legacy.concat(events);return '<article class="possession-log-row '+(item.teamSide==="defense"?'defense':'offense')+'" data-period="'+Number(item.period||1)+'"><strong>Possession '+(index+1)+' · '+(item.teamSide==="defense"?'Defense':'Offense')+' · Period '+Number(item.period||1)+' · '+(item.turnover?'Turnover':item.forcedTurnover?'Forced TO':Number(item.points||0)+(item.teamSide==="defense"?' pts allowed':' pts'))+'</strong><div>'+liveAnalyticsPlayChips_(events)+'</div></article>';}).join('')+'</div>';
+  container.innerHTML=(Array.isArray(focus)?renderLiveFocusReport_(analytics,focus):"")+(Array.isArray(focus)&&!focus.some(function(tag){return tag.type==="paintTouch";})?"":insight)+tagTable+'<h4>Player contributions · game to date</h4><small>Only plays with a jersey are credited. OREB and paint touches on defense belong to the opponent.</small>'+(totals?'<div class="possession-table-wrap"><table class="possession-player-table"><thead><tr><th>Player</th><th>OREB</th><th>Paint touches</th><th>Deflections</th><th>Points</th></tr></thead><tbody>'+totals+'</tbody></table></div>':'<p>No player-attributed plays yet.</p>')+'<h4>Every possession · '+log.length+' total</h4><label class="possession-period-filter"><input type="checkbox" onchange="filterCheckpointPossessions_(this.checked,'+Number(period||1)+')"> Show report period only</label><div class="possession-log">'+log.map(function(item,index){let events=(item.playEvents||[]).slice();const legacy=[];if(item.transition)legacy.push({type:"Transition"});if(item.paintTouch&&!events.some(function(event){return event.type==="paintTouch";}))legacy.push({type:"paintTouch"});if(item.rightHandDrive)legacy.push({type:"Right-hand drive"});if(item.offensiveRebounds&&!events.some(function(event){return event.type==="offensiveRebound";}))legacy.push({type:item.offensiveRebounds+" OREB"});events=legacy.concat(events);return '<article class="possession-log-row '+(item.teamSide==="defense"?'defense':'offense')+'" data-period="'+Number(item.period||1)+'"><strong>Possession '+(index+1)+' · '+(item.teamSide==="defense"?'Defense':'Offense')+' · Period '+Number(item.period||1)+' · '+(item.turnover?'Turnover':item.forcedTurnover?'Forced TO':Number(item.points||0)+(item.teamSide==="defense"?' pts allowed':' pts'))+'</strong><div>'+liveAnalyticsPlayChips_(events)+'</div></article>';}).join('')+'</div>';
 }
 function filterCheckpointPossessions_(onlyPeriod,period){document.querySelectorAll("#checkpointPossessionReview .possession-log-row").forEach(function(row){row.hidden=onlyPeriod&&Number(row.dataset.period)!==period;});}
 function finishLiveAnalyticsTurnover(button){finishLiveAnalyticsPossession(0,button,true);}
@@ -1122,12 +1171,13 @@ function formatCheckpointAnalyticsValue_(value,digits){return value==null||!isFi
 function checkpointAnalyticsMetric_(label,value,detail){return '<div><span>'+escapeHtmlValue(label)+'</span><strong>'+escapeHtmlValue(value)+'</strong><small>'+escapeHtmlValue(detail||"")+'</small></div>';}
 function renderCheckpointAnalyticsReport_(report){
   const section=document.getElementById("checkpointAnalyticsReport"),rows=document.getElementById("checkpointAnalyticsRows"),analytics=report.analytics||{},offense=analytics.offense||{},defense=analytics.defense||{};if(!section||!rows)return;
-  renderCheckpointPossessionReview_(analytics,report.period);
+  renderCheckpointPossessionReview_(analytics,report.period,report.possessionFocus);
   const hasAnalytics=Number(offense.possessions||0)>0||Number(defense.possessions||0)>0;section.hidden=!hasAnalytics;if(section.hidden){rows.innerHTML="";return;}
   const pct=function(value){return value==null?"—":(Number(value)*100).toFixed(1)+"%";},metric=function(label,value,detail){return checkpointAnalyticsMetric_(label,value,detail);};
   const offenseRows=[metric("Points / possessions",Number(offense.points||0)+" / "+Number(offense.possessions||0),"Offensive PPP "+formatCheckpointAnalyticsValue_(offense.ppp)),metric("Transition",Number(offense.transitionPoints||0)+" pts · "+Number(offense.transitionPossessions||0)+" poss","PPP "+formatCheckpointAnalyticsValue_(offense.transitionPpp)),metric("Paint touch",Number(offense.paintTouchPoints||0)+" pts · "+Number(offense.paintTouchPossessions||0)+" poss","PPP "+formatCheckpointAnalyticsValue_(offense.paintTouchPpp)),metric("Turnovers",String(Number(offense.turnovers||0)),"Rate "+pct(offense.turnoverRate)),metric("Offensive rebounds",String(Number(offense.offensiveRebounds||0)),formatCheckpointAnalyticsValue_(offense.offensiveReboundsPer100,1)+" per 100 possessions")];
   const defenseRows=[metric("Points allowed / possessions",Number(defense.points||0)+" / "+Number(defense.possessions||0),"Defensive PPP allowed "+formatCheckpointAnalyticsValue_(defense.ppp)),metric("Transition allowed",Number(defense.transitionPoints||0)+" pts · "+Number(defense.transitionPossessions||0)+" poss","PPP allowed "+formatCheckpointAnalyticsValue_(defense.transitionPpp)),metric("Paint touch allowed",Number(defense.paintTouchPoints||0)+" pts · "+Number(defense.paintTouchPossessions||0)+" poss","PPP allowed "+formatCheckpointAnalyticsValue_(defense.paintTouchPpp)),metric("Forced turnovers",String(Number(defense.forcedTurnovers||0)),"Rate "+pct(defense.forcedTurnoverRate)),metric("Offensive rebounds allowed",String(Number(defense.offensiveRebounds||0)),formatCheckpointAnalyticsValue_(defense.offensiveReboundsPer100,1)+" per 100 possessions"),metric("Right-hand drives allowed",Number(defense.rightHandDrivePoints||0)+" pts · "+Number(defense.rightHandDrivePossessions||0)+" poss","PPP allowed "+formatCheckpointAnalyticsValue_(defense.rightHandDrivePpp))];
-  rows.innerHTML='<article><h4>Offense</h4>'+offenseRows.join("")+'</article><article><h4>Defense</h4>'+defenseRows.join("")+'</article>';
+  const metrics='<article><h4>Offense</h4>'+offenseRows.join("")+'</article><article><h4>Defense</h4>'+defenseRows.join("")+'</article>';
+  rows.innerHTML=Array.isArray(report.possessionFocus)?'<details class="checkpoint-extra-metrics"><summary>All recorded metrics</summary>'+metrics+'</details>':metrics;
 }
 function renderCheckpointBenchmarkReport_(report){
   const section=document.getElementById("checkpointBenchmarkReport"),rows=document.getElementById("checkpointBenchmarkRows"),program=report.analyticsBenchmarks||{},analytics=report.analytics||{},metrics=program.metrics||[];if(!section||!rows)return;

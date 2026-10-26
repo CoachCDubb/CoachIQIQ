@@ -35,7 +35,7 @@ test('tracker uses role-specific tags and a single possession outcome', () => {
 test('tracker explains possession-level tags and permits rebound correction', () => {
   const game = read('Game.html');
   const scripts = read('Scripts.html');
-  assert.match(game, /Half court is the default; tap each tag once if it happened/);
+  assert.match(game, /Tap what mattered, then points to save one possession/i);
   assert.match(game, /removeLiveAnalyticsRebound/);
   assert.match(scripts, /Any Paint Touch/);
   assert.match(scripts, /aria-pressed/);
