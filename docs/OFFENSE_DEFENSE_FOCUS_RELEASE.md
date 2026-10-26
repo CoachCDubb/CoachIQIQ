@@ -4,7 +4,9 @@ Each game can now hold independent offense and defense tag lists (up to six per 
 
 Existing games/preparation files with one shared list keep that list on both sides until edited. A focus change affects future possessions only. Every finished possession saves the tags enabled for that side at the time, so untracked paint touches remain unknown rather than being counted as no paint touch. Saved possession events, statistics and corrections remain intact.
 
-## GameDay (hosted version 2026.10.26.7)
+## GameDay implementation (version 2026.10.26.7; publication pending)
+
+The implementation is built and tested, but the private Site publication is currently blocked by automatic credential-handling review. The live Site remains on version 2026.10.26.6. These steps apply after publication succeeds.
 
 1. Reconnect to internet, reopen GameDay, wait for its update and reload. Confirm version **2026.10.26.7** and run Prepare for offline again.
 2. Open a live practice game with no unfinished tagged possession.
