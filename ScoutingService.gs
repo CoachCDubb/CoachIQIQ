@@ -62,10 +62,10 @@ function sendScoutingReportToLiveGame(reportId) {
   if(!record)throw new Error("Save the scouting report first.");
   const report=scoutingRowToObject_(record.values);requireScoutingTeamAccess_(report.team);
   const objectives=report.sections.filter(function(section){return section.tracking&&section.tracking.enabled;}).map(function(section,index){const tracking=section.tracking,safeId=String(section.id||index).toLowerCase().replace(/[^a-z0-9_]/g,"_").slice(0,45);return{id:"objective_scout_"+safeId,label:tracking.label||section.title,goalType:tracking.goalType,subject:tracking.subject,target:tracking.target,direction:tracking.direction,unit:tracking.unit,order:index};});
-  if(!objectives.length)return{reportId:report.reportId,team:report.team,opponent:report.opponent,objectives:[]};
+  if(!objectives.length)return{reportId:report.reportId,team:report.team,opponent:report.opponent,objectives:[],watchlist:scoutingWatchlistFromSections_(report.sections)};
   initializeLiveGameSheets_();const cleaned=cleanLiveGameTrackingPlan_(objectives),name=("Scout: "+report.opponent).slice(0,60),sheet=SpreadsheetApp.getActive().getSheetByName(LIVE_GAME_TEMPLATES_SHEET),rows=sheet.getLastRow()>1?sheet.getRange(2,1,sheet.getLastRow()-1,LIVE_GAME_TEMPLATE_HEADERS.length).getValues():[],index=rows.findIndex(function(row){return String(row[1]||"").toLowerCase()===name.toLowerCase()&&String(row[2]||"")===report.team;}),now=new Date();let templateId;
   if(index>=0){templateId=String(rows[index][0]);sheet.getRange(index+2,4).setValue(JSON.stringify(cleaned));sheet.getRange(index+2,7).setValue(now);}else{templateId="TPL-"+Utilities.getUuid().slice(0,10).toUpperCase();sheet.appendRow([templateId,safeLiveGameValue_(name),safeLiveGameValue_(report.team),JSON.stringify(cleaned),Session.getActiveUser().getEmail()||"",now,now]);}
-  return{reportId:report.reportId,templateId:templateId,templateName:name,team:report.team,opponent:report.opponent,objectives:cleaned};
+  return{reportId:report.reportId,templateId:templateId,templateName:name,team:report.team,opponent:report.opponent,objectives:cleaned,watchlist:scoutingWatchlistFromSections_(report.sections)};
 }
 
 function initializeScoutingSheet_() {
@@ -77,7 +77,8 @@ function initializeScoutingSheet_() {
 function cleanScoutingSections_(sections) {
   if (!Array.isArray(sections)) return [];
   if (sections.length > 20) throw new Error("A scouting report can contain up to 20 sections.");
-  return sections.map(function(section,index){const raw=section&&section.tracking||{},goal=["comparison","minimum","maximum","track"].indexOf(raw.goalType)>=0?raw.goalType:"track",subject=["our_team","opponent_team","both_teams"].indexOf(raw.subject)>=0?raw.subject:"our_team",unit=["count","points","percentage"].indexOf(raw.unit)>=0?raw.unit:"count";return {id:safeScoutingText_(section.id,60)||("section-"+index),title:safeScoutingText_(section.title,80)||"Untitled section",prompt:safeScoutingText_(section.prompt,180),content:safeScoutingText_(section.content,5000),comparison:cleanScoutingComparison_(section.comparison),tracking:{enabled:raw.enabled===true,label:safeScoutingText_(raw.label,60),goalType:goal,subject:goal==="comparison"?"both_teams":subject,target:Math.max(0,Math.min(9999,Number(raw.target)||0)),direction:raw.direction==="lower"?"lower":"higher",unit:unit}};});
+  if(sections.filter(function(section){return section&&section.watch===true;}).length>3)throw new Error("Choose up to 3 scouting watchlist priorities.");
+  return sections.map(function(section,index){const raw=section&&section.tracking||{},goal=["comparison","minimum","maximum","track"].indexOf(raw.goalType)>=0?raw.goalType:"track",subject=["our_team","opponent_team","both_teams"].indexOf(raw.subject)>=0?raw.subject:"our_team",unit=["count","points","percentage"].indexOf(raw.unit)>=0?raw.unit:"count";return {id:safeScoutingText_(section.id,60)||("section-"+index),title:safeScoutingText_(section.title,80)||"Untitled section",prompt:safeScoutingText_(section.prompt,180),content:safeScoutingText_(section.content,5000),comparison:cleanScoutingComparison_(section.comparison),watch:cleanScoutingWatch_(section),watchResponse:safeScoutingText_(section.watchResponse,240),tracking:{enabled:raw.enabled===true,label:safeScoutingText_(raw.label,60),goalType:goal,subject:goal==="comparison"?"both_teams":subject,target:Math.max(0,Math.min(9999,Number(raw.target)||0)),direction:raw.direction==="lower"?"lower":"higher",unit:unit}};});
 }
 function safeScoutingText_(value,maxLength) { return String(value == null ? "" : value).trim().slice(0,maxLength); }
 function safeScoutingSheetValue_(value,maxLength) { const text=safeScoutingText_(value,maxLength); return /^[=+\-@]/.test(text)?"'"+text:text; }
@@ -193,7 +194,7 @@ function compactStoredPostgameReport_(report,gameId){
 }
 function getLiveGameScoutingChoices_(){
   const sheet=getCoachIQSpreadsheet_().getSheetByName(SCOUTING_REPORTS_SHEET);if(!sheet||sheet.getLastRow()<2)return[];const access=getCurrentStaffAccess_();
-  return sheet.getRange(2,1,sheet.getLastRow()-1,6).getValues().filter(function(row){return String(row[5])!=="Archived"&&canAccessScoutingTeam_(String(row[1]),access);}).map(function(row){return{reportId:String(row[0]),team:String(row[1]),opponent:String(row[2]),gameDate:row[3] instanceof Date?Utilities.formatDate(row[3],Session.getScriptTimeZone(),"yyyy-MM-dd"):String(row[3]||""),status:String(row[5]||"Draft")};});
+  return sheet.getRange(2,1,sheet.getLastRow()-1,9).getValues().filter(function(row){return String(row[5])!=="Archived"&&canAccessScoutingTeam_(String(row[1]),access);}).map(function(row){return{reportId:String(row[0]),team:String(row[1]),opponent:String(row[2]),gameDate:row[3] instanceof Date?Utilities.formatDate(row[3],Session.getScriptTimeZone(),"yyyy-MM-dd"):String(row[3]||""),status:String(row[5]||"Draft"),watchlist:scoutingWatchlistFromSections_(parseLiveGameJson_(row[8],[]))};});
 }
 function scoutingSectionGameContext_(section,analytics){
   const side=["our-offense","opponent-defense"].indexOf(section.id)>=0?"offense":["our-defense","opponent-offense","opponent-tendencies"].indexOf(section.id)>=0?"defense":"";
@@ -207,4 +208,25 @@ function scoutingSectionGameContext_(section,analytics){
   }
   if(section.id==="special-situations")return "Related evidence — coach review required: "+scoutingGameEvidence_(analytics,{metric:"ato",team:"us"}).text+" "+scoutingGameEvidence_(analytics,{metric:"ato",team:"opponent"}).text;
   return "No explicit tracked measure linked. Review this scouting note against the game evidence; it is not automatically graded.";
+}
+
+function scoutingWatchTypes_(){return ["paintTouch","offensiveRebound","transition","driveKick","cut","setPlay","ato","putback","pickRoll","postUp","isolation","rightHandDrive","customTag"];}
+function cleanScoutingWatch_(section){
+  if(!section||section.watch!==true)return false;
+  const choice=cleanScoutingComparison_(section.comparison);
+  if(!choice||scoutingWatchTypes_().indexOf(choice.metric)<0)throw new Error("Choose a possession tag before adding this section to the watchlist.");
+  if(choice.metric==="rightHandDrive"&&choice.team!=="opponent")throw new Error("Right-hand drive tracking is available for the opponent only.");
+  return true;
+}
+function scoutingWatchlistFromSections_(sections){
+  const seen=Object.create(null),list=[];
+  (Array.isArray(sections)?sections:[]).forEach(function(section){if(!cleanScoutingWatch_(section))return;const choice=cleanScoutingComparison_(section.comparison),key=JSON.stringify([choice.team,choice.metric,choice.label]);if(seen[key])return;seen[key]=true;
+    const label=choice.metric==="customTag"?choice.label:(scoutingComparisonMetrics_().find(function(item){return item.id===choice.metric;})||{}).label;
+    list.push({type:choice.metric,label:label,side:choice.team==="opponent"?"defense":"offense",title:safeScoutingText_(section.title,80),response:safeScoutingText_(section.watchResponse,240)});
+  });if(list.length>3)throw new Error("Choose up to 3 scouting watchlist priorities.");return list;
+}
+function mergeScoutingWatchFocus_(focus,watchlist){
+  const merged=[],seen=Object.create(null);
+  (watchlist||[]).map(function(item){return{type:item.type,label:item.label};}).concat(cleanLivePossessionFocus_(focus)).forEach(function(item){const key=item.type==="customTag"?JSON.stringify([item.type,item.label]):item.type;if(!seen[key]){seen[key]=true;merged.push(item);}});
+  return cleanLivePossessionFocus_(merged.slice(0,6));
 }
