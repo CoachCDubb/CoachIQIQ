@@ -3127,13 +3127,13 @@ body.checkpoint-open #content{overflow:hidden}
 @media print{.live-review-dialog,.review-edit-button{display:none!important}.checkpoint-game-review{margin:14px 0}.review-highlight-grid article,.review-adjustment{break-inside:avoid}}
 
 /* Completed-game cards: game identity first, compact actions underneath. */
-.live-game-history .live-game-resume-list{grid-template-columns:repeat(auto-fit,minmax(min(100%,320px),1fr));align-items:start;gap:14px}
-.live-game-history-row.live-game-completed-card{grid-template-columns:minmax(0,1fr);align-content:start;gap:10px;min-width:0;padding:12px;border:1px solid var(--line);border-radius:10px;background:#fff;box-sizing:border-box}
-.live-game-history-row.live-game-completed-card>button:first-child{grid-column:auto;min-width:0;min-height:88px;align-items:flex-start;border-radius:7px;box-sizing:border-box}
-.live-game-completed-card>button:first-child>span{min-width:0;overflow-wrap:anywhere;gap:6px}
-.live-game-completed-card>button:first-child strong{font-size:14px;line-height:1.4}
-.live-game-completed-card>button:first-child small{font-size:12px;line-height:1.5}
-.live-game-completed-card>button:first-child>b{flex-shrink:0;white-space:nowrap;margin-top:3px}
+.live-game-history .live-game-resume-list,.live-game-resume .live-game-resume-list{grid-template-columns:repeat(auto-fit,minmax(min(100%,320px),1fr));align-items:start;gap:14px}
+.live-game-history-row:is(.live-game-completed-card,.live-game-saved-card){grid-template-columns:minmax(0,1fr);align-content:start;gap:10px;min-width:0;padding:12px;border:1px solid var(--line);border-radius:10px;background:#fff;box-sizing:border-box}
+.live-game-history-row:is(.live-game-completed-card,.live-game-saved-card)>button:first-child{grid-column:auto;min-width:0;min-height:88px;align-items:flex-start;border-radius:7px;box-sizing:border-box}
+:is(.live-game-completed-card,.live-game-saved-card)>button:first-child>span{min-width:0;overflow-wrap:anywhere;gap:6px}
+:is(.live-game-completed-card,.live-game-saved-card)>button:first-child strong{font-size:14px;line-height:1.4}
+:is(.live-game-completed-card,.live-game-saved-card)>button:first-child small{font-size:12px;line-height:1.5}
+:is(.live-game-completed-card,.live-game-saved-card)>button:first-child>b{flex-shrink:0;white-space:nowrap;margin-top:3px}
 .live-game-history-row .live-game-history-actions{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));align-items:stretch;gap:8px;min-width:0}
 .live-game-history-row .live-game-history-actions>button{width:100%;min-width:0;max-width:none;min-height:44px;margin:0;padding:8px 6px;justify-content:center;text-align:center;white-space:normal;overflow-wrap:anywhere;font-size:12px;line-height:1.35;font-weight:700;border-radius:7px;box-sizing:border-box}
 
@@ -3168,4 +3168,7 @@ body.live-game-mode .live-analytics-details .live-play-tools{width:100%;min-widt
 body.live-game-mode .live-focus-tags{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(140px,100%),1fr))}
 body.live-game-mode .live-analytics-outcomes{flex-shrink:0}
 @media(max-width:600px){.live-analytics-player-credit{grid-template-columns:minmax(0,1fr)}.live-analytics-player-credit .live-play-rosters{grid-template-columns:minmax(0,1fr)}.live-analytics-player-credit .live-player-credit-clear{grid-column:auto;grid-row:auto}}
+
+.live-game-saved-card .live-game-history-actions{grid-template-columns:minmax(0,2fr) minmax(0,1fr)}
+.live-game-prep-button{color:var(--primary);border:1px solid #b9cbe2;background:#eef5ff;cursor:pointer}
 </style>
