@@ -82,12 +82,16 @@ function cleanLiveAnalyticsTrackedTags_(tags){
 }
 
 /** Exact patterns from completed possessions; no model-generated facts or causal claims. */
+// Count recorded events; older boolean-only rows establish at least one touch.
+function livePaintTouchCount_(item){const count=(item.playEvents||[]).filter(function(event){return event.type==="paintTouch";}).length;return count||(item.paintTouch===true?1:0);}
+
 function buildLivePossessionIntelligence_(possessions){
   const kills={total:0,currentStops:0,longestStops:0,totalStops:0,progress:0},paint={},patterns={},insights=[],recommendations=[];
-  ["offense","defense"].forEach(function(side){paint[side]={withTouch:{possessions:0,scored:0,points:0},withoutTouch:{possessions:0,scored:0,points:0},unknown:0,currentNoTouch:0,longestNoTouch:0};});
+  ["offense","defense"].forEach(function(side){paint[side]={withTouch:{possessions:0,scored:0,points:0},withoutTouch:{possessions:0,scored:0,points:0},unknown:0,currentNoTouch:0,longestNoTouch:0,recordedTouches:0,singleTouch:{possessions:0,scored:0,points:0},multipleTouches:{possessions:0,scored:0,points:0}};});
   const labels={paintTouch:"Paint touch",offensiveRebound:"OREB",transition:"Transition",rightHandDrive:"Right-hand drive",deflection:"Deflection",driveKick:"Drive & kick",cut:"Cut",setPlay:"Set play",ato:"ATO",putback:"Putback",pickRoll:"Pick & roll",postUp:"Post-up",isolation:"Isolation"};
   (possessions||[]).forEach(function(item,index){
     if(!paint[item.teamSide])return;const points=Number(item.points||0),side=item.teamSide,p=paint[side];
+    const touchCount=livePaintTouchCount_(item);p.recordedTouches+=touchCount;if(touchCount){const group=touchCount>=2?p.multipleTouches:p.singleTouch;group.possessions++;group.points+=points;if(points>0)group.scored++;}
     const covered=item.paintTouch===true||(Array.isArray(item.trackedTags)&&item.trackedTags.indexOf("paintTouch")>=0);
     if(covered){const bucket=item.paintTouch?p.withTouch:p.withoutTouch;bucket.possessions++;bucket.points+=points;if(points>0)bucket.scored++;p.currentNoTouch=item.paintTouch?0:p.currentNoTouch+1;p.longestNoTouch=Math.max(p.longestNoTouch,p.currentNoTouch);}else{p.unknown++;p.currentNoTouch=0;}
     if(side==="defense"){
@@ -103,6 +107,7 @@ function buildLivePossessionIntelligence_(possessions){
   ["offense","defense"].forEach(function(side){
     const p=paint[side],who=side==="defense"?"Opponent":"Your team",withTouch=p.withTouch,without=p.withoutTouch;
     if(withTouch.possessions){const all=withTouch.scored===withTouch.possessions;insights.push({kind:side==="defense"&&all?"attention":"neutral",title:who+" paint-touch scoring",text:(all?who+" scored on every recorded paint-touch possession: ":who+" scored on ")+withTouch.scored+"/"+withTouch.possessions+" · "+withTouch.points+" points · "+(withTouch.points/withTouch.possessions).toFixed(2)+" PPP."+(withTouch.possessions<3?" Small sample.":""),logNumbers:[]});}
+    if(p.multipleTouches.possessions){const multi=p.multipleTouches,single=p.singleTouch;insights.push({kind:"neutral",title:who+" repeated paint touches",text:p.recordedTouches+" recorded paint touches. On possessions with 2+ recorded touches: scored on "+multi.scored+"/"+multi.possessions+" for "+multi.points+" points ("+(multi.points/multi.possessions).toFixed(2)+" PPP)."+(single.possessions?" With one recorded touch: "+single.points+" points on "+single.possessions+" possessions ("+(single.points/single.possessions).toFixed(2)+" PPP).":"")+" Recorded counts only; older single-touch records may omit repeat touches."+(multi.possessions<10||(single.possessions>0&&single.possessions<10)?" Small sample.":""),logNumbers:[]});}
     if(without.possessions)insights.push({kind:"neutral",title:who+" without a paint touch",text:who+" scored on "+without.scored+"/"+without.possessions+" confirmed no-paint-touch possessions · "+without.points+" points · "+(without.points/without.possessions).toFixed(2)+" PPP.",logNumbers:[]});
     if(side==="defense"&&p.currentNoTouch>=3)insights.push({kind:"positive",title:"Paint kept out",text:"No opponent paint touch on the last "+p.currentNoTouch+" defensive possessions. This is separate from stops: points allowed still determine kills.",logNumbers:[]});
     if(side==="defense"&&withTouch.possessions>=3&&withTouch.scored===withTouch.possessions&&without.possessions<3)recommendations.push("Opponent scored on all "+withTouch.possessions+" recorded paint-touch possessions. Prioritize paint containment and keep tracking the next defensive possessions.");
@@ -174,7 +179,7 @@ function buildLiveAnalyticsSummary_(possessions, currentPeriod, options) {
   (possessions || []).forEach(function(item) {
     const side = sides[item.teamSide]; if (!side) return;
     side.possessions++; if (Number(item.period) === Number(currentPeriod)) side.periodPossessions++;
-    side.points += item.points; side.offensiveRebounds += item.offensiveRebounds;
+    side.points += item.points; side.offensiveRebounds += item.offensiveRebounds; side.paintTouches += livePaintTouchCount_(item);
     if (item.transition) { side.transitionPossessions++; side.transitionPoints += item.points; }
     if (item.paintTouch) { side.paintTouchPossessions++; side.paintTouchPoints += item.points; }
     if (item.rightHandDrive) { side.rightHandDrivePossessions++; side.rightHandDrivePoints += item.points; }
@@ -194,7 +199,7 @@ function buildLiveAnalyticsSummary_(possessions, currentPeriod, options) {
     recent:(possessions || []).slice(-8).reverse()});
 }
 
-function emptyLiveAnalyticsSide_() { return {possessions:0,periodPossessions:0,points:0,offensiveRebounds:0,transitionPossessions:0,
+function emptyLiveAnalyticsSide_() { return {possessions:0,periodPossessions:0,points:0,offensiveRebounds:0,paintTouches:0,transitionPossessions:0,
   transitionPoints:0,paintTouchPossessions:0,paintTouchPoints:0,rightHandDrivePossessions:0,
   rightHandDrivePoints:0,turnovers:0,forcedTurnovers:0}; }
 function liveAnalyticsRate_(number, denominator) { return denominator ? roundLiveAnalytics_(number / denominator) : null; }
@@ -320,7 +325,8 @@ function buildLiveNextAdjustment_(analytics,watchlist,recommendations,objectives
       if(present)positive.push(p);else if(watch.type!=="customTag"&&Array.isArray(p.trackedTags)&&p.trackedTags.indexOf(watch.type)>=0)negative.push(p);else unknown++;
     });
     const n=positive.length,points=positive.reduce(function(sum,p){return sum+Number(p.points||0);},0),scored=positive.filter(function(p){return Number(p.points)>0;}).length,withoutPoints=negative.reduce(function(sum,p){return sum+Number(p.points||0);},0);
-    const evidence=(watch.side==="defense"?"Opponent":"Our team")+" · "+watch.label+": "+(n?"scored on "+scored+"/"+n+" tagged possessions for "+points+" points ("+(points/n).toFixed(2)+" PPP).":"no tagged occurrences recorded.")+(negative.length?" Confirmed without this tag: "+withoutPoints+" points on "+negative.length+" possessions ("+(withoutPoints/negative.length).toFixed(2)+" PPP).":"");
+    const totalTouches=watch.type==="paintTouch"?positive.reduce(function(sum,p){return sum+livePaintTouchCount_(p);},0):null;
+    const evidence=(totalTouches!=null?totalTouches+" recorded paint touches across "+n+" tagged possessions. ":"")+(watch.side==="defense"?"Opponent":"Our team")+" · "+watch.label+": "+(n?"scored on "+scored+"/"+n+" tagged possessions for "+points+" points ("+(points/n).toFixed(2)+" PPP).":"no tagged occurrences recorded.")+(negative.length?" Confirmed without this tag: "+withoutPoints+" points on "+negative.length+" possessions ("+(withoutPoints/negative.length).toFixed(2)+" PPP).":"");
     const sample=n+" tagged · "+negative.length+" confirmed without · "+unknown+" unknown of "+entries.length+" relevant possessions. "+(n<10?"Small sample. ":"")+(unknown?"Partial tracking; absence is not inferred. ":"")+"Tags can overlap; results do not establish cause.";
     if(n>=3&&watch.side==="defense"&&scored/n>=0.5)candidates.push({rank:3+scored/n,title:"Address "+watch.label,action:watch.response||defaults[watch.type]||"Review the matchup and the agreed coverage for "+watch.label+".",evidence:evidence,sample:sample,basis:"Scouting watchlist · "+(watch.response?"coach's planned response":"suggested response")});
     if(n>=3&&watch.side==="offense"&&negative.length>=3&&points/n>withoutPoints/negative.length)candidates.push({rank:2,title:"Keep creating "+watch.label,action:watch.response||"Look for suitable "+watch.label+" opportunities against the current coverage; confirm the pattern over the next possessions.",evidence:evidence,sample:sample,basis:"Scouting watchlist · "+(watch.response?"coach's planned response":"suggested response")});
