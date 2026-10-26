@@ -3117,4 +3117,14 @@ body.checkpoint-open #content{overflow:hidden}
 .live-offline-readiness{padding:10px 14px;border:1px solid #cbd5e1;border-left:4px solid #64748b;background:#f8fafc;color:#334155;font-size:12px;line-height:1.5}.live-offline-readiness[data-state=offline]{border-left-color:#d97706;background:#fffbeb}.live-offline-readiness[data-state=error]{border-color:#fca5a5;border-left-color:#dc2626;background:#fef2f2;color:#991b1b}
 
 .gameday-handoff{display:flex;justify-content:space-between;align-items:center;gap:18px;margin-bottom:18px}.gameday-handoff p{font-size:12px;line-height:1.5;margin-top:8px;color:var(--ink-soft)}.gameday-handoff-actions{display:flex;flex-wrap:wrap;gap:8px;flex-shrink:0}.gameday-handoff a{text-decoration:none}body.live-game-mode .gameday-handoff{display:none}@media(max-width:800px){.gameday-handoff{flex-direction:column;align-items:stretch}.gameday-handoff-actions>*{flex:1}}
+/* Keep reports inside the visible iframe; an animated ancestor otherwise becomes
+   the containing block for position:fixed, even after its animation ends. */
+@media screen{
+  body.checkpoint-open{overflow:hidden}
+  body.checkpoint-open #page-content{animation:none!important;transform:none;will-change:auto}
+  body.checkpoint-open #content{overflow:hidden!important}
+  #liveGameCheckpointReport{--checkpoint-dialog-gap:20px;align-items:flex-start;overflow-y:auto;overscroll-behavior:contain;padding:var(--checkpoint-dialog-gap)}
+  #liveGameCheckpointReport .checkpoint-report{flex:0 1 auto;min-height:0;max-height:calc(100vh - var(--checkpoint-dialog-gap) - var(--checkpoint-dialog-gap));max-height:calc(100dvh - var(--checkpoint-dialog-gap) - var(--checkpoint-dialog-gap));overflow-y:auto;overflow-x:hidden;-webkit-overflow-scrolling:touch;padding-bottom:max(24px,env(safe-area-inset-bottom,0px))}
+  @media(max-width:700px){#liveGameCheckpointReport{--checkpoint-dialog-gap:8px}}
+}
 </style>
