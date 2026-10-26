@@ -69,6 +69,7 @@ function setCoachIQNavigationLoading_(page,loading){
 function scheduleCoachIQPreload_(){if(typeof window.requestIdleCallback==="function")window.requestIdleCallback(preloadCoachIQPages,{timeout:3000});else setTimeout(preloadCoachIQPages,1200);}
 function updateCoachIQHTML_(element,html){if(!element||element.coachIQRenderedHTML===html)return false;element.innerHTML=html;element.coachIQRenderedHTML=html;return true;}
 function loadPage(page, callback){
+    closeLiveQuickStats_(false);
 
     if(page !== "Game"){
         document.body.classList.remove("live-game-setup-mode");
@@ -729,12 +730,61 @@ function exitLiveGameTracker(){
   performLiveGameExit_();
 }
 function performLiveGameExit_(){
+  closeLiveQuickStats_(false);
   releaseLiveGameWakeLock_();
   document.body.classList.remove("live-game-mode");
   CoachIQ.liveGame.tracker = null;
   CoachIQ.liveGame.selectedPlayerId = "";
   loadPage("Game");
 }
+
+function liveQuickStatsDefaults_(){return ["score","possessions","ppp","paint","rebounds","stops"];}
+function buildLiveQuickStats_(tracker){
+  const analytics=tracker.analytics||{},log=analytics.possessionLog||[],enabled=(tracker.game||{}).analyticsEnabled!==false,hasLog=Array.isArray(analytics.possessionLog),sides={};
+  ["offense","defense"].forEach(function(side){const entries=log.filter(function(p){return p.teamSide===side;}),saved=analytics[side]||{};
+    sides[side]=hasLog?{n:entries.length,points:entries.reduce(function(n,p){return n+Number(p.points||0);},0),paint:entries.reduce(function(n,p){return n+liveDraftPaintTouchCount_(p);},0),paintPoss:entries.filter(function(p){return liveDraftPaintTouchCount_(p)>0;}).length,rebounds:entries.reduce(function(n,p){return n+Number(p.offensiveRebounds||0);},0),turnovers:entries.filter(function(p){return side==="offense"?p.turnover:p.forcedTurnover;}).length,transition:entries.filter(function(p){return p.transition;}).length,transitionPoints:entries.filter(function(p){return p.transition;}).reduce(function(n,p){return n+Number(p.points||0);},0)}:{n:Number(saved.possessions||0),points:Number(saved.points||0),paint:Number(saved.paintTouches==null?saved.paintTouchPossessions||0:saved.paintTouches),paintPoss:Number(saved.paintTouchPossessions||0),rebounds:Number(saved.offensiveRebounds||0),turnovers:Number((side==="offense"?saved.turnovers:saved.forcedTurnovers)||0),transition:Number(saved.transitionPossessions||0),transitionPoints:Number(saved.transitionPoints||0)};
+  });
+  const us=sides.offense,opp=sides.defense,cards=[],fmt=function(points,n){return n?(points/n).toFixed(2):"—";},value=function(n){return enabled?String(n):"—";};
+  function add(id,label,ours,theirs,note){cards.push({id:id,label:label,us:ours,opponent:theirs,note:note||""});}
+  add("score","Tracked score",String(us.points+Number(tracker.ourScore||0)),String(opp.points+Number(tracker.opponentScore||0)),"Includes score-only adjustments; not a confirmed final score.");
+  add("possessions","Possessions",value(us.n),value(opp.n),enabled?"Completed recorded possessions; current unfinished possession excluded.":"Possession Analytics is off.");
+  add("ppp","Points per possession",enabled?fmt(us.points,us.n):"—",enabled?fmt(opp.points,opp.n):"—","Offense / opponent offense. Score-only adjustments excluded.");
+  add("paint","Paint touches",value(us.paint),value(opp.paint),"Recorded touches on "+us.paintPoss+" / "+opp.paintPoss+" possessions. Historical repeat touches may be missing.");
+  add("rebounds","Offensive rebounds",value(us.rebounds),value(opp.rebounds),"Our OREB / opponent OREB allowed.");
+  add("turnovers","Turnovers",value(us.turnovers),value(opp.turnovers),"Our turnovers / opponent turnovers we forced.");
+  add("transition","Transition scoring",enabled?us.transitionPoints+" pts / "+us.transition+" poss":"—",enabled?opp.transitionPoints+" pts / "+opp.transition+" poss":"—","Points and possessions tagged transition.");
+  const ourKills=liveKillProgress_(log),theirKills=liveKillProgress_(log.map(function(p){return Object.assign({},p,{teamSide:p.teamSide==="offense"?"defense":"offense"});}));
+  add("stops","Stops & kills",enabled&&hasLog?ourKills.total+" kills · "+ourKills.currentStops+" stops now":"—",enabled&&hasLog?theirKills.total+" kills · "+theirKills.currentStops+" stops now":"—","Our defense / opponent defense. Three consecutive recorded stops = one kill.");
+  (tracker.possessionFocus||[]).forEach(function(tag){const outcomes={};["offense","defense"].forEach(function(side){let tagged=0,points=0,covered=0,total=0;log.forEach(function(p){if(p.teamSide!==side)return;total++;const present=p[tag.type]===true||(tag.type==="paintTouch"&&liveDraftPaintTouchCount_(p)>0)||(tag.type==="offensiveRebound"&&Number(p.offensiveRebounds||0)>0)||(p.playEvents||[]).some(function(event){return event.type===tag.type&&(tag.type!=="customTag"||event.label===tag.label);});if(present){tagged++;points+=Number(p.points||0);}if(present||(tag.type!=="customTag"&&Array.isArray(p.trackedTags)&&p.trackedTags.indexOf(tag.type)>=0))covered++;});outcomes[side]={text:enabled&&hasLog?points+" pts / "+tagged+" poss":"—",covered:covered,total:total};});
+    add("tag:"+JSON.stringify([tag.type,tag.label]),tag.label+" outcomes",outcomes.offense.text,outcomes.defense.text,"Tag coverage: "+outcomes.offense.covered+"/"+outcomes.offense.total+" offense; "+outcomes.defense.covered+"/"+outcomes.defense.total+" defense. Untracked tags are unknown; groups can overlap.");
+  });
+  (tracker.objectives||[]).filter(function(o){return o.active!==false;}).forEach(function(o){const t=(tracker.objectiveTotals||{})[o.id]||{};function display(side){if(o.unit!=="percentage")return String(Number(t[side]||0));const made=Number(t[side+"Made"]||0),attempts=Number(t[side+"Attempts"]||0);return attempts?(100*made/attempts).toFixed(1)+"%":"—";}
+    const both=o.subject==="both_teams",opponent=String(o.subject||"").indexOf("opponent_")===0;add("objective:"+o.id,o.label,both||!opponent?display("our"):"—",both||opponent?display("opponent"):"—","Game-plan objective"+(o.playerLabel?" · "+o.playerLabel:"")+" · "+(o.unit||"count")+".");
+  });
+  return{cards:cards,analyticsEnabled:enabled};
+}
+function liveQuickStatsPreferenceKey_(tracker){return "coachiq_quick_stats_v1:"+JSON.stringify([(tracker.game||{}).team||"",(CoachIQ.liveGame.setup||{}).season||""]);}
+function liveQuickStatsChoices_(tracker,cards){
+  const key=liveQuickStatsPreferenceKey_(tracker);let saved=CoachIQ.liveGame.quickStatsPreferences;if(!saved||saved.key!==key){let ids=null;try{ids=JSON.parse(localStorage.getItem(key)||"null");}catch(error){}saved={key:key,ids:Array.isArray(ids)?ids:liveQuickStatsDefaults_()};CoachIQ.liveGame.quickStatsPreferences=saved;}
+  const available=new Set(cards.map(function(c){return c.id;})),ids=saved.ids.filter(function(id,index,list){return typeof id==="string"&&available.has(id)&&list.indexOf(id)===index;}).slice(0,8);return ids.length?ids:liveQuickStatsDefaults_().filter(function(id){return available.has(id);});
+}
+function renderLiveQuickStats_(){
+  const dialog=document.getElementById("liveQuickStats"),tracker=CoachIQ.liveGame.tracker;if(!dialog||!dialog.open)return;if(!tracker||(tracker.game||{}).gameId!==dialog.dataset.gameId){closeLiveQuickStats_(false);return;}
+  const model=buildLiveQuickStats_(tracker),ids=liveQuickStatsChoices_(tracker,model.cards),game=tracker.game||{};
+  document.getElementById("liveQuickStatsMatchup").textContent=(game.team||"Our team")+" vs. "+(game.opponent||"Opponent")+" · "+liveGamePeriodName(game.format,game.currentPeriod);
+  document.getElementById("liveQuickStatsRows").innerHTML=ids.map(function(id){const c=model.cards.find(function(item){return item.id===id;});return '<article><h3>'+escapeHtmlValue(c.label)+'</h3><div class="live-quick-values"><span><small>Us</small><strong>'+escapeHtmlValue(c.us)+'</strong></span><span><small>Opponent</small><strong>'+escapeHtmlValue(c.opponent)+'</strong></span></div><small>'+escapeHtmlValue(c.note)+'</small></article>';}).join('');
+  const pending=liveGamePendingTapCount(),status=document.getElementById("liveQuickStatsStatus");status.textContent=(pending?pending+" taps pending sync on this device. ":"")+"Game to date · latest loaded activity, including this device's queued possessions. Other devices appear after the shared view refreshes. Unfinished possession excluded.";
+  const chooser=document.getElementById("liveQuickStatsChoices"),signature=JSON.stringify(model.cards.map(function(c){return[c.id,c.label];}));if(chooser.dataset.catalog!==signature){chooser.innerHTML=model.cards.map(function(c){return '<label><input type="checkbox" value="'+escapeHtmlValue(c.id)+'" onchange="changeLiveQuickStatsChoice_(this)">'+escapeHtmlValue(c.label)+'</label>';}).join('');chooser.dataset.catalog=signature;}
+  chooser.querySelectorAll('input').forEach(function(input){input.checked=ids.indexOf(input.value)>=0;});
+}
+function changeLiveQuickStatsChoice_(input){
+  const chooser=document.getElementById("liveQuickStatsChoices"),ids=Array.from(chooser.querySelectorAll('input:checked')).map(function(el){return el.value;});if(!ids.length||ids.length>8){input.checked=!input.checked;showToast("Choose between 1 and 8 quick stats.");return;}
+  const tracker=CoachIQ.liveGame.tracker;if(!tracker)return;const key=liveQuickStatsPreferenceKey_(tracker);CoachIQ.liveGame.quickStatsPreferences={key:key,ids:ids};try{localStorage.setItem(key,JSON.stringify(ids));}catch(error){showToast("Choices will last for this visit; this browser could not save them.");}renderLiveQuickStats_();
+}
+function openLiveQuickStats_(){
+  const tracker=CoachIQ.liveGame.tracker,dialog=document.getElementById("liveQuickStats");if(!tracker||!dialog)return;CoachIQ.liveGame.quickStatsReturnFocus=document.activeElement;dialog.dataset.gameId=tracker.game.gameId;dialog.showModal();renderLiveQuickStats_();document.getElementById("liveQuickStatsClose").focus();
+}
+function closeLiveQuickStats_(restoreFocus){const dialog=document.getElementById("liveQuickStats");if(dialog&&dialog.open)dialog.close();const previous=CoachIQ.liveGame.quickStatsReturnFocus;CoachIQ.liveGame.quickStatsReturnFocus=null;if(restoreFocus!==false&&previous&&previous.isConnected&&previous.focus)previous.focus();}
 
 function renderLiveGameTracker(data){
   CoachIQ.liveGame.tracker=data;
@@ -772,6 +822,7 @@ function renderLiveTrackerPossessions(data){
   const ourPoints=document.getElementById("livePointsUs"),opponentPoints=document.getElementById("livePointsOpponent");
   if(ourPoints)ourPoints.textContent=Number(offense.points||0)+Number(data.ourScore||0);if(opponentPoints)opponentPoints.textContent=Number(defense.points||0)+Number(data.opponentScore||0);
   renderLiveAnalyticsTracker_(data);
+  renderLiveQuickStats_();
 }
 function recordLivePossession(side,button){recordLiveObjectiveChange("system_possession",side,1,"",button);}
 
@@ -1303,6 +1354,7 @@ function handleCheckpointKeydown_(event){
   if(event.shiftKey&&document.activeElement===first){event.preventDefault();last.focus();}else if(!event.shiftKey&&document.activeElement===last){event.preventDefault();first.focus();}
 }
 function renderLiveCheckpointReport(report){
+  closeLiveQuickStats_(false);
   CoachIQ.liveGame.currentCheckpointType=report.checkpointType;
   CoachIQ.liveGame.currentReportGameId=(report.game||{}).gameId||report.gameId||"";
   const scoutingButton=document.getElementById("checkpointScoutingButton");if(scoutingButton)scoutingButton.hidden=report.checkpointType!=="Postgame";
