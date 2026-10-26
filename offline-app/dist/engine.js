@@ -1,5 +1,7 @@
 // Generated from CoachIQ canonical analytics. Run node offline-app/tools/build.cjs.
 const Utilities={getUuid:()=>crypto.randomUUID()};
+function liveAnalyticsPlayPoints_(event){return event.type==="ftMade"?1:/^made[123]$/.test(event.type)?Number(event.type.slice(-1)):0;}
+
 function livePaintTouchCount_(item){const count=(item.playEvents||[]).filter(function(event){return event.type==="paintTouch";}).length;return count||(item.paintTouch===true?1:0);}
 
 function cleanLiveAnalyticsPossession_(payload, currentPeriod) {
@@ -7,7 +9,7 @@ function cleanLiveAnalyticsPossession_(payload, currentPeriod) {
   const teamSide = String(payload.teamSide || "").toLowerCase();
   if (["offense", "defense"].indexOf(teamSide) < 0) throw new Error("Choose offense or defense.");
   const points = Number(payload.points);
-  if (!Number.isInteger(points) || points < 0 || points > 3) throw new Error("Possession points must be 0, 1, 2, or 3.");
+  if (!Number.isInteger(points) || points < 0 || points > 20) throw new Error("Possession points must be a whole number from 0 to 20.");
   const period = Number(payload.period || currentPeriod);
   if (!Number.isInteger(period) || period < 1 || period > 20) throw new Error("Choose a valid period.");
   const offensiveRebounds = Number(payload.offensiveRebounds || 0);
@@ -18,8 +20,10 @@ function cleanLiveAnalyticsPossession_(payload, currentPeriod) {
   const playEvents = cleanLiveAnalyticsPlayEvents_(payload.playEvents, teamSide);
   const reboundEvents = playEvents.filter(function(event){return event.type==="offensiveRebound";});
   if(reboundEvents.length && reboundEvents.length!==offensiveRebounds)throw new Error("Rebound events must match the possession rebound count.");
-  const scores=playEvents.filter(function(event){return /^made[123]$/.test(event.type);});
-  if(scores.length>1||(scores.length===1&&Number(scores[0].type.slice(-1))!==points))throw new Error("Scoring event must match total possession points.");
+  const scores=playEvents.filter(function(event){return /^made[123]$/.test(event.type)||event.type==="ftMade";}),hasFreeThrows=playEvents.some(function(event){return ["freeThrows","ftMade","ftMiss"].indexOf(event.type)>=0;});
+  if(hasFreeThrows){if(!playEvents.some(function(event){return event.type==="ftMade"||event.type==="ftMiss";}))throw new Error("Record an FT make or miss for a free-throw possession.");const total=scores.reduce(function(sum,event){return sum+liveAnalyticsPlayPoints_(event);},0);if(total!==points)throw new Error("Scoring events must match total possession points.");}
+  else{if(points>3)throw new Error("Possession points above 3 need the individual basket/free-throw events.");if(scores.length>1||(scores.length===1&&Number(scores[0].type.slice(-1))!==points))throw new Error("Scoring event must match total possession points.");}
+
   return {
     playEvents:playEvents,
     trackedTags:cleanLiveAnalyticsTrackedTags_(payload.trackedTags),
@@ -42,14 +46,14 @@ function cleanLiveAnalyticsTrackedTags_(tags){
 function cleanLiveAnalyticsPlayEvents_(events, teamSide) {
   if(events==null)return [];
   if(!Array.isArray(events)||events.length>100)throw new Error("A possession can contain up to 100 play events.");
-  const types=["paintTouch","offensiveRebound","deflection","driveKick","miss2","miss3","putback","andOne","made1","made2","made3","cut","setPlay","ato","pickRoll","postUp","isolation","customTag"];
+  const types=["paintTouch","offensiveRebound","deflection","driveKick","miss2","miss3","putback","andOne","made1","made2","made3","cut","setPlay","ato","pickRoll","postUp","isolation","customTag","freeThrows","ftMade","ftMiss","foulRetained","foulFreeThrows"];
   return events.map(function(event){
     if(!event||types.indexOf(event.type)<0)throw new Error("Choose a valid play event.");
     const jersey=String(event.jersey||"").trim();
     if(jersey&&!/^[0-9]{1,3}$/.test(jersey))throw new Error("Use a jersey number of 1–3 digits.");
     const label=event.type==="customTag"?String(event.label||"").trim():"";
     if(event.type==="customTag"&&(!label||label.length>40||/[\x00-\x1f]/.test(label)))throw new Error("Custom tags need a name of 1–40 characters.");
-    return {type:event.type,label:label,jersey:jersey,playerSide:event.type==="deflection"?(teamSide==="defense"?"us":"opponent"):(teamSide==="offense"?"us":"opponent")};
+    return {type:event.type,label:label,jersey:jersey,playerSide:["deflection","foulRetained","foulFreeThrows"].indexOf(event.type)>=0?(teamSide==="defense"?"us":"opponent"):(teamSide==="offense"?"us":"opponent")};
   });
 }
 
@@ -58,11 +62,11 @@ function buildLiveAnalyticsPlayerTotals_(possessions) {
   possessions.forEach(function(item){(item.playEvents||[]).forEach(function(event){
     if(!event.jersey)return;
     const playerSide=event.playerSide||(item.teamSide==="offense"?"us":"opponent"),key=playerSide+":"+event.jersey;
-    const player=totals[key]||(totals[key]={jersey:event.jersey,playerSide:playerSide,offensiveRebounds:0,paintTouches:0,deflections:0,points:0});
+    const player=totals[key]||(totals[key]={jersey:event.jersey,playerSide:playerSide,offensiveRebounds:0,paintTouches:0,deflections:0,points:0,freeThrowsMade:0,freeThrowsAttempted:0});
     if(event.type==="offensiveRebound")player.offensiveRebounds++;
     if(event.type==="paintTouch")player.paintTouches++;
     if(event.type==="deflection")player.deflections++;
-    if(/^made[123]$/.test(event.type))player.points+=Number(event.type.slice(-1));
+    player.points+=liveAnalyticsPlayPoints_(event);if(event.type==="ftMade")player.freeThrowsMade++;if(event.type==="ftMade"||event.type==="ftMiss")player.freeThrowsAttempted++;
   });});
   return Object.keys(totals).sort().map(function(key){return totals[key];});
 }
@@ -80,7 +84,7 @@ function buildLiveScoringTagSummary_(possessions){
 function buildLivePossessionIntelligence_(possessions){
   const kills={total:0,currentStops:0,longestStops:0,totalStops:0,progress:0},paint={},patterns={},insights=[],recommendations=[];
   ["offense","defense"].forEach(function(side){paint[side]={withTouch:{possessions:0,scored:0,points:0},withoutTouch:{possessions:0,scored:0,points:0},unknown:0,currentNoTouch:0,longestNoTouch:0,recordedTouches:0,singleTouch:{possessions:0,scored:0,points:0},multipleTouches:{possessions:0,scored:0,points:0}};});
-  const labels={paintTouch:"Paint touch",offensiveRebound:"OREB",transition:"Transition",rightHandDrive:"Right-hand drive",deflection:"Deflection",driveKick:"Drive & kick",cut:"Cut",setPlay:"Set play",ato:"ATO",putback:"Putback",pickRoll:"Pick & roll",postUp:"Post-up",isolation:"Isolation"};
+  const labels={freeThrows:"Free throws",foulRetained:"Foul · retained ball",foulFreeThrows:"Foul → FTs",paintTouch:"Paint touch",offensiveRebound:"OREB",transition:"Transition",rightHandDrive:"Right-hand drive",deflection:"Deflection",driveKick:"Drive & kick",cut:"Cut",setPlay:"Set play",ato:"ATO",putback:"Putback",pickRoll:"Pick & roll",postUp:"Post-up",isolation:"Isolation"};
   (possessions||[]).forEach(function(item,index){
     if(!paint[item.teamSide])return;const points=Number(item.points||0),side=item.teamSide,p=paint[side];
     const touchCount=livePaintTouchCount_(item);p.recordedTouches+=touchCount;if(touchCount){const group=touchCount>=2?p.multipleTouches:p.singleTouch;group.possessions++;group.points+=points;if(points>0)group.scored++;}
@@ -98,6 +102,8 @@ function buildLivePossessionIntelligence_(possessions){
   if(kills.progress===2)recommendations.push("One more stop earns the next kill: you have 2 consecutive stops toward it.");
   ["offense","defense"].forEach(function(side){
     const p=paint[side],who=side==="defense"?"Opponent":"Your team",withTouch=p.withTouch,without=p.withoutTouch;
+    let ftMade=0,ftAttempted=0;(possessions||[]).filter(function(item){return item.teamSide===side;}).forEach(function(item){(item.playEvents||[]).forEach(function(event){if(event.type==="ftMade")ftMade++;if(event.type==="ftMade"||event.type==="ftMiss")ftAttempted++;});});
+    if(ftAttempted)insights.push({kind:"neutral",title:who+" free throws",text:who+" made "+ftMade+"/"+ftAttempted+" recorded free throws ("+Math.round(100*ftMade/ftAttempted)+"%). Free-throw points remain part of the recorded possessions."+(ftAttempted<10?" Small sample.":""),logNumbers:[]});
     if(withTouch.possessions){const all=withTouch.scored===withTouch.possessions;insights.push({kind:side==="defense"&&all?"attention":"neutral",title:who+" paint-touch scoring",text:(all?who+" scored on every recorded paint-touch possession: ":who+" scored on ")+withTouch.scored+"/"+withTouch.possessions+" · "+withTouch.points+" points · "+(withTouch.points/withTouch.possessions).toFixed(2)+" PPP."+(withTouch.possessions<3?" Small sample.":""),logNumbers:[]});}
     if(p.multipleTouches.possessions){const multi=p.multipleTouches,single=p.singleTouch;insights.push({kind:"neutral",title:who+" repeated paint touches",text:p.recordedTouches+" recorded paint touches. On possessions with 2+ recorded touches: scored on "+multi.scored+"/"+multi.possessions+" for "+multi.points+" points ("+(multi.points/multi.possessions).toFixed(2)+" PPP)."+(single.possessions?" With one recorded touch: "+single.points+" points on "+single.possessions+" possessions ("+(single.points/single.possessions).toFixed(2)+" PPP).":"")+" Recorded counts only; older single-touch records may omit repeat touches."+(multi.possessions<10||(single.possessions>0&&single.possessions<10)?" Small sample.":""),logNumbers:[]});}
     if(without.possessions)insights.push({kind:"neutral",title:who+" without a paint touch",text:who+" scored on "+without.scored+"/"+without.possessions+" confirmed no-paint-touch possessions · "+without.points+" points · "+(without.points/without.possessions).toFixed(2)+" PPP.",logNumbers:[]});
@@ -117,7 +123,8 @@ function buildLiveAnalyticsSummary_(possessions, currentPeriod, options) {
   const sides = {offense:emptyLiveAnalyticsSide_(), defense:emptyLiveAnalyticsSide_()};
   (possessions || []).forEach(function(item) {
     const side = sides[item.teamSide]; if (!side) return;
-    side.possessions++; if (Number(item.period) === Number(currentPeriod)) side.periodPossessions++;
+    side.possessions++;
+    (item.playEvents||[]).forEach(function(event){if(event.type==="foulRetained")side.foulsRetained++;if(event.type==="foulFreeThrows")side.foulsToFreeThrows++;if(event.type==="ftMade")side.freeThrowsMade++;if(event.type==="ftMade"||event.type==="ftMiss")side.freeThrowsAttempted++;}); if (Number(item.period) === Number(currentPeriod)) side.periodPossessions++;
     side.points += item.points; side.offensiveRebounds += item.offensiveRebounds; side.paintTouches += livePaintTouchCount_(item);
     if (item.transition) { side.transitionPossessions++; side.transitionPoints += item.points; }
     if (item.paintTouch) { side.paintTouchPossessions++; side.paintTouchPoints += item.points; }
@@ -140,13 +147,14 @@ function buildLiveAnalyticsSummary_(possessions, currentPeriod, options) {
 
 function emptyLiveAnalyticsSide_() { return {possessions:0,periodPossessions:0,points:0,offensiveRebounds:0,paintTouches:0,transitionPossessions:0,
   transitionPoints:0,paintTouchPossessions:0,paintTouchPoints:0,rightHandDrivePossessions:0,
-  rightHandDrivePoints:0,turnovers:0,forcedTurnovers:0}; }
+  rightHandDrivePoints:0,turnovers:0,forcedTurnovers:0,freeThrowsMade:0,freeThrowsAttempted:0,foulsRetained:0,foulsToFreeThrows:0}; }
 
 function liveAnalyticsRate_(number, denominator) { return denominator ? roundLiveAnalytics_(number / denominator) : null; }
 
 function roundLiveAnalytics_(value) { return Math.round(Number(value || 0) * 1000) / 1000; }
 
 function addLiveAnalyticsRates_(side) {
+  side.freeThrowPercentage=side.freeThrowsAttempted?roundLiveAnalytics_(100*side.freeThrowsMade/side.freeThrowsAttempted):null;
   side.ppp=liveAnalyticsRate_(side.points,side.possessions);
   side.transitionFrequency=liveAnalyticsRate_(side.transitionPossessions,side.possessions);
   side.transitionPpp=liveAnalyticsRate_(side.transitionPoints,side.transitionPossessions);
@@ -283,4 +291,4 @@ function buildGameScoutingComparison_(snapshot,report,sourceMode){
   const summary={};[["measured","measured"],["met","met"],["notMet","not_met"],["partial","partial"]].forEach(function(pair){summary[pair[0]]=rows.filter(function(row){return row.status===pair[1];}).length;});summary.review=rows.filter(function(row){return row.status==="review"||row.status==="untracked";}).length;
   return{available:true,sourceMode:sourceMode,source:snapshot,rows:rows,summary:summary};
 }
-export {livePaintTouchCount_,cleanLiveAnalyticsPossession_,cleanLiveAnalyticsTrackedTags_,cleanLiveAnalyticsPlayEvents_,buildLiveAnalyticsPlayerTotals_,buildLiveScoringTagSummary_,buildLivePossessionIntelligence_,buildLiveAnalyticsSummary_,emptyLiveAnalyticsSide_,liveAnalyticsRate_,roundLiveAnalytics_,addLiveAnalyticsRates_,buildLiveNextAdjustment_,buildLiveReviewInsights_,scoutingComparisonMetrics_,scoutingMetricForLabel_,scoutingGameEvidence_,scoutingSectionGameContext_,buildGameScoutingComparison_};
+export {liveAnalyticsPlayPoints_,livePaintTouchCount_,cleanLiveAnalyticsPossession_,cleanLiveAnalyticsTrackedTags_,cleanLiveAnalyticsPlayEvents_,buildLiveAnalyticsPlayerTotals_,buildLiveScoringTagSummary_,buildLivePossessionIntelligence_,buildLiveAnalyticsSummary_,emptyLiveAnalyticsSide_,liveAnalyticsRate_,roundLiveAnalytics_,addLiveAnalyticsRates_,buildLiveNextAdjustment_,buildLiveReviewInsights_,scoutingComparisonMetrics_,scoutingMetricForLabel_,scoutingGameEvidence_,scoutingSectionGameContext_,buildGameScoutingComparison_};
