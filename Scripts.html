@@ -2291,26 +2291,44 @@ function uploadProgramLogo(){
   const reader=new FileReader(); reader.onload=function(){ google.script.run.withSuccessHandler(function(result){document.getElementById("programLogoUrl").value=result.url; CoachIQ.programSettings.logoUrl=result.url; applyCoachIQTheme(CoachIQ.programSettings); button.disabled=false;button.textContent="Replace logo";showToast("Program logo uploaded!");}).withFailureHandler(function(error){button.disabled=false;button.textContent="Upload logo";showToast(error.message||"Logo upload failed.");}).uploadCoachIQLogo({name:file.name,mimeType:file.type,base64:String(reader.result).split(",")[1]});}; reader.readAsDataURL(file);
 }
 
+function setIntelligenceView(mode){
+  CoachIQ.intelligenceView=mode==="games"?"games":"sessions";
+  loadIntelligence(PageNavigation.requestId);
+}
+function renderGamePerformanceIntelligence_(data){
+  const select=document.getElementById("intelligenceTeamFilter"),selected=data.team||"";
+  select.innerHTML="";const all=document.createElement("option");all.value="";all.textContent="All accessible teams";select.appendChild(all);
+  (data.teams||[]).forEach(function(team){const option=document.createElement("option");option.value=team;option.textContent=team;select.appendChild(option);});select.value=selected;
+  renderIntelligenceList("intelligenceGameActions",data.actions,String);
+  renderIntelligenceList("intelligenceGamePerformance",data.lines,String);
+  renderIntelligenceList("intelligenceGamePatterns",data.patterns,String);
+  renderIntelligenceList("intelligenceScoutEvidence",data.scouting,String);
+  renderIntelligenceList("intelligenceGameTrends",(data.objectives||{}).categories,function(item){return item.summary+" Last 5 tracked: "+item.last5.achieved+"/"+item.last5.tracked+" · "+item.direction;});
+  document.getElementById("intelligenceGameCoverage").textContent=data.coverage;
+  const metrics=document.getElementById("intelligenceGameMetrics");metrics.innerHTML="";
+  [["COMPLETED GAMES",data.games],["OFFENSIVE POSSESSIONS",data.offense.n],["DEFENSIVE POSSESSIONS",data.defense.n],["DEFENSIVE KILLS",data.kills]].forEach(function(item){const card=document.createElement("article"),label=document.createElement("small"),value=document.createElement("strong");label.textContent=item[0];value.textContent=item[1];card.appendChild(label);card.appendChild(value);metrics.appendChild(card);});
+}
 function loadIntelligence(requestId){
-  google.script.run.withSuccessHandler(function(data){if(!isCurrentPage("AI",requestId))return;
+  const mode=CoachIQ.intelligenceView||"sessions",token=(CoachIQ.intelligenceRequest||0)+1;CoachIQ.intelligenceRequest=token;
+  document.getElementById("intelligenceSessionPanel").hidden=mode!=="sessions";document.getElementById("intelligenceGamePanel").hidden=mode!=="games";
+  document.getElementById("intelligenceSessionsView").setAttribute("aria-pressed",String(mode==="sessions"));document.getElementById("intelligenceGamesView").setAttribute("aria-pressed",String(mode==="games"));
+  document.getElementById("intelligenceLoading").textContent="Updating analysis…";
+  const selected=mode==="games"?document.getElementById("intelligenceTeamFilter").value:"";
+  google.script.run.withSuccessHandler(function(data){if(!isCurrentPage("AI",requestId)||CoachIQ.intelligenceRequest!==token)return;
+    document.getElementById("intelligenceLoading").textContent="";
+    if(mode==="games"){renderGamePerformanceIntelligence_(data);document.getElementById("intelligenceScope").textContent="Current-season game analysis · "+(data.team||"all accessible teams");return;}
+    renderIntelligenceList("intelligenceSessionAnalysis",(data.sessionAnalysis||{}).lines,String);
     document.getElementById("intelligenceScope").textContent=data.scope.role==="Head Coach"?"Program-wide analysis":"Scoped to "+(data.scope.positions.length?data.scope.positions.join(", "):"all assigned positions")+" • "+(data.scope.teams.length?data.scope.teams.join(", "):"all assigned teams");
-    document.getElementById("intelligencePlayers").textContent=data.activePlayers; document.getElementById("intelligenceAttendance").textContent=data.attendance+"%"; document.getElementById("intelligenceSessions").textContent=data.sampleSessions; document.getElementById("intelligencePositionCount").textContent=data.positions.length;
+    document.getElementById("intelligencePlayers").textContent=data.activePlayers; document.getElementById("intelligenceAttendance").textContent=(data.attendance==null?"—":data.attendance+"%"); document.getElementById("intelligenceSessions").textContent=data.sampleSessions; document.getElementById("intelligencePositionCount").textContent=data.positions.length;
     renderIntelligenceList("intelligenceActions",data.actions,function(item){return item;});
     renderIntelligenceList("intelligencePositions",data.positions,function(item){return item.position+" — "+item.average+" ("+item.players+" athletes)";});
-    renderIntelligenceList("intelligencePillars",data.pillars,function(item){return item.name+" — "+(item.average||"No scores");});
-    renderIntelligenceList("intelligenceTop",data.topPerformers,function(item){return item.name+" • "+item.position+" — "+item.average;});
-    renderIntelligenceList("intelligenceNeeds",data.needsAttention,function(item){return item.name+" • "+item.position+" — "+item.average;});
-    const gameIntelligence=data.gameIntelligence||{gamesAnalyzed:0,categories:[]};
-    document.getElementById("intelligenceGameSample").textContent=gameIntelligence.gamesAnalyzed
-      ? gameIntelligence.gamesAnalyzed+" completed game"+(gameIntelligence.gamesAnalyzed===1?"":"s")+" analyzed."
-      : "Complete Live Games to begin building game-plan memory.";
-    renderIntelligenceList("intelligenceGameTrends",gameIntelligence.categories,function(item){
-      const last5=item.last5.tracked?" • Last 5: "+item.last5.achieved+"/"+item.last5.tracked:"";
-      return item.summary+last5+" • "+item.direction;
-    });
-  }).withFailureHandler(function(error){showToast(error.message||"Unable to build intelligence report.");}).getProgramIntelligence();
+    renderIntelligenceList("intelligencePillars",data.pillars,function(item){return item.name+" — "+(item.average==null?"No scores":item.average)+" ("+item.ratings+" ratings)";});
+    renderIntelligenceList("intelligenceTop",data.topPerformers,function(item){return item.name+" • "+item.position+" — "+item.average+" ("+item.ratings+" ratings, "+item.sessions+" sessions)";});
+    renderIntelligenceList("intelligenceNeeds",data.needsAttention,function(item){return item.name+" • "+item.position+" — "+item.average+" ("+item.ratings+" ratings, "+item.sessions+" sessions)";});
+  }).withFailureHandler(function(error){if(!isCurrentPage("AI",requestId)||CoachIQ.intelligenceRequest!==token)return;document.getElementById("intelligenceLoading").textContent="Analysis could not be updated. Tap Refresh analysis to retry.";showToast(error.message||"Unable to build intelligence report.");}).getProgramIntelligence(mode,selected);
 }
-function renderIntelligenceList(id,items,format){const container=document.getElementById(id);container.innerHTML="";(items&&items.length?items:["Not enough completed evaluation data yet."]).forEach(function(item,index){const row=document.createElement("div");row.className="intelligence-list-row";const number=document.createElement("span");number.textContent=String(index+1).padStart(2,"0");const copy=document.createElement("p");copy.textContent=typeof item==="string"?item:format(item);row.appendChild(number);row.appendChild(copy);container.appendChild(row);});}
+
+function renderIntelligenceList(id,items,format){const container=document.getElementById(id);container.innerHTML="";(items&&items.length?items:["Not enough recorded data in this sample yet."]).forEach(function(item,index){const row=document.createElement("div");row.className="intelligence-list-row";const number=document.createElement("span");number.textContent=String(index+1).padStart(2,"0");const copy=document.createElement("p");copy.textContent=typeof item==="string"?item:format(item);row.appendChild(number);row.appendChild(copy);container.appendChild(row);});}
 
 function showSettings(settings){
 

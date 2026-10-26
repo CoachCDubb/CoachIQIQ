@@ -31,43 +31,48 @@ function getRecentSessions(limit){
 
 }
 
-function getProgramIntelligence() {
+function getProgramIntelligence(mode, teamFilter) {
   requireStaffCapability_("view_intelligence");
+  if(mode === "games") return getGamePerformanceIntelligence_(teamFilter);
   const settings = getCoachIQSettings();
   const players = filterPlayersForCurrentStaff_(getPlayers()).filter(function(player) { return player[7] === "Active"; });
   const playerMap = {};
   players.forEach(function(player) { playerMap[String(player[0])] = {id:String(player[0]),name:String(player[1])+" "+String(player[2]),team:String(player[5]||""),position:String(player[6]||"Unassigned")}; });
-  const recentIds = getRecentSessionIds(8);
+  const recentSessions = getRecentSessions(Number.MAX_SAFE_INTEGER);
   const sheet = SpreadsheetApp.getActive().getSheetByName("Practice Evaluations");
   const data = sheet.getDataRange().getValues();
   const headers = data[0] || [];
   const columns = {}; headers.forEach(function(header,index){columns[header]=index;});
+  const visibleSessionIds = new Set(filterCoachIQRowsForCurrentSeason_(headers,data.slice(1)).filter(function(row){return playerMap[String(row[columns["Player ID"]])]&&(row[columns["Complete"]]===true||String(row[columns["Complete"]]).toUpperCase()==="TRUE");}).map(function(row){return String(row[columns["Session ID"]]);}));
+  const recentIds = recentSessions.filter(function(session){return visibleSessionIds.has(String(session["Session ID"]));}).slice(0,8).map(function(session){return String(session["Session ID"]);});
   const categories = settings.cultureCategories || [];
   const summaries = {}, categoryTotals = {};
   categories.forEach(function(category){categoryTotals[category]={sum:0,count:0};});
+  const sessionEvidence = [];
   let present=0,absent=0;
   filterCoachIQRowsForCurrentSeason_(headers,data.slice(1)).forEach(function(row){
     const player=playerMap[String(row[columns["Player ID"]])];
     const completeValue=row[columns["Complete"]];
     const complete=completeValue===true||String(completeValue).toUpperCase()==="TRUE";
-    if(!player || recentIds.indexOf(row[columns["Session ID"]])<0 || !complete)return;
+    if(!player || recentIds.indexOf(String(row[columns["Session ID"]]))<0 || !complete)return;
+    sessionEvidence.push({sessionId:String(row[columns["Session ID"]]),attendance:row[columns["Attendance"]],scores:categories.map(function(category){return Number(row[columns[category]]);}).filter(function(value){return isFinite(value)&&value>0;})});
     const summary=summaries[player.id]||(summaries[player.id]={player:player,sum:0,count:0,sessions:0}); summary.sessions++;
     if(row[columns["Attendance"]]===true)present++; else if(row[columns["Attendance"]]===false)absent++;
     categories.forEach(function(category){const value=Number(row[columns[category]]);if(isFinite(value)&&value>0){summary.sum+=value;summary.count++;categoryTotals[category].sum+=value;categoryTotals[category].count++;}});
   });
-  const ranked=Object.keys(summaries).map(function(id){const item=summaries[id];return {name:item.player.name,position:item.player.position,team:item.player.team,average:item.count?Math.round(item.sum/item.count*10)/10:0,sessions:item.sessions};}).filter(function(item){return item.sessions>0;}).sort(function(a,b){return b.average-a.average;});
+  const ranked=Object.keys(summaries).map(function(id){const item=summaries[id];return {name:item.player.name,position:item.player.position,team:item.player.team,average:item.count?Math.round(item.sum/item.count*10)/10:0,sessions:item.sessions,ratings:item.count};}).filter(function(item){return item.ratings>0;}).sort(function(a,b){return b.average-a.average;});
   const positionMap={}; ranked.forEach(function(item){const group=positionMap[item.position]||(positionMap[item.position]={position:item.position,sum:0,count:0});group.sum+=item.average;group.count++;});
   const positions=Object.keys(positionMap).map(function(key){const group=positionMap[key];return {position:key,average:Math.round(group.sum/group.count*10)/10,players:group.count};}).sort(function(a,b){return b.average-a.average;});
-  const pillars=categories.map(function(category){const total=categoryTotals[category];return {name:category,average:total.count?Math.round(total.sum/total.count*10)/10:0};}).sort(function(a,b){return a.average-b.average;});
+  const pillars=categories.map(function(category){const total=categoryTotals[category];return {name:category,average:total.count?Math.round(total.sum/total.count*10)/10:null,ratings:total.count};}).sort(function(a,b){return (a.average==null?Infinity:a.average)-(b.average==null?Infinity:b.average);});
   const attendance=(present+absent)?Math.round(present/(present+absent)*100):0;
   const actions=[];
-  const gameIntelligence = getLiveGameProgramTrends_();
+  const gameIntelligence = {gamesAnalyzed:0,categories:[],alerts:[]};
   (gameIntelligence.alerts || []).forEach(function(alert){ actions.push(alert); });
-  if(attendance<90)actions.push("Attendance is "+attendance+"%. Identify repeat absences before the next practice block.");
+  if((present+absent)>0&&attendance<90)actions.push("Attendance is "+attendance+"%. Identify repeat absences before the next practice block.");
   if(pillars.length&&pillars[0].average)actions.push("Make "+pillars[0].name+" a coaching emphasis; it is the lowest-scoring program pillar at "+pillars[0].average+".");
   if(positions.length>1)actions.push("Review the "+positions[positions.length-1].position+" group; its recent average trails other position groups.");
-  if(!actions.length)actions.push("Data is stable. Continue the current plan and watch for changes over the next three sessions.");
-  return {scope:getCurrentStaffAccess_(),sampleSessions:recentIds.length,activePlayers:players.length,attendance:attendance,pillars:pillars,positions:positions,topPerformers:ranked.slice(0,5),needsAttention:ranked.slice().reverse().slice(0,5),actions:actions,gameIntelligence:gameIntelligence};
+  if(!actions.length)actions.push(ranked.length?"No clear priority from these evaluations. Compare the next completed sessions before changing the plan.":"Complete session evaluations to build performance recommendations.");
+  return {scope:getCurrentStaffAccess_(),sessionAnalysis:buildSessionPerformanceAnalysis_(recentIds,sessionEvidence),sampleSessions:recentIds.length,activePlayers:players.length,attendance:(present+absent)?attendance:null,pillars:pillars,positions:positions,topPerformers:ranked.slice(0,5),needsAttention:ranked.slice().reverse().slice(0,5),actions:actions,gameIntelligence:gameIntelligence};
 }
 /**
  * Returns the Session IDs for the most
@@ -559,4 +564,56 @@ function testPlayerHistory(){
   Logger.log("P003");
   Logger.log(JSON.stringify(getPlayerHistory("P003",5), null, 2));
 
+}
+/** Disjoint recent/prior windows; every reported average retains its denominator. */
+function buildSessionPerformanceAnalysis_(ids,evidence){
+  function windowStats(window){const rows=evidence.filter(function(row){return window.indexOf(row.sessionId)>=0;}),scores=[];let present=0,marked=0;rows.forEach(function(row){Array.prototype.push.apply(scores,row.scores);if(row.attendance===true||row.attendance===false){marked++;if(row.attendance)present++;}});return{sessions:window.length,ratings:scores.length,average:scores.length?scores.reduce(function(a,b){return a+b;},0)/scores.length:null,present:present,marked:marked};}
+  const current=windowStats(ids.slice(0,4)),prior=windowStats(ids.slice(4,8)),lines=[];
+  [current,prior].forEach(function(item,index){if(item.sessions)lines.push((index?"Previous ":"Latest ")+item.sessions+" sessions: "+(item.average==null?"no scored ratings":item.average.toFixed(2)+" average across "+item.ratings+" recorded category ratings")+"; attendance "+item.present+"/"+item.marked+" marked evaluations.");});
+  if(current.average!=null&&prior.average!=null)lines.push("Rating change: "+(current.average-prior.average>=0?"+":"")+(current.average-prior.average).toFixed(2)+". Different athletes, evaluators and session content can affect this comparison.");
+  if(!evidence.length)lines.push("No completed evaluations in this session sample yet.");
+  return{current:current,prior:prior,lines:lines};
+}
+
+function getGamePerformanceIntelligence_(teamFilter){
+  const access=getCurrentStaffAccess_(),snapshot=getLiveGameSheetSnapshot_(),cols=liveGameHeaderMap_(snapshot.headers);
+  const accessible=filterCoachIQRowsForCurrentSeason_(snapshot.headers,snapshot.values).filter(function(row){const team=String(row[cols.Team]||"");return !isLiveGameArchived_(row,cols)&&String(row[cols.Status])==="Completed"&&String(row[cols.Sport]||"Basketball").toLowerCase()==="basketball"&&(!access.configured||access.role==="Head Coach"||!access.teams.length||access.teams.indexOf(team)>=0);});
+  const teams=Array.from(new Set(accessible.map(function(row){return String(row[cols.Team]||"");}))).sort();
+  const selected=String(teamFilter||"");if(selected&&teams.indexOf(selected)<0)throw new Error("No accessible completed games for that team.");
+  const rows=accessible.filter(function(row){return !selected||String(row[cols.Team])===selected;}).sort(function(a,b){return new Date(b[cols["Game Date"]]||b[cols["Completed At"]]||0)-new Date(a[cols["Game Date"]]||a[cols["Completed At"]]||0);}).slice(0,10);
+  const groups=getLiveAnalyticsPossessionsByGames_(rows.map(function(row){return String(row[cols["Game ID"]]);}));
+  const games=rows.map(function(row){const id=String(row[cols["Game ID"]]),log=groups[id]||[],stored=parseLiveGameObject_(row[cols["Final Report"]],{}),mode=parseLiveGameObject_(row[cols["Tracker Mode"]],{});let scouting=null,scoutUnavailable=false;
+    if(mode.scoutingSnapshotId){try{const scout=readGameReportSnapshot_(id,"scouting",mode.scoutingSnapshotId);if(scout&&scout.reportId===mode.scoutingReportId&&scout.team===String(row[cols.Team])&&String(scout.opponent||"").trim().toLowerCase()===String(row[cols.Opponent]||"").trim().toLowerCase())scouting=buildGameScoutingComparison_(scout,{analytics:buildLiveAnalyticsSummary_(log,1),objectives:stored.objectives||[],finalScore:stored.finalScore},"pregame");else scoutUnavailable=true;}catch(error){scoutUnavailable=true;}}
+    return{gameId:id,team:String(row[cols.Team]),opponent:String(row[cols.Opponent]||""),date:formatLiveGameDate_(row[cols["Game Date"]]),log:log,scouting:scouting,scoutUnavailable:scoutUnavailable};});
+  const result=buildGamePerformanceAnalysis_(games);result.teams=teams;result.team=selected;result.mode="games";result.scope=access;result.objectives=getLiveGameProgramTrends_(selected);return result;
+}
+
+function buildGamePerformanceAnalysis_(games){
+  const lines=[],patterns=[],actions=[],scouting=[],totals={offense:{n:0,points:0,turnovers:0},defense:{n:0,points:0,stops:0}},paint={offense:{yes:{n:0,points:0,scored:0},no:{n:0,points:0,scored:0},unknown:0},defense:{yes:{n:0,points:0,scored:0},no:{n:0,points:0,scored:0},unknown:0}},tags=Object.create(null);
+  let kills=0,longest=0,trackedGames=0,linked=0,unavailable=0;const targetGroups=Object.create(null),scouts={met:0,notMet:0,partial:0,review:0,measured:0};
+  (games||[]).forEach(function(game){if(game.log.length)trackedGames++;const intel=buildLivePossessionIntelligence_(game.log);kills+=intel.kills.total;longest=Math.max(longest,intel.kills.longestStops);
+    game.log.forEach(function(p){const total=totals[p.teamSide];if(!total)return;total.n++;total.points+=Number(p.points||0);if(p.turnover)total.turnovers++;if(p.teamSide==="defense"&&Number(p.points)===0)total.stops++;});
+    ["offense","defense"].forEach(function(side){const from=intel.paint[side],to=paint[side];[["withTouch","yes"],["withoutTouch","no"]].forEach(function(pair){const a=from[pair[0]],b=to[pair[1]];b.n+=a.possessions;b.points+=a.points;b.scored+=a.scored;});to.unknown+=from.unknown;});
+    intel.tagPatterns.filter(function(tag){return tag.type!=="paintTouch";}).forEach(function(tag){const key=JSON.stringify([tag.side,tag.type,tag.label]),group=tags[key]||(tags[key]={side:tag.side,label:tag.label,n:0,points:0,scored:0});group.n+=tag.possessions;group.points+=tag.points;group.scored+=tag.scored;});
+    if(game.scouting){linked++;(game.scouting.rows||[]).forEach(function(row){if(row.status!=="met"&&row.status!=="not_met")return;const key=JSON.stringify([game.team,row.title,row.expected]),group=targetGroups[key]||(targetGroups[key]={team:game.team,title:row.title,expected:row.expected,met:0,n:0,latest:row.actual});group.n++;if(row.status==="met")group.met++;});Object.keys(scouts).forEach(function(key){scouts[key]+=Number(game.scouting.summary[key]||0);});scouting.push(game.date+" · "+game.team+" vs "+game.opponent+": "+game.scouting.summary.met+" targets met, "+game.scouting.summary.notMet+" missed; "+game.scouting.summary.partial+" partial and "+game.scouting.summary.review+" needing coach review.");}if(game.scoutUnavailable)unavailable++;
+  });
+  const fmt=function(points,n){return n?(points/n).toFixed(2):"—";};
+  ["offense","defense"].forEach(function(side){const total=totals[side],label=side==="offense"?"Offense":"Defense";if(total.n)lines.push(label+": "+total.points+" points "+(side==="defense"?"allowed ":"")+"on "+total.n+" recorded possessions · "+fmt(total.points,total.n)+" PPP"+(side==="offense"?" · "+total.turnovers+" turnovers":" · "+total.stops+" stops ("+(100*total.stops/total.n).toFixed(1)+"%)")+".");
+    const p=paint[side];["yes","no"].forEach(function(key){const b=p[key];if(b.n)patterns.push(label+(key==="yes"?" with a paint touch":" with confirmed no paint touch")+": scored on "+b.scored+"/"+b.n+" possessions · "+b.points+" points · "+fmt(b.points,b.n)+" PPP."+(b.n<10?" Small sample.":""));});
+    if(p.yes.n>=10&&p.no.n>=10&&p.yes.points/p.yes.n>p.no.points/p.no.n)actions.push((side==="offense"?"Test more paint-touch opportunities in your next game plan":"Emphasize paint containment in your next scouting plan")+": "+label.toLowerCase()+" PPP is "+fmt(p.yes.points,p.yes.n)+" with a touch (n="+p.yes.n+") versus "+fmt(p.no.points,p.no.n)+" without (n="+p.no.n+"). Check opponent and lineup context before changing strategy.");
+  });
+  // Calculate streaks independently per game. No kills cross a game boundary.
+  if(totals.defense.n)lines.push("Defense earned "+kills+" kills across "+trackedGames+" games with possession data; longest recorded stop run in one game: "+longest+". A kill is three consecutive recorded stops.");
+  function windowPpp(window,side){let n=0,points=0;window.forEach(function(game){game.log.forEach(function(p){if(p.teamSide===side){n++;points+=Number(p.points||0);}});});return{n:n,points:points};}
+  if(games.length>3)["offense","defense"].forEach(function(side){const recent=windowPpp(games.slice(0,3),side),prior=windowPpp(games.slice(3,6),side);if(recent.n&&prior.n)lines.push((side==="offense"?"Offensive":"Defensive")+" PPP: latest 3 games "+fmt(recent.points,recent.n)+" (n="+recent.n+") versus previous "+Math.min(3,games.length-3)+" games "+fmt(prior.points,prior.n)+" (n="+prior.n+"). "+(recent.n<20||prior.n<20?"Small sample; ":"")+"Opponent strength and tracking coverage may differ.");});
+  Object.keys(tags).map(function(key){return tags[key];}).sort(function(a,b){return b.n-a.n;}).slice(0,12).forEach(function(t){patterns.push((t.side==="offense"?"Your team":"Opponent")+" · "+t.label+": "+t.scored+"/"+t.n+" scoring possessions · "+t.points+" points · "+fmt(t.points,t.n)+" PPP."+(t.n<10?" Small sample.":""));});
+  const reliableTags=Object.keys(tags).map(function(key){return tags[key];}).filter(function(t){return t.side==="offense"&&t.n>=10;}).sort(function(a,b){return b.points/b.n-a.points/a.n;});
+  if(reliableTags.length){const tag=reliableTags[0];actions.push("Review "+tag.label+" opportunities when preparing your next plan: "+tag.scored+"/"+tag.n+" tagged possessions produced points ("+fmt(tag.points,tag.n)+" PPP). Check film and opponent context; overlapping tags do not isolate this action's effect.");}
+  Object.keys(targetGroups).map(function(key){return targetGroups[key];}).sort(function(a,b){return a.met/a.n-b.met/b.n;}).slice(0,8).forEach(function(group){scouting.unshift(group.team+" · "+group.title+" ("+group.expected+"): met in "+group.met+"/"+group.n+" comparable scouting targets. Most recent evidence: "+group.latest);});
+  if(scouts.notMet)actions.push("Review the "+scouts.notMet+" missed measurable scouting targets in completed-game comparisons. Separate execution issues from changes in the opponent's approach.");
+  if(!actions.length)actions.push(trackedGames?"Continue recording the same focus tags over several games to test repeatable patterns. Current evidence does not support a strong tactical recommendation yet.":"Finish a game with possession tracking to begin game-performance analysis.");
+  if(linked)scouting.unshift(linked+" original pregame plans compared: "+scouts.met+" measurable targets met, "+scouts.notMet+" missed, "+scouts.measured+" measured without a graded target, "+scouts.partial+" partial, "+scouts.review+" coach review/untracked.");
+  if(!linked)scouting.push("No original linked scouting plans available in this sample. Link a scouting report before the next game to compare preparation with execution.");
+  if(unavailable)scouting.push(unavailable+" linked scouting snapshots unavailable; excluded from target totals.");
+  return{games:games.length,trackedGames:trackedGames,offense:totals.offense,defense:totals.defense,kills:kills,lines:lines,patterns:patterns,actions:actions,scouting:scouting,coverage:"Latest "+games.length+" completed basketball games by game date, current season. "+trackedGames+" have possession data. PPP uses recorded possessions and their points, excluding score-only adjustments. Paint coverage unknown: offense "+paint.offense.unknown+", defense "+paint.defense.unknown+" possessions. Untracked tags are not counted as absent. Tag groups overlap; associations do not establish cause. Small samples, changing opponents and lineups limit conclusions. All-team totals may mix teams; select a team for coaching decisions."};
 }
