@@ -1,0 +1,55 @@
+name: Publish CoachIQ GameDay
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'offline-app/**'
+      - 'AnalyticsService.gs'
+      - 'ScoutingService.gs'
+      - 'GameReviewService.gs'
+      - '.github/workflows/gameday-pages.yml'
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: gameday-pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Install test dependencies
+        run: npm ci --prefix offline-app
+      - name: Build GameDay
+        run: npm --prefix offline-app run build
+      - name: Verify offline behavior
+        run: npm --prefix offline-app test
+      - name: Configure Pages
+        uses: actions/configure-pages@v5
+      - name: Upload static app only
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: offline-app/dist
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Publish GameDay
+        id: deployment
+        uses: actions/deploy-pages@v4

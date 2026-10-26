@@ -1,5 +1,5 @@
 /** File-based bridge for the separate offline GameDay app. No public write endpoint. */
-const OFFLINE_GAMEDAY_URL = "https://coachiq-gameday-offline.chummychick11.chatgpt.site/";
+const OFFLINE_GAMEDAY_URL = "https://coachcdubb.github.io/CoachIQIQ/";
 function exportCoachIQOfflineTeams(){
   requireStaffCapability_("run_sessions");const settings=getCoachIQSettings(),teams=(settings.teams||[]).filter(function(team){try{requireLiveGameTeamAccess_(team);return true;}catch(error){return false;}});
   if(!teams.length)throw new Error("No accessible teams are configured in CoachIQ settings.");
