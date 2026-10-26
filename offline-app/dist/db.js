@@ -7,3 +7,11 @@ export async function putGame(game,expectedRevision){const db=await openDB();ret
 
 export async function getTeamLink(){return (await getGame('TEAM-LINK'))||null;}
 export async function putTeamLink(link){const previous=await getTeamLink();return putGame({...link,id:'TEAM-LINK'},previous?.revision||0);}
+
+export async function deleteGame(id,expectedRevision){
+  if(!/^OFFGAME-[a-f0-9-]{36}$/i.test(String(id))||!Number.isInteger(expectedRevision)||expectedRevision<1)throw Error('Choose a saved GameDay game to delete.');
+  const db=await openDB();return new Promise((resolve,reject)=>{const tx=db.transaction('games','readwrite'),store=tx.objectStore('games'),req=store.get(id);let reason,deleted=false;
+    req.onsuccess=()=>{const current=req.result;if(!current)return;if(current.format!=='coachiq-offline-game'){reason=Error('Only saved games can be deleted here.');tx.abort();return;}if(current.revision!==expectedRevision){reason=Error('This game changed in another tab. Reload the game list before deleting it.');tx.abort();return;}store.delete(id);deleted=true;};
+    tx.oncomplete=()=>resolve(deleted);tx.onabort=()=>reject(reason||tx.error||Error('The game could not be deleted.'));tx.onerror=()=>{};
+  });
+}
