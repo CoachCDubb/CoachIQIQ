@@ -197,7 +197,7 @@ function createLiveGameSetup(data) {
     ];
     while(row.length<sheet.getLastColumn())row.push("");
     row[headers.indexOf("Opponent Roster")]=JSON.stringify(opponentRoster);
-    row[headers.indexOf("Tracker Mode")]=JSON.stringify({analytics:enableAnalytics,objectives:enableObjectives,focus:mergeScoutingWatchFocus_(data.possessionFocus,scoutingSnapshot?scoutingWatchlistFromSections_(scoutingSnapshot.sections):[]),watchlist:scoutingSnapshot?scoutingWatchlistFromSections_(scoutingSnapshot.sections):[],scoutingReportId:scoutingSnapshot?scoutingSnapshot.reportId:"",scoutingSnapshotId:scoutingSnapshot?writeGameReportSnapshot_(gameId,"scouting",scoutingSnapshot):""});
+    row[headers.indexOf("Tracker Mode")]=JSON.stringify({analytics:enableAnalytics,objectives:enableObjectives,focus:mergeScoutingWatchFocus_(data.possessionFocus,scoutingSnapshot?scoutingWatchlistFromSections_(scoutingSnapshot.sections):[]),focusBySide:cleanLivePossessionFocusBySide_(data.possessionFocusBySide,mergeScoutingWatchFocus_(data.possessionFocus,scoutingSnapshot?scoutingWatchlistFromSections_(scoutingSnapshot.sections):[])),watchlist:scoutingSnapshot?scoutingWatchlistFromSections_(scoutingSnapshot.sections):[],scoutingReportId:scoutingSnapshot?scoutingSnapshot.reportId:"",scoutingSnapshotId:scoutingSnapshot?writeGameReportSnapshot_(gameId,"scouting",scoutingSnapshot):""});
     setCoachIQSeasonOnRow_(headers,row,getCoachIQCurrentSeason_());
     sheet.appendRow(row);
   } finally {
@@ -573,6 +573,7 @@ function getLiveGameTracker(gameId) {
       players:players,
     opponentRoster:parseLiveGameJson_(game["Opponent Roster"], []),
     possessionFocus:cleanLivePossessionFocus_(parseLiveGameObject_(game["Tracker Mode"],{}).focus),
+    possessionFocusBySide:cleanLivePossessionFocusBySide_(parseLiveGameObject_(game["Tracker Mode"],{}).focusBySide,parseLiveGameObject_(game["Tracker Mode"],{}).focus),
     scoutingWatchlist:parseLiveGameObject_(game["Tracker Mode"],{}).watchlist||[],
       objectives:objectives.sort(function(a, b) { return Number(a.order || 0) - Number(b.order || 0); }),
       originalObjectives:originalObjectives,
@@ -600,6 +601,7 @@ function getLiveGameTracker(gameId) {
     players:players,
     opponentRoster:parseLiveGameJson_(game["Opponent Roster"], []),
     possessionFocus:cleanLivePossessionFocus_(parseLiveGameObject_(game["Tracker Mode"],{}).focus),
+    possessionFocusBySide:cleanLivePossessionFocusBySide_(parseLiveGameObject_(game["Tracker Mode"],{}).focusBySide,parseLiveGameObject_(game["Tracker Mode"],{}).focus),
     scoutingWatchlist:parseLiveGameObject_(game["Tracker Mode"],{}).watchlist||[],
     objectives:[],
     planAdjustments:parseLiveGameJson_(game["Plan Adjustments"], []),
@@ -629,6 +631,12 @@ function cleanLivePossessionFocus_(focus){
     const key=JSON.stringify([item.type,label]);if(seen[key])throw new Error("Choose each tag once.");seen[key]=true;return {type:item.type,label:label};
   });
 }
+function cleanLivePossessionFocusBySide_(value,fallback){
+  const shared=cleanLivePossessionFocus_(fallback);
+  if(value==null)return{offense:cleanLivePossessionFocus_(shared),defense:cleanLivePossessionFocus_(shared)};
+  if(typeof value!=="object"||Array.isArray(value)||!Array.isArray(value.offense)||!Array.isArray(value.defense))throw new Error("Choose separate offense and defense tag lists.");
+  return{offense:cleanLivePossessionFocus_(value.offense),defense:cleanLivePossessionFocus_(value.defense)};
+}
 function getTeamPossessionFocus_(providedSnapshot){
   const snapshot=providedSnapshot||getLiveGameSheetSnapshot_(),headers=snapshot.headers,values=snapshot.values,cols=liveGameHeaderMap_(headers),access=getCurrentStaffAccess_(),result={};
   filterCoachIQRowsForCurrentSeason_(headers,values).forEach(function(row){
@@ -640,7 +648,16 @@ function getTeamPossessionFocus_(providedSnapshot){
 function saveLivePossessionFocus(gameId,focus){
   requireStaffCapability_("run_sessions");initializeLiveGameSheets_();const cleaned=cleanLivePossessionFocus_(focus),lock=LockService.getScriptLock();lock.waitLock(10000);
   try{const record=findLiveGameRecord_(gameId);requireLiveGameTeamAccess_(record.game.Team);if(String(record.game.Status||"")==="Completed")throw new Error("A completed game cannot be changed.");
-    const mode=parseLiveGameObject_(record.game["Tracker Mode"],{});mode.focus=cleaned;
+    const mode=parseLiveGameObject_(record.game["Tracker Mode"],{});
+    mode.focus=cleaned;mode.focusBySide=cleanLivePossessionFocusBySide_(null,cleaned);
+    SpreadsheetApp.getActive().getSheetByName(LIVE_GAMES_SHEET).getRange(record.rowNumber,record.cols["Tracker Mode"]+1).setValue(JSON.stringify(mode));
+  }finally{lock.releaseLock();}return cleaned;
+}
+
+function saveLivePossessionFocusBySide(gameId,choices){
+  requireStaffCapability_("run_sessions");initializeLiveGameSheets_();const cleaned=cleanLivePossessionFocusBySide_(choices),lock=LockService.getScriptLock();lock.waitLock(10000);
+  try{const record=findLiveGameRecord_(gameId);requireLiveGameTeamAccess_(record.game.Team);if(["Completed","Offline Importing"].indexOf(String(record.game.Status||""))>=0)throw new Error("This game's tracking choices cannot be changed.");
+    const mode=parseLiveGameObject_(record.game["Tracker Mode"],{});mode.focusBySide=cleaned;mode.focus=cleaned.offense;
     SpreadsheetApp.getActive().getSheetByName(LIVE_GAMES_SHEET).getRange(record.rowNumber,record.cols["Tracker Mode"]+1).setValue(JSON.stringify(mode));
   }finally{lock.releaseLock();}return cleaned;
 }
