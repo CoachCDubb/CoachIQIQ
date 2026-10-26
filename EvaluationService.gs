@@ -361,21 +361,14 @@ function completeEvaluations(sessionId){
 
   const data = sheet.getDataRange().getValues();
 
- for(let i = 1; i < data.length; i++){
-
-  if(data[i][cols["Session ID"] - 1] === sessionId){
-
-    sheet
-      .getRange(i + 1, cols["Complete"])
-      .setValue(true);
-
-    sheet
-      .getRange(i + 1, cols["Last Updated"])
-      .setValue(new Date());
-
+  const matchingRows=[];
+  for(let i=1;i<data.length;i++)if(data[i][cols["Session ID"]-1]===sessionId)matchingRows.push(i+1);
+  if(matchingRows.length){
+    const letters=function(column){let value="";while(column>0){column--;value=String.fromCharCode(65+column%26)+value;column=Math.floor(column/26);}return value;};
+    const completeColumn=letters(cols["Complete"]),updatedColumn=letters(cols["Last Updated"]);
+    sheet.getRangeList(matchingRows.map(function(row){return completeColumn+row;})).setValue(true);
+    sheet.getRangeList(matchingRows.map(function(row){return updatedColumn+row;})).setValue(new Date());
   }
-
-}
 
 practiceEvaluationCache = null;
 

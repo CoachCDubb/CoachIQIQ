@@ -61,6 +61,13 @@ function isCurrentPage(page, requestId){
         (requestId == null || PageNavigation.requestId === requestId);
 }
 
+function setCoachIQNavigationLoading_(page,loading){
+  const status=document.getElementById("pageNavigationStatus"),container=document.getElementById("page-content");
+  if(container)container.setAttribute("aria-busy",loading?"true":"false");
+  if(status){status.hidden=!loading;status.textContent=loading?"Opening "+String(page||"page").replace(/([a-z])([A-Z])/g,"$1 $2")+"…":"";}
+}
+function scheduleCoachIQPreload_(){if(typeof window.requestIdleCallback==="function")window.requestIdleCallback(preloadCoachIQPages,{timeout:3000});else setTimeout(preloadCoachIQPages,1200);}
+function updateCoachIQHTML_(element,html){if(!element||element.coachIQRenderedHTML===html)return false;element.innerHTML=html;element.coachIQRenderedHTML=html;return true;}
 function loadPage(page, callback){
 
     if(page !== "Game"){
@@ -73,6 +80,7 @@ function loadPage(page, callback){
 
     const requestId = ++PageNavigation.requestId;
     PageNavigation.loadingPage = page;
+    setCoachIQNavigationLoading_(page,true);
 
     if(PageNavigation.pageCache[page]){
         renderCoachIQPage_(page, PageNavigation.pageCache[page], requestId, callback);
@@ -92,6 +100,7 @@ function loadPage(page, callback){
         }
 
         PageNavigation.loadingPage = null;
+        setCoachIQNavigationLoading_(page,false);
 
         console.error(error);
 
@@ -108,7 +117,8 @@ function loadPage(page, callback){
 function renderCoachIQPage_(page, html, requestId, callback){
     if(requestId !== PageNavigation.requestId){return;}
     const container=document.getElementById("page-content");
-    if(!container){PageNavigation.loadingPage=null;console.error("page-content not found.");return;}
+    if(!container){PageNavigation.loadingPage=null;setCoachIQNavigationLoading_(page,false);console.error("page-content not found.");return;}
+    setCoachIQNavigationLoading_(page,false);
     container.innerHTML=html;
     const content=document.getElementById("content");if(content){content.scrollTop=0;}
     PageNavigation.currentPage=page;PageNavigation.loadingPage=null;updatePointTerminology();
@@ -812,8 +822,10 @@ function liveAnalyticsBenchmarkTotals_(analytics,metric){const side=(analytics[m
 function renderLiveAnalyticsBenchmarks_(data){
   const program=data.analyticsBenchmarks||{metrics:[]},analytics=data.analytics||{},container=document.getElementById("liveAnalyticsBenchmarks"),intelligence=document.getElementById("liveProgramIntelligenceRows");if(!container)return;
   const role=getLiveAnalyticsRole_(),visibleMetrics=(program.metrics||[]).filter(function(metric){return !role||metric.side===role;});
-  container.innerHTML=visibleMetrics.map(function(metric){const value=((analytics[metric.side]||{})[metric.field]),status=liveAnalyticsBenchmarkStatus_(value,metric.recommendedTarget,metric.direction),goal=metric.direction==="lower"?"Maximum":"Target";return '<article class="live-analytics-benchmark '+status+'"><strong>'+escapeHtmlValue(metric.label)+'</strong><span>Current <b>'+formatLiveBenchmarkValue_(value,metric.unit)+'</b></span><span>'+goal+' <b>'+formatLiveBenchmarkValue_(metric.recommendedTarget,metric.unit)+'</b></span><span class="live-analytics-benchmark-totals">'+escapeHtmlValue(liveAnalyticsBenchmarkTotals_(analytics,metric))+'</span><small>'+escapeHtmlValue(status==="near-target"?"near target":status)+' · n='+Number(metric.validSampleCount||0)+' · '+escapeHtmlValue(metric.confidenceLabel)+'</small></article>';}).join("");
-  if(intelligence)intelligence.innerHTML='<p><b>'+Number(program.completedGameCount||0)+'</b> completed games · '+Number(program.winCount||0)+' wins · '+Number(program.lossCount||0)+' losses</p>'+(program.metrics||[]).map(function(metric){const current=((analytics[metric.side]||{})[metric.field]),goal=metric.direction==="lower"?"Maximum":"Target";return '<article><strong>'+escapeHtmlValue(metric.label)+'</strong><span>Current game: '+formatLiveBenchmarkValue_(current,metric.unit)+' · '+goal+': '+formatLiveBenchmarkValue_(metric.recommendedTarget,metric.unit)+'</span><span>Current totals: '+escapeHtmlValue(liveAnalyticsBenchmarkTotals_(analytics,metric))+'</span><span>Winning games: '+formatLiveBenchmarkValue_(metric.winningGameAverage,metric.unit)+' · Losing games: '+formatLiveBenchmarkValue_(metric.losingGameAverage,metric.unit)+' · valid n='+Number(metric.validSampleCount||0)+'</span><small>'+escapeHtmlValue(metric.targetSource)+' · last changed '+escapeHtmlValue(metric.lastChanged)+'</small></article>';}).join('');
+  const benchmarkHTML=visibleMetrics.map(function(metric){const value=((analytics[metric.side]||{})[metric.field]),status=liveAnalyticsBenchmarkStatus_(value,metric.recommendedTarget,metric.direction),goal=metric.direction==="lower"?"Maximum":"Target";return '<article class="live-analytics-benchmark '+status+'"><strong>'+escapeHtmlValue(metric.label)+'</strong><span>Current <b>'+formatLiveBenchmarkValue_(value,metric.unit)+'</b></span><span>'+goal+' <b>'+formatLiveBenchmarkValue_(metric.recommendedTarget,metric.unit)+'</b></span><span class="live-analytics-benchmark-totals">'+escapeHtmlValue(liveAnalyticsBenchmarkTotals_(analytics,metric))+'</span><small>'+escapeHtmlValue(status==="near-target"?"near target":status)+' · n='+Number(metric.validSampleCount||0)+' · '+escapeHtmlValue(metric.confidenceLabel)+'</small></article>';}).join("");
+  updateCoachIQHTML_(container,benchmarkHTML);
+  const programHTML='<p><b>'+Number(program.completedGameCount||0)+'</b> completed games · '+Number(program.winCount||0)+' wins · '+Number(program.lossCount||0)+' losses</p>'+(program.metrics||[]).map(function(metric){const current=((analytics[metric.side]||{})[metric.field]),goal=metric.direction==="lower"?"Maximum":"Target";return '<article><strong>'+escapeHtmlValue(metric.label)+'</strong><span>Current game: '+formatLiveBenchmarkValue_(current,metric.unit)+' · '+goal+': '+formatLiveBenchmarkValue_(metric.recommendedTarget,metric.unit)+'</span><span>Current totals: '+escapeHtmlValue(liveAnalyticsBenchmarkTotals_(analytics,metric))+'</span><span>Winning games: '+formatLiveBenchmarkValue_(metric.winningGameAverage,metric.unit)+' · Losing games: '+formatLiveBenchmarkValue_(metric.losingGameAverage,metric.unit)+' · valid n='+Number(metric.validSampleCount||0)+'</span><small>'+escapeHtmlValue(metric.targetSource)+' · last changed '+escapeHtmlValue(metric.lastChanged)+'</small></article>';}).join('');
+  updateCoachIQHTML_(intelligence,programHTML);
 }
 function toggleLiveAnalyticsTag(key){const draft=CoachIQ.liveGame.analyticsDraft;if(!draft||["transition","paintTouch","rightHandDrive"].indexOf(key)<0)return;if(key==="paintTouch"&&!draft[key]&&((draft.playEvents||[]).length>=99||!liveAnalyticsPlayEvent_("paintTouch")))return;rememberLiveAnalyticsSelection_();draft[key]=!draft[key];if(key==="paintTouch"){draft.playEvents=draft.playEvents||[];if(draft[key])draft.playEvents.push(liveAnalyticsPlayEvent_("paintTouch"));else draft.playEvents=draft.playEvents.filter(function(event){return event.type!=="paintTouch";});}renderLiveAnalyticsTracker_(CoachIQ.liveGame.tracker||{});}
 function addLiveAnalyticsRebound(){const draft=CoachIQ.liveGame.analyticsDraft;if(!draft)return;if(Number(draft.offensiveRebounds||0)>=10||(draft.playEvents||[]).length>=99)return;const event=liveAnalyticsPlayEvent_("offensiveRebound");if(!event)return;rememberLiveAnalyticsSelection_();draft.offensiveRebounds=Math.min(10,Number(draft.offensiveRebounds||0)+1);(draft.playEvents||(draft.playEvents=[])).push(event);renderLiveAnalyticsTracker_(CoachIQ.liveGame.tracker||{});}
@@ -977,10 +989,11 @@ function liveWinningTargetData_(objective,total){
 function renderLiveWinningTargets(data){
   const container=document.getElementById("liveWinningTargetRows");if(!container)return;
   const objectives=(data.objectives||[]).filter(function(item){return item.active!==false&&item.goalType!=="track";});
-  container.innerHTML=objectives.map(function(objective){
+  const html=objectives.map(function(objective){
     const total=(data.objectiveTotals||{})[objective.id]||{our:0,opponent:0},status=objectiveStatus(objective,total),chart=liveWinningTargetData_(objective,total);
     return `<article class="live-winning-target ${status}"><div><strong>${escapeHtmlValue(objective.label)}</strong><small>${escapeHtmlValue(chart.target)}</small></div><div class="live-winning-target-value"><b>${escapeHtmlValue(chart.current)}</b><span>${status}</span></div><div class="live-winning-target-track" role="progressbar" aria-label="${escapeHtmlValue(objective.label)} progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${Math.round(chart.progress)}"><i style="width:${chart.progress}%"></i></div></article>`;
   }).join("")||'<p class="live-winning-target-empty">Add a target-based objective to see the winning chart.</p>';
+  updateCoachIQHTML_(container,html);
 }
 function objectiveButtons(objective,side,autoLinked){
   if(autoLinked)return '<span class="objective-auto-source">Auto from Possession Analytics</span>';
@@ -992,7 +1005,7 @@ function objectiveButtons(objective,side,autoLinked){
 }
 function renderLiveTrackerObjectives(data){
   const container=document.getElementById("liveTrackerObjectives"); if(!container){return;}
-  container.innerHTML=(data.objectives||[]).filter(function(objective){return objective.active!==false;}).map(function(objective){
+  const html=(data.objectives||[]).filter(function(objective){return objective.active!==false;}).map(function(objective){
     const total=(data.objectiveTotals||{})[objective.id]||{our:0,opponent:0},autoLinked=(data.objectiveSources||{})[objective.id]==="analytics";
     const status=objectiveStatus(objective,total);
     const suffix=objective.unit==="percentage"?"%":"";
@@ -1004,6 +1017,7 @@ function renderLiveTrackerObjectives(data){
     const detail=objective.unit==="percentage"?(side==="Opponent"?(total.opponentMade||0)+"/"+(total.opponentAttempts||0):(total.ourMade||0)+"/"+(total.ourAttempts||0)):"";
     return `<article class="objective-card ${status}"><header><div><span>${autoLinked?"AUTO FROM ANALYTICS":escapeHtmlValue(who)}</span><h3>${escapeHtmlValue(objective.label)}</h3></div><b>${status}</b></header><div class="objective-single"><strong>${value}${suffix}</strong>${detail?`<em>${detail}</em>`:""}<small>${escapeHtmlValue(goal)}</small>${objectiveButtons(objective,side,autoLinked)}</div></article>`;
   }).join("");
+  updateCoachIQHTML_(container,html);
 }
 function recordLiveObjectiveChange(objectiveId,side,delta,component,button){
   if(!CoachIQ.liveGame.tracker){return;}
@@ -1193,12 +1207,25 @@ function renderCheckpointAnalyticsReport_(report){
 }
 function renderCheckpointBenchmarkReport_(report){
   const section=document.getElementById("checkpointBenchmarkReport"),rows=document.getElementById("checkpointBenchmarkRows"),program=report.analyticsBenchmarks||{},analytics=report.analytics||{},metrics=program.metrics||[];if(!section||!rows)return;
-  section.hidden=!metrics.length;if(section.hidden){rows.innerHTML="";return;}
+  section.hidden=!metrics.length;const benchmarkDetails=document.getElementById("checkpointBenchmarkDetails");if(benchmarkDetails)benchmarkDetails.hidden=section.hidden;if(section.hidden){rows.innerHTML="";return;}
   rows.innerHTML=metrics.map(function(metric){const value=((analytics[metric.side]||{})[metric.field]),status=liveAnalyticsBenchmarkStatus_(value,metric.recommendedTarget,metric.direction),goal=metric.direction==="lower"?"Maximum":"Target";return '<article class="'+status+'"><span><strong>'+escapeHtmlValue(metric.label)+'</strong><small>'+escapeHtmlValue(metric.confidenceLabel)+' · valid n='+Number(metric.validSampleCount||0)+'</small></span><span><b>Current '+formatLiveBenchmarkValue_(value,metric.unit)+'</b><small>'+escapeHtmlValue(liveAnalyticsBenchmarkTotals_(analytics,metric))+'</small></span><span><b>'+goal+' '+formatLiveBenchmarkValue_(metric.recommendedTarget,metric.unit)+'</b><small>'+escapeHtmlValue(status==="near-target"?"Near target":status.charAt(0).toUpperCase()+status.slice(1))+'</small></span></article>';}).join("");
+}
+function renderCheckpointScoreline_(report){
+  const element=document.getElementById("checkpointScoreline");if(!element)return;
+  const score=report.finalScore||report.score,game=report.game||{};element.hidden=!score;if(!score)return;
+  element.innerHTML='<div><span>'+escapeHtmlValue(game.team||"Our team")+'</span><strong>'+Number(score.our||0)+'</strong></div><small>'+(report.finalScore?'Final'+(report.gameResult?' · '+escapeHtmlValue(report.gameResult):''):'Tracked score')+'</small><div><span>'+escapeHtmlValue(game.opponent||"Opponent")+'</span><strong>'+Number(score.opponent||0)+'</strong></div>';
+}
+function handleCheckpointKeydown_(event){
+  const overlay=document.getElementById("liveGameCheckpointReport");if(!overlay||overlay.hidden)return;
+  if(event.key==="Escape"){event.preventDefault();closeLiveCheckpointReport();return;}
+  if(event.key!=="Tab")return;
+  const controls=Array.from(overlay.querySelectorAll('button:not([disabled]),a[href],input:not([disabled]),select:not([disabled]),textarea:not([disabled]),summary,[tabindex="0"]')).filter(function(element){return element.getClientRects().length>0;}),first=controls[0],last=controls[controls.length-1];if(!first)return;
+  if(event.shiftKey&&document.activeElement===first){event.preventDefault();last.focus();}else if(!event.shiftKey&&document.activeElement===last){event.preventDefault();first.focus();}
 }
 function renderLiveCheckpointReport(report){
   CoachIQ.liveGame.currentCheckpointType=report.checkpointType;
-  document.getElementById("checkpointHeadline").textContent=report.headline;
+  document.getElementById("checkpointHeadline").textContent=report.coachMode==="halftime"?"Halftime report":report.checkpointType==="Timeout"?"Timeout report":report.checkpointType==="Postgame"?"Game report":liveGamePeriodName((report.game||{}).format||"Quarters",report.period||1)+" report";
+  renderCheckpointScoreline_(report);
   const reportGame=report.game||{},reportMeta=document.getElementById("checkpointReportMeta");if(reportMeta)reportMeta.textContent=[reportGame.team&&reportGame.opponent?reportGame.team+" vs. "+reportGame.opponent:"",report.gameDate||reportGame.gameDate||"",report.checkpointType==="Postgame"?"Final report":"Period "+Number(report.period||1),report.generatedAt||report.completedAt||""].filter(Boolean).join(" · ");
   document.getElementById("checkpointObjectiveRows").innerHTML=(report.objectives||[]).map(function(item){return `<div class="checkpoint-row ${item.status}"><span>${escapeHtmlValue(item.label)}</span><strong>${escapeHtmlValue(item.summary)}${item.outcome?" · "+escapeHtmlValue(item.outcome):""}</strong></div>`;}).join("");
   document.getElementById("checkpointRecommendations").innerHTML=(report.recommendations||[]).map(function(item){return `<li>${escapeHtmlValue(item)}</li>`;}).join("");
@@ -1212,16 +1239,16 @@ function renderLiveCheckpointReport(report){
   if(isCoachMode){const keep=(report.keepDoing||[]),fix=(report.fixNow||[]);document.getElementById("checkpointKeepDoing").innerHTML=(keep.length?keep:["No clear positive pattern yet — keep tracking possessions."]).map(function(item){return `<li>${escapeHtmlValue(item)}</li>`;}).join("");document.getElementById("checkpointFixNow").innerHTML=(fix.length?fix:["No clear adjustment identified yet."]).map(function(item){return `<li>${escapeHtmlValue(item)}</li>`;}).join("");document.getElementById("checkpointRecentPulse").textContent=report.recentPulse||"Keep tracking the selected priorities.";const possessions=report.possessions||{our:0,opponent:0};document.getElementById("checkpointPossessionContext").textContent=(possessions.our||0)+" our possessions · "+(possessions.opponent||0)+" opponent possessions. Possessions add pace context; game targets are prorated for the current period.";document.getElementById("checkpointTopAdjustment").textContent=report.topAdjustment||(report.recommendations||[])[0]||"Stay with the game plan.";}
   const objectiveDetails=document.getElementById("checkpointObjectiveDetails");if(objectiveDetails){objectiveDetails.open=report.checkpointType==="Postgame";objectiveDetails.hidden=!(report.objectives||[]).length;}
   const trendWrap=document.getElementById("checkpointTrendsWrap"); const trends=report.trends||[]; trendWrap.hidden=!trends.length; document.getElementById("checkpointTrends").innerHTML=trends.map(function(item){return `<li>${escapeHtmlValue(item)}</li>`;}).join("");
-  document.getElementById("checkpointDoneButton").textContent=report.checkpointType==="Postgame"?"Back to Game History":"Back to Tracker";
+  document.getElementById("checkpointDoneButton").textContent=report.checkpointType==="Postgame"?"Close report":"Back to Tracker";
   const adjustButton=document.getElementById("checkpointAdjustButton");adjustButton.hidden=report.checkpointType==="Postgame"||!(report.objectives||[]).length;adjustButton.textContent=report.coachMode==="halftime"?"Update for Second Half":"Update Game Plan";
-  document.getElementById("liveGameCheckpointReport").hidden=false;
+  const overlay=document.getElementById("liveGameCheckpointReport");if(overlay.hidden)CoachIQ.liveGame.reportReturnFocus=document.activeElement;overlay.hidden=false;document.body.classList.add("checkpoint-open");const close=overlay.querySelector(".checkpoint-close");if(close)close.focus();
 }
-function closeLiveCheckpointReport(){document.getElementById("liveGameCheckpointReport").hidden=true;}
+function closeLiveCheckpointReport(){document.getElementById("liveGameCheckpointReport").hidden=true;document.body.classList.remove("checkpoint-open");const previous=CoachIQ.liveGame.reportReturnFocus,fallback=document.querySelector(".objective-tracker-actions button");if(previous&&previous.isConnected&&typeof previous.focus==="function")previous.focus();else if(fallback)fallback.focus();}
 function printLiveCheckpointReport(){
   const overlay=document.getElementById("liveGameCheckpointReport");if(!overlay||overlay.hidden){showToast("Open a timeout, period, or postgame report before printing.","error");return;}
-  const objectiveDetails=document.getElementById("checkpointObjectiveDetails"),wasOpen=objectiveDetails&&objectiveDetails.open;if(objectiveDetails&&!objectiveDetails.hidden)objectiveDetails.open=true;
+  const details=Array.from(overlay.querySelectorAll("details")).map(function(element){return{element:element,open:element.open};});details.forEach(function(item){item.element.open=true;});
   document.body.classList.add("checkpoint-print-mode");
-  const cleanup=function(){document.body.classList.remove("checkpoint-print-mode");if(objectiveDetails)objectiveDetails.open=wasOpen;window.removeEventListener("afterprint",cleanup);};
+  const cleanup=function(){document.body.classList.remove("checkpoint-print-mode");details.forEach(function(item){item.element.open=item.open;});window.removeEventListener("afterprint",cleanup);};
   window.addEventListener("afterprint",cleanup);window.print();window.setTimeout(cleanup,1500);
 }
 
@@ -2333,6 +2360,7 @@ function showToast(message){
 }
 
 document.addEventListener("DOMContentLoaded", initializeCoachIQ);
+document.addEventListener("keydown", handleCheckpointKeydown_);
 
 function initializeCoachIQ(){
   updateCoachGreeting();
@@ -2350,7 +2378,7 @@ function initializeCoachIQ(){
         document.getElementById("app").hidden = false;
         if(bootstrap.dashboardHtml){PageNavigation.pageCache.Dashboard=bootstrap.dashboardHtml;}
         loadPage("Dashboard");
-        setTimeout(preloadCoachIQPages,0);
+        scheduleCoachIQPreload_();
       }
     })
     .withFailureHandler(function(error){

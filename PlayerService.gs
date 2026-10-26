@@ -70,13 +70,10 @@ function updatePlayer(player) {
         status: data[i][7]
       };
 
-      sheet.getRange(i + 1, 2).setValue(player.firstName);
-      sheet.getRange(i + 1, 3).setValue(player.lastName);
-      sheet.getRange(i + 1, 4).setValue(player.jersey);
-      sheet.getRange(i + 1, 5).setValue(player.grade);
-      sheet.getRange(i + 1, 6).setValue(player.team);
-      sheet.getRange(i + 1, 7).setValue(player.position);
-      sheet.getRange(i + 1, 8).setValue(player.status);
+      sheet.getRange(i + 1, 2, 1, 7).setValues([[
+        player.firstName, player.lastName, player.jersey, player.grade,
+        player.team, player.position, player.status
+      ]]);
 
       try {
         logCoachIQAudit({

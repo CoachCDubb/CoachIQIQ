@@ -20,10 +20,10 @@ function getCoachIQSpreadsheet_() {
 
   if (activeSpreadsheet) {
 
-    properties.setProperty(
-      "COACHIQ_SPREADSHEET_ID",
-      activeSpreadsheet.getId()
-    );
+    const activeId=activeSpreadsheet.getId();
+    if(properties.getProperty("COACHIQ_SPREADSHEET_ID")!==activeId){
+      properties.setProperty("COACHIQ_SPREADSHEET_ID",activeId);
+    }
 
     return activeSpreadsheet;
 
