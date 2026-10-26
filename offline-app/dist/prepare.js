@@ -10,7 +10,7 @@ export async function cacheOfflineFiles({cacheStorage,fetchAsset,baseURL,version
     const type=response.headers.get('content-type')||'';
     if(path.endsWith('.js')&&!/(javascript|ecmascript)/i.test(type))throw Error(path+' returned '+(type||'an unknown file type')+' instead of JavaScript. A sign-in page may be blocking this file.');
     if((path==='./'||path==='./index.html')&&!(await response.clone().text()).includes('name="coachiq-offline-build" content="'+version+'"'))throw Error(path+' did not return the current GameDay app. Reopen the link directly in Safari and sign in.');
-    try{await withDeadline(cache.put(new URL(path,base).href,response),'Saving '+path+' timed out.',timeoutMs);}catch(error){throw Error('Could not save '+path+': '+error.message);}
+    try{await withDeadline(cache.put(new URL(path,base).href,new Response(response.body,{status:response.status,statusText:response.statusText,headers:response.headers})),'Saving '+path+' timed out.',timeoutMs);}catch(error){throw Error('Could not save '+path+': '+error.message);}
   }}catch(error){await cacheStorage.delete(name);throw error;}
   return {files:ASSETS.length,version};
 }
