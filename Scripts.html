@@ -753,6 +753,7 @@ function renderLiveFocusSetup_(){
 function renderLiveFocusTracker_(data,draft){
   const focus=Array.isArray(data.possessionFocus)?data.possessionFocus:defaultLiveFocus_(),role=draft.teamSide,container=document.getElementById("liveFocusTags");
   if(container)container.innerHTML=focus.map(function(tag,index){if(tag.type==="rightHandDrive"&&role!=="defense")return '';const count=tag.type==="offensiveRebound"?Number(draft.offensiveRebounds||0):0,active=count>0||draft[tag.type]===true||(draft.playEvents||[]).some(function(event){return event.type===tag.type&&(tag.type!=="customTag"||event.label===tag.label);});return '<button type="button" class="'+(active?'active':'')+'" aria-pressed="'+active+'" onclick="tapLiveFocusTag_('+index+')">'+escapeHtmlValue(tag.label)+(role==="defense"&&["paintTouch","offensiveRebound","transition","rightHandDrive"].indexOf(tag.type)>=0?' allowed':'')+(count?' ×'+count:active?' ✓':'')+'</button>';}).join('')||'<span>Points only · choose points to record each possession.</span>';
+  renderLiveKillStatus_(data);
   const editor=document.getElementById("liveFocusEditor"),key=JSON.stringify([(data.game||{}).gameId,focus]);if(editor&&editor.dataset.focusKey!==key){renderLiveFocusChoices_("live",focus);editor.dataset.focusKey=key;}
 }
 function tapLiveFocusTag_(index){
@@ -873,8 +874,9 @@ function renderLiveFocusReport_(analytics,focus){
 function renderCheckpointPossessionReview_(analytics,period,focus){
   const container=document.getElementById("checkpointPossessionReview");if(!container)return;
   const log=analytics.possessionLog||[],players=analytics.playerTotals||[],offense=analytics.offense||{};
-  const withCount=Number(offense.paintTouchPossessions||0),withoutCount=Number(offense.possessions||0)-withCount;
-  const withPpp=withCount?Number(offense.paintTouchPoints||0)/withCount:null,withoutPpp=withoutCount?(Number(offense.points||0)-Number(offense.paintTouchPoints||0))/withoutCount:null;
+  const paintCoverage=((analytics.intelligence||{}).paint||{}).offense;
+  const withCount=paintCoverage?paintCoverage.withTouch.possessions:Number(offense.paintTouchPossessions||0),withoutCount=paintCoverage?paintCoverage.withoutTouch.possessions:Number(offense.possessions||0)-withCount;
+  const withPpp=withCount?(paintCoverage?paintCoverage.withTouch.points:Number(offense.paintTouchPoints||0))/withCount:null,withoutPpp=withoutCount?(paintCoverage?paintCoverage.withoutTouch.points:Number(offense.points||0)-Number(offense.paintTouchPoints||0))/withoutCount:null;
   const insight='<p class="possession-insight"><strong>Paint-touch scoring</strong> · '+formatCheckpointAnalyticsValue_(withPpp)+' PPP with a paint touch ('+withCount+' possessions) vs '+formatCheckpointAnalyticsValue_(withoutPpp)+' without ('+withoutCount+'). Tracked association; small samples can vary.</p>';
   const totals=players.map(function(player){return '<tr><th scope="row">'+(player.playerSide==="opponent"?'Opponent':'Us')+' #'+escapeHtmlValue(player.jersey)+'</th><td>'+Number(player.offensiveRebounds||0)+'</td><td>'+Number(player.paintTouches||0)+'</td><td>'+Number(player.deflections||0)+'</td><td>'+Number(player.points||0)+'</td></tr>';}).join('');
   const tagRows=(analytics.scoringTags||[]).map(function(tag){return '<tr><th scope="row">'+escapeHtmlValue(tag.label)+'</th><td>'+(tag.teamSide==="defense"?'Opponent':'Us')+'</td><td>'+Number(tag.possessions||0)+'</td><td>'+Number(tag.points||0)+'</td><td>'+formatCheckpointAnalyticsValue_(tag.ppp)+'</td></tr>';}).join('');
@@ -889,6 +891,7 @@ function adjustLiveGameScore_(side,delta,button){recordLiveObjectiveChange("syst
 function finishLiveAnalyticsPossession(points,button,isTurnover){
   const tracker=CoachIQ.liveGame.tracker,role=getLiveAnalyticsRole_(),draft=CoachIQ.liveGame.analyticsDraft;if(!tracker||!role||!draft)return;
   const payload=Object.assign({},draft,{possessionId:"LAP-"+Date.now().toString(36)+"-"+Math.random().toString(36).slice(2,9),points:Number(points),period:tracker.game.currentPeriod});
+  payload.trackedTags=(Array.isArray(tracker.possessionFocus)?tracker.possessionFocus:defaultLiveFocus_()).map(function(tag){return tag.type;});
   payload.playEvents=(draft.playEvents||[]).slice();
   if(Number(points)>0){const event=liveAnalyticsPlayEvent_("made"+Number(points));if(!event)return;payload.playEvents.push(event);}
   if(isTurnover){payload[role==="offense"?"turnover":"forcedTurnover"]=true;}
@@ -1169,6 +1172,15 @@ function finishLiveGameFromTracker(){
 }
 function formatCheckpointAnalyticsValue_(value,digits){return value==null||!isFinite(Number(value))?"—":Number(value).toFixed(digits==null?2:digits);}
 function checkpointAnalyticsMetric_(label,value,detail){return '<div><span>'+escapeHtmlValue(label)+'</span><strong>'+escapeHtmlValue(value)+'</strong><small>'+escapeHtmlValue(detail||"")+'</small></div>';}
+function liveKillProgress_(log){let total=0,current=0,longest=0;(log||[]).forEach(function(item){if(item.teamSide!=="defense")return;if(Number(item.points||0)===0){current++;longest=Math.max(longest,current);if(current%3===0)total++;}else current=0;});return{total:total,currentStops:current,longestStops:longest,progress:current%3};}
+function renderLiveKillStatus_(data){const element=document.getElementById("liveKillStatus");if(!element)return;const kills=liveKillProgress_((data.analytics||{}).possessionLog||[]);element.textContent=kills.total+' kill'+(kills.total===1?'':'s')+' · '+kills.currentStops+' stops in a row · '+kills.progress+'/3 toward next kill';}
+function renderCheckpointIntelligence_(report){
+  const section=document.getElementById("checkpointIntelligence"),cards=document.getElementById("checkpointIntelligenceCards"),intelligence=(report.analytics||{}).intelligence;if(!section||!cards)return;
+  section.hidden=!intelligence||!(((report.analytics||{}).possessionLog||[]).length);if(section.hidden){cards.innerHTML="";return;}
+  const kills=intelligence.kills||{};document.getElementById("checkpointKillSummary").textContent=Number(kills.total||0)+' kills · '+Number(kills.currentStops||0)+' consecutive stops now · longest run '+Number(kills.longestStops||0)+' · '+Number(kills.progress||0)+'/3 toward next kill';
+  cards.innerHTML=(intelligence.insights||[]).map(function(item){const kind=['positive','attention','neutral'].indexOf(item.kind)>=0?item.kind:'neutral',numbers=item.logNumbers||[];return '<article class="'+kind+'"><strong>'+escapeHtmlValue(item.title)+'</strong><p>'+escapeHtmlValue(item.text)+'</p>'+(numbers.length?'<small>Possessions '+numbers.slice(0,12).map(Number).join(', ')+(numbers.length>12?' · '+(numbers.length-12)+' more':'')+'</small>':'')+'</article>';}).join('');
+  document.getElementById("checkpointIntelligenceDefinition").textContent=intelligence.definition||"";document.getElementById("checkpointIntelligenceCoverage").textContent=intelligence.coverageNote||"";
+}
 function renderCheckpointAnalyticsReport_(report){
   const section=document.getElementById("checkpointAnalyticsReport"),rows=document.getElementById("checkpointAnalyticsRows"),analytics=report.analytics||{},offense=analytics.offense||{},defense=analytics.defense||{};if(!section||!rows)return;
   renderCheckpointPossessionReview_(analytics,report.period,report.possessionFocus);
@@ -1192,6 +1204,7 @@ function renderLiveCheckpointReport(report){
   document.getElementById("checkpointRecommendations").innerHTML=(report.recommendations||[]).map(function(item){return `<li>${escapeHtmlValue(item)}</li>`;}).join("");
   const finalScore=document.getElementById("checkpointFinalScore"),score=report.finalScore||null;if(finalScore){finalScore.hidden=!score;finalScore.textContent=score?(String((report.game||{}).team||"Our team")+" "+Number(score.our||0)+" · "+String((report.game||{}).opponent||"Opponent")+" "+Number(score.opponent||0)+" · "+String(report.gameResult||"Final")):"";}
   const scorecard=document.getElementById("checkpointScorecard"); scorecard.hidden=!Number(report.scored||0); scorecard.textContent=scorecard.hidden?"":report.achieved+" of "+report.scored+" game-plan objectives achieved";
+  renderCheckpointIntelligence_(report);
   renderCheckpointAnalyticsReport_(report);
   renderCheckpointBenchmarkReport_(report);
   const coachMode=document.getElementById("checkpointCoachMode"),isCoachMode=report.checkpointType!=="Postgame";coachMode.hidden=!isCoachMode;

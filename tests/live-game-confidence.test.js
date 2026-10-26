@@ -148,7 +148,8 @@ test("possession tracking is always available and feeds pace-aware Coach Mode", 
 
 test("Coach Mode ignores possession taps when describing recent priority events", () => {
   assert.match(server, /event\.eventType!==LIVE_GAME_POSSESSION_EVENT/);
-  assert.match(server, /fixNow:rows\.filter\(function\(item\)\{return item\.status==="behind";/);
+  assert.match(server, /fixNow:\(intelligence\.insights/);
+  assert.match(server, /rows\.filter\(function\(item\)\{return item\.status==="behind";/);
   assert.match(server, /Improve shot quality/);
 });
 
