@@ -49,8 +49,8 @@ test('possession persistence round-trips play JSON and old rows without the new 
 test('player scoring cannot disagree with the saved possession score',()=>{
   const ctx=server();assert.throws(()=>ctx.cleanLiveAnalyticsPossession_({teamSide:'offense',points:0,playEvents:[{type:'made3',jersey:'12'}]},1),/match total/);
 });
-test('checkpoint renderer shows the full log, escapes jersey text and distinguishes missing paint samples',()=>{
+test('checkpoint renderer keeps the full log behind a collapsed drill-down and escapes jersey text',()=>{
   const container={innerHTML:''};const ctx=functions(['liveAnalyticsPlayChips_','renderCheckpointPossessionReview_'],{document:{getElementById:()=>container},escapeHtmlValue:s=>String(s).replaceAll('<','&lt;').replaceAll('>','&gt;'),formatCheckpointAnalyticsValue_:n=>n==null?'—':Number(n).toFixed(2)});
   ctx.renderCheckpointPossessionReview_({offense:{possessions:10,points:20,paintTouchPossessions:0},playerTotals:[{jersey:'<12>',offensiveRebounds:2}],possessionLog:Array.from({length:10},()=>({teamSide:'offense',period:1,points:2,playEvents:[{type:'made2',jersey:'12'}]}))},1);
-  assert.match(container.innerHTML,/Possession 10/);assert.match(container.innerHTML,/&lt;12&gt;/);assert.match(container.innerHTML,/— PPP with a paint touch/);assert.match(container.innerHTML,/2.00 without/);
+  assert.match(container.innerHTML,/Review possessions/);assert.doesNotMatch(container.innerHTML,/Game possession 10/);assert.equal(container.coachIQLog.length,10);assert.match(container.innerHTML,/&lt;12&gt;/);assert.match(container.innerHTML,/— PPP with a paint touch/);assert.match(container.innerHTML,/2.00 without/);
 });

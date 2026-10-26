@@ -3005,3 +3005,37 @@ body.checkpoint-open #content{overflow:hidden}
  body.checkpoint-print-mode #liveGameCheckpointReport #checkpointIntelligenceCards article,body.checkpoint-print-mode #liveGameCheckpointReport .checkpoint-coach-columns article,body.checkpoint-print-mode #liveGameCheckpointReport .possession-log-row{break-inside:avoid;page-break-inside:avoid}
 }
 </style>
+<style>
+.checkpoint-side-overview{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin:18px 0}
+.checkpoint-side-overview article{padding:16px;border:1px solid #dbe4ee;border-top:3px solid #16a34a;border-radius:10px;background:#f8fafc}
+.checkpoint-side-overview article:last-child{border-top-color:#2563eb}
+.checkpoint-side-overview span{font-size:10px;font-weight:800;letter-spacing:.07em;text-transform:uppercase;color:#526175}
+.checkpoint-side-overview strong{display:block;margin:7px 0;font-size:21px;letter-spacing:-.025em}
+.checkpoint-side-overview p{margin:7px 0;font-size:13px}
+.checkpoint-side-overview small{font-size:11px;color:#526175}
+.checkpoint-possession-log,.checkpoint-secondary-details{margin:16px 0;padding:12px 14px;border:1px solid #dbe4ee;border-radius:10px;background:#fff}
+.checkpoint-possession-log>summary,.checkpoint-secondary-details>summary,.checkpoint-more-patterns>summary{padding:4px 0;cursor:pointer;font-size:13px;font-weight:750;color:#314b6a}
+.checkpoint-log-toolbar{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:10px;margin:14px 0}
+.checkpoint-side-filters{display:flex;flex-wrap:wrap;gap:6px}
+.checkpoint-side-filters button,.checkpoint-log-pagination button{min-height:40px;padding:8px 12px;border:1px solid #cbd7e5;border-radius:7px;background:#fff;color:#314b6a;font:inherit;font-size:12px;font-weight:700;cursor:pointer}
+.checkpoint-side-filters button.active{background:var(--primary);color:var(--primary-text);border-color:var(--primary)}
+.checkpoint-log-toolbar label{display:flex;align-items:center;gap:8px;font-size:12px;font-weight:700}
+.checkpoint-log-toolbar select{min-height:40px;padding:8px;border:1px solid #cbd7e5;background:#fff;color:#314b6a;font:inherit}
+#checkpointPossessionRange{font-size:12px;color:#64748b;margin:10px 0}
+#checkpointPossessionRows .possession-log-row>small{display:block;font-size:11px;color:#64748b;margin-top:3px}
+.checkpoint-log-pagination{display:flex;justify-content:flex-end;align-items:center;gap:10px;margin-top:12px}
+.checkpoint-log-pagination span{font-size:12px;color:#64748b}
+.checkpoint-print-log-option{display:flex;align-items:center;gap:8px;margin-top:14px;font-size:12px;color:#526175}
+.checkpoint-possession-print-log{display:none}
+.checkpoint-log-empty{padding:16px;background:#f8fafc;font-size:13px;color:#64748b}
+#checkpointIntelligenceCards>.checkpoint-more-patterns{grid-column:1/-1;padding:10px;border:1px solid #dbe4ee;border-radius:8px}
+.checkpoint-more-patterns>div{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin-top:12px}
+@media(max-width:650px){.checkpoint-side-overview,.checkpoint-more-patterns>div{grid-template-columns:minmax(0,1fr)}.checkpoint-log-toolbar{align-items:stretch;flex-direction:column}.checkpoint-log-pagination{justify-content:space-between}}
+@media print{
+ body.checkpoint-print-mode #liveGameCheckpointReport .checkpoint-possession-log{display:none!important}
+ body.checkpoint-print-mode.checkpoint-print-full-log #liveGameCheckpointReport .checkpoint-possession-log{display:block!important;border:0;padding:0}
+ body.checkpoint-print-mode #liveGameCheckpointReport .checkpoint-possession-browser,body.checkpoint-print-mode #liveGameCheckpointReport .checkpoint-print-log-option,body.checkpoint-print-mode #liveGameCheckpointReport .checkpoint-possession-log>summary{display:none!important}
+ body.checkpoint-print-mode.checkpoint-print-full-log #liveGameCheckpointReport .checkpoint-possession-print-log{display:block!important}
+ .checkpoint-side-overview article{break-inside:avoid}
+}
+</style>
