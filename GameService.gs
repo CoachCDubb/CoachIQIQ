@@ -111,6 +111,7 @@ function getLiveGameSetupData() {
     gamePlanTemplates: getLiveGamePlanTemplates_(),
     lastGamePlans: getLastLiveGamePlans_(gameSnapshot),
     opponentRosters:getLiveGameOpponentRosters_(),
+    scoutingReports:getLiveGameScoutingChoices_(),
     sportPresets:getLiveGameSportPresets_(),
     sportFormats:sportPreset.formats,
     sportObjectives:sportPreset.objectives,
@@ -176,6 +177,7 @@ function createLiveGameSetup(data) {
     throw new Error("The game roster contains a player outside your team or position access.");
   }
 
+  const scoutingSnapshot=captureGameScoutingReport_(data.scoutingReportId,team,opponent);
   const now = new Date();
   const gameId = "GAME-" + Utilities.formatDate(now, Session.getScriptTimeZone(), "yyyyMMdd-HHmmss") +
     "-" + Utilities.getUuid().slice(0, 6).toUpperCase();
@@ -194,7 +196,7 @@ function createLiveGameSetup(data) {
     ];
     while(row.length<sheet.getLastColumn())row.push("");
     row[headers.indexOf("Opponent Roster")]=JSON.stringify(opponentRoster);
-    row[headers.indexOf("Tracker Mode")]=JSON.stringify({analytics:enableAnalytics,objectives:enableObjectives,focus:cleanLivePossessionFocus_(data.possessionFocus)});
+    row[headers.indexOf("Tracker Mode")]=JSON.stringify({analytics:enableAnalytics,objectives:enableObjectives,focus:cleanLivePossessionFocus_(data.possessionFocus),scoutingReportId:scoutingSnapshot?scoutingSnapshot.reportId:"",scoutingSnapshotId:scoutingSnapshot?writeGameReportSnapshot_(gameId,"scouting",scoutingSnapshot):""});
     setCoachIQSeasonOnRow_(headers,row,getCoachIQCurrentSeason_());
     sheet.appendRow(row);
   } finally {
@@ -1032,12 +1034,13 @@ function finishLiveGame(gameId, finalResult) {
     report.finalScore={our:finalOurScore,opponent:finalOpponentScore};
     report.gameResult=authoritativeResult;
     report.game={gameId:tracker.game.gameId,gameDate:tracker.game.gameDate,team:tracker.game.team,opponent:tracker.game.opponent};
+    const storedReport=compactStoredPostgameReport_(report,gameId);
     const now = new Date();
     current.sheet.getRange(current.rowNumber, current.cols.Status + 1).setValue("Completed");
     current.sheet.getRange(current.rowNumber, current.cols["Our Score"] + 1).setValue(finalOurScore);
     current.sheet.getRange(current.rowNumber, current.cols["Opponent Score"] + 1).setValue(finalOpponentScore);
     current.sheet.getRange(current.rowNumber, current.cols["Game Result"] + 1).setValue(authoritativeResult);
-    current.sheet.getRange(current.rowNumber, current.cols["Final Report"] + 1).setValue(JSON.stringify(report));
+    current.sheet.getRange(current.rowNumber, current.cols["Final Report"] + 1).setValue(JSON.stringify(storedReport));
     current.sheet.getRange(current.rowNumber, current.cols["Completed At"] + 1).setValue(now);
     current.sheet.getRange(current.rowNumber, current.cols["Updated At"] + 1).setValue(now);
   }finally{lock.releaseLock();}
@@ -1065,7 +1068,8 @@ function getLiveGamePostgameReport(gameId) {
   initializeLiveGameSheets_();
   const record = findLiveGameRecord_(gameId);
   requireLiveGameTeamAccess_(record.game.Team);
-  const report = parseLiveGameObject_(record.game["Final Report"], null);
+  let report = parseLiveGameObject_(record.game["Final Report"], null);
+  if(report&&report.snapshotId){const archived=readGameReportSnapshot_(gameId,"postgame",report.snapshotId);if(!archived)throw new Error("The saved full postgame report is unavailable.");report=archived;}
   if (!report) throw new Error("This game does not have a completed postgame report.");
   if(!report.analytics)report.analytics=buildLiveAnalyticsSummary_(getLiveAnalyticsPossessions_(gameId),Number(record.game["Current Period"]||1));
   if(!report.analyticsBenchmarks)report.analyticsBenchmarks=getLiveAnalyticsProgramBenchmark_(String(record.game.Team||""));
