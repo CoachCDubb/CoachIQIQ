@@ -7,6 +7,7 @@
   <div id="liveGameResumePanel" class="live-game-resume" hidden></div>
   <div id="liveGameHistoryPanel" class="live-game-history" hidden></div>
 
+  <aside class="card gameday-handoff"><div><span class="page-kicker">Separate offline game-day app</span><h3>CoachIQ GameDay</h3><p>Prepare the iPad before travel. Track and finish there offline, then import its locked result here when connected.</p></div><div class="gameday-handoff-actions"><a class="btn" href="https://coachiq-gameday-offline.chummychick11.chatgpt.site/" target="_blank" rel="noopener">Open GameDay</a><button id="importGameDayResultButton" class="btn" type="button" onclick="document.getElementById('gameDayResultFile').click()">Import GameDay result</button><input id="gameDayResultFile" type="file" accept="application/json,.json" onchange="chooseGameDayResult_(this)" hidden></div></aside>
   <form id="liveGameSetupForm" class="live-game-setup" hidden onsubmit="submitLiveGameSetup(event)">
     <div class="live-game-setup-grid">
       <article class="card live-game-panel">
@@ -63,7 +64,7 @@
     <div class="live-game-launch-bar"><div><strong>Game-day setup</strong><p>CoachIQ will show only the tools you selected above.</p></div><button id="saveLiveGameSetupButton" class="btn btn-primary" type="submit">Save Game Setup</button></div>
   </form>
 
-  <div id="liveGameSetupSuccess" class="card live-game-success" hidden><span>Game setup saved</span><h3 id="liveGameSetupSuccessTitle">Game ready</h3><p>Open the game screen whenever your staff is ready.</p><div class="live-game-success-actions"><button id="openSavedLiveGameButton" class="btn btn-primary" type="button">Open Game Screen</button><button class="btn" type="button" onclick="resetLiveGameSetup()">Build Another Game</button></div></div>
+  <div id="liveGameSetupSuccess" class="card live-game-success" hidden><span>Game setup saved</span><h3 id="liveGameSetupSuccessTitle">Game ready</h3><p>Open the game screen whenever your staff is ready.</p><div class="live-game-success-actions"><button id="downloadGameDayPreparationButton" class="btn" type="button" onclick="downloadGameDayPreparation_()">Download GameDay preparation</button><button id="openSavedLiveGameButton" class="btn btn-primary" type="button">Open Game Screen</button><button class="btn" type="button" onclick="resetLiveGameSetup()">Build Another Game</button></div></div>
 
   <section id="liveGameTracker" class="live-game-tracker" hidden>
     <header class="objective-tracker-header">

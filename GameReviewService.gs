@@ -19,7 +19,7 @@ function applyLivePossessionEdits_(groups){
     return Object.assign({},item,after,{sequence:item.sequence,timestamp:item.timestamp,revision:Number(row[3]),editedAt:formatLiveGameTimestamp_(row[4])});
   });});
 }
-function requireLiveReviewGame_(gameId){const record=findLiveGameRecord_(gameId);requireLiveGameTeamAccess_(record.game.Team);if(String(record.game["Archive Status"]||"")==="Archived")throw new Error("Archived games cannot be reviewed or changed here.");return record;}
+function requireLiveReviewGame_(gameId){const record=findLiveGameRecord_(gameId);requireLiveGameTeamAccess_(record.game.Team);if(String(record.game.Status)==="Offline Importing")throw new Error("Finish or retry the staged offline import before reviewing this game.");if(String(record.game["Archive Status"]||"")==="Archived")throw new Error("Archived games cannot be reviewed or changed here.");return record;}
 function getLivePossessionForEdit(gameId,possessionId){
   requireStaffCapability_("run_sessions");const record=requireLiveReviewGame_(gameId),item=getLiveAnalyticsPossessions_(gameId).find(function(p){return p.possessionId===String(possessionId);});if(!item)throw new Error("This possession is unavailable or was undone. Refresh the list.");
   const history=getLivePossessionEditRows_([gameId]).filter(function(row){return String(row[2])===String(possessionId);}).map(function(row){return{revision:Number(row[3]),at:formatLiveGameTimestamp_(row[4]),by:String(row[5]),reason:String(row[6]),before:JSON.parse(String(row[7]).slice(5)),after:JSON.parse(String(row[8]).slice(5))};});
