@@ -1,6 +1,7 @@
 import * as M from './model.js';
 import {listGames,getGame,putGame,openDB} from './db.js';
 import {prepareOffline} from './prepare.js';
+import {prepareReportPrint,clearReportPrint} from './print.js';
 let current=null,games=[],work=Promise.resolve(),busy=false,ready=false,editor=null,toastTimer,logPage=0,logSide='all';
 const $=id=>document.getElementById(id),esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])),button=(label,action,cls='',extra='')=>`<button type="button" class="${cls}" data-action="${action}" ${extra}>${label}</button>`;
 const field=(label,id,value='',type='text',extra='')=>`<label>${label}<input id="${id}" type="${type}" value="${esc(value)}" ${extra}></label>`;
@@ -61,10 +62,12 @@ else if(action==='marker')showMarker();else if(action==='finish')showFinish();el
 else if(action==='backup'){await work;download(current,'CoachIQ-backup-'+current.id+'.json');}
 else if(action==='export-result')await exportResult();
 else if(action==='confirm-export'){if(await mutate(g=>{g.transferLocked=true;g.exportedAt=new Date().toISOString();})){close();download(current,'CoachIQ-result-'+current.id+'.json');}}
-else if(action==='print')window.print();
+else if(action==='print'){prepareReportPrint();window.print();}
 else if(action==='save-quick'){const ids=[...$('quickChoices').querySelectorAll('input:checked')].map(e=>e.value);if(!ids.length||ids.length>8)throw Error('Choose between one and eight quick stats.');if(await mutate(g=>{g.quickStats=ids;}))showQuick();}
 else if(action==='add-custom'){const label=$('customFocus').value.trim();if(!label||label.length>40)throw Error('Enter a custom tag name of 1–40 characters.');const row=document.createElement('label'),input=document.createElement('input');input.type='checkbox';input.dataset.tag='customTag';input.dataset.label=label;input.checked=true;row.append(input,document.createTextNode(label));$('focusChoices').append(row);$('customFocus').value='';}
 }catch(e){toast(e.message);}});
 document.addEventListener('change',async e=>{if(e.target.matches('[data-edit]')){editor.playEvents[Number(e.target.dataset.index)][e.target.dataset.edit]=e.target.value;if(e.target.dataset.edit==='type')renderEditorEvents();return;}if(e.target.id==='jerseySelect'||e.target.id==='manualJersey'){const jersey=e.target.value.trim();await mutate(g=>{if(jersey&&!/^\d{1,3}$/.test(jersey))throw Error('Use a jersey number of 1–3 digits.');g.draft.jersey=jersey;});}});
 window.addEventListener('online',status);window.addEventListener('offline',status);window.addEventListener('beforeunload',e=>{if(busy){e.preventDefault();e.returnValue='';}});document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')status();});
 (async()=>{try{await openDB();games=await listGames();render();if('serviceWorker'in navigator){const registration=await navigator.serviceWorker.getRegistration();if(registration?.active){const c=new MessageChannel();c.port1.onmessage=e=>{ready=e.data.ready===true;render();};registration.active.postMessage({type:'VERIFY_CACHE'},[c.port2]);}}}catch(e){error(e);$('main').innerHTML='<section class="surface empty"><h2>This browser could not open local storage.</h2><p>Use normal Safari browsing, not a private tab. Do not use this app for a game until local storage and offline preparation pass.</p></section>';}})();
+
+window.addEventListener('beforeprint',()=>prepareReportPrint());window.addEventListener('afterprint',()=>clearReportPrint());
