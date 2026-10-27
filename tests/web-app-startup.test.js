@@ -1,0 +1,13 @@
+const test=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),vm=require('node:vm');
+function fixture(){
+ const tables={Settings:[['Setting','Value'],['Setup Complete','TRUE'],['Workspace Mode','games'],['Teams','Varsity'],['Sport','Basketball']], 'Point Awards':[['Reward ID','Reward Name','Points','Active','Display Order']],Players:[['Player ID','First Name','Last Name','Jersey Number','Grade','Team','Position','Status'],['P1','Test','Player','12','11','Varsity','Guard','Active']]};
+ const writes=[];const properties={COACHIQ_SPREADSHEET_ID:'program-workbook'};
+ const spreadsheet={getId:()=> 'program-workbook',getSheetByName(name){const rows=tables[name];return {getLastColumn:()=>rows[0].length,getLastRow:()=>rows.length,getDataRange:()=>({getValues:()=>rows.map(row=>row.slice())}),getRange(...args){return {getValues:()=>rows.slice(args[0]-1,args[0]-1+args[2]).map(row=>row.slice(args[1]-1,args[1]-1+args[3])),setValue:value=>writes.push({name,args,value})};},appendRow:row=>rows.push(row)};}};
+ const ctx=vm.createContext({console,PropertiesService:{getScriptProperties:()=>({getProperty:key=>properties[key],setProperty:(key,value)=>properties[key]=value})},SpreadsheetApp:{getActive:()=>null,openById:id=>{assert.equal(id,'program-workbook');return spreadsheet;}},HtmlService:{createHtmlOutputFromFile:()=>({getContent:()=>'<h2>Dashboard</h2>'})}});
+ for(const file of ['SheetService.gs','SettingsService.gs','RewardService.gs','SessionPolicyService.gs','OnboardingService.gs','PlayerService.gs'])vm.runInContext(fs.readFileSync(file,'utf8'),ctx,{filename:file});
+ return {ctx,tables,writes,properties};
+}
+test('web bootstrap loads settings and rewards without an active spreadsheet',()=>{const {ctx}=fixture();const result=ctx.getCoachIQBootstrap();assert.equal(result.setupRequired,false);assert.equal(result.settings.workspaceMode,'games');assert.equal(result.settings.teams[0],'Varsity');assert.equal(result.settings.rewards.length,0);});
+test('web roster loads from the bound program workbook without active spreadsheet',()=>{const {ctx}=fixture();const players=ctx.getPlayersForUI();assert.equal(players.length,1);assert.equal(players[0][3],'12');});
+test('web settings writes use the same resolved workbook',()=>{const {ctx,writes}=fixture();ctx.setSettingValues_({'Workspace Mode':'full'});assert.equal(writes.length,1);assert.equal(writes[0].name,'Settings');assert.equal(writes[0].value,'full');});
+test('unbound web app gives setup guidance instead of selecting another workbook',()=>{const {ctx,properties}=fixture();delete properties.COACHIQ_SPREADSHEET_ID;assert.throws(()=>ctx.getCoachIQBootstrap(),/Open CoachIQ from the spreadsheet once/);});

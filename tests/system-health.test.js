@@ -84,6 +84,7 @@ test("schema version 2 requires Season on season-scoped core sheets", () => {
 test("dialog and web entry points render the same Index template", () => {
   const renders = [];
   const output = {
+    addMetaTag(name, value) { this.meta = {name, value}; return this; },
     setTitle(value) { this.title = value; return this; },
     setWidth(value) { this.width = value; return this; },
     setHeight(value) { this.height = value; return this; }
@@ -102,6 +103,7 @@ test("dialog and web entry points render the same Index template", () => {
   context.launchCoachIQ();
   assert.deepEqual(renders, ["Index", "Index"]);
   assert.equal(output.title, "CoachIQ");
+  assert.deepEqual(output.meta, {name:"viewport",value:"width=device-width, initial-scale=1"});
   assert.equal(output.width, 1600);
   assert.equal(output.height, 900);
 });

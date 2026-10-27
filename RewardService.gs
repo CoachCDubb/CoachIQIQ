@@ -9,8 +9,7 @@ const REWARD_SHEET = "Point Awards";
  */
 function getPointAwards() {
 
-  const sheet = SpreadsheetApp
-    .getActive()
+  const sheet = getCoachIQSpreadsheet_()
     .getSheetByName(REWARD_SHEET);
 
   const headers = sheet
@@ -108,8 +107,7 @@ function savePointRewards(rewards){
 
 function savePointRewards_(rewards){
 
-  const sheet = SpreadsheetApp
-    .getActive()
+  const sheet = getCoachIQSpreadsheet_()
     .getSheetByName(REWARD_SHEET);
   const headers = sheet
     .getRange(1, 1, 1, sheet.getLastColumn())
