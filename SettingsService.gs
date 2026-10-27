@@ -121,6 +121,8 @@ const settings = settingsMap && typeof settingsMap === "object" ? settingsMap : 
 
 return {
 
+    workspaceMode: settings["Workspace Mode"] === "games" ? "games" : "full",
+
     programName: settings["Program Name"] || "",
 
     schoolName: settings["School Name"] || "",
@@ -474,4 +476,47 @@ function requireStaffCapability_(capability) {
   const access = getCurrentStaffAccess_();
   if (access.capabilities.indexOf(capability) === -1) throw new Error("You do not have permission to access this CoachIQ section.");
   return access;
+}
+/** Presentation preference only; staff permissions remain independent. */
+function saveCoachIQWorkspaceMode(mode) {
+  requireStaffCapability_("manage_settings");
+  if (mode !== "games" && mode !== "full") throw new Error("Choose a valid workspace mode.");
+  setSettingValues_({"Workspace Mode": mode});
+  return getCoachIQSettings();
+}
+
+/** Creates a separate, header-only workbook. Never copies records or source permissions. */
+function createCoachIQGamePilotWorkbook() {
+  requireStaffCapability_("manage_settings");
+  const source = getCoachIQSpreadsheet_();
+  const names = ["Players", "Sessions", "Practice Evaluations", "Culture Points", "Audit Log"];
+  // Validate before creating anything. Use the installed schema's column order.
+  const headers = names.map(function(name) {
+    const sheet = source.getSheetByName(name);
+    if (!sheet || sheet.getLastColumn() < 1) throw new Error("Missing source structure: " + name);
+    const row = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+    const required = COACHIQ_REQUIRED_SCHEMA[name] || [];
+    if (required.some(function(header) { return row.indexOf(header) < 0; })) {
+      throw new Error("Repair the " + name + " headers before creating a pilot workbook.");
+    }
+    return {name: name, row: row.map(function(header) { return safeSettingValue_(header); })};
+  });
+  const pilot = SpreadsheetApp.create("CoachIQ — Scouting & Games Pilot");
+  const settingsSheet = pilot.getSheets()[0];
+  settingsSheet.setName("Settings");
+  settingsSheet.getRange(1, 1, 13, 2).setValues([
+    ["Setting", "Value"], ["Workspace Mode", "games"], ["Setup Complete", "FALSE"],
+    ["Sport", "Basketball"], ["Teams", "Varsity"], ["Positions", "Guard, Wing, Forward, Center"],
+    ["Player Statuses", "Active, Inactive, Injured, Archived"],
+    ["Culture Categories", "Effort, Toughness, Leadership, Accountability"],
+    ["Staff", "Head Coach"], ["Primary Color", "#1E3A5F"],
+    ["Secondary Color", "#F59E0B"], ["CoachIQ Schema Version", "1"], ["CoachIQ Version", COACHIQ_BUILD_VERSION]
+  ]);
+  headers.push({name: "Point Awards", row: ["Reward ID", "Reward Name", "Points", "Active", "Display Order"]});
+  headers.forEach(function(item) {
+    const sheet = pilot.insertSheet(item.name);
+    sheet.getRange(1, 1, 1, item.row.length).setValues([item.row]);
+    sheet.setFrozenRows(1);
+  });
+  return {url: pilot.getUrl(), name: pilot.getName()};
 }

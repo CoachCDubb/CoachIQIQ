@@ -8,6 +8,14 @@
     <span class="settings-status"><span></span> Program configuration</span>
   </div>
 
+  <div class="settings-section">
+    <h3>Workspace</h3><p>Choose the features your program uses. You can switch back at any time.</p>
+    <label>Experience <select id="workspaceMode"><option value="full">Full program</option><option value="games">Scouting &amp; Games</option></select></label>
+    <p>Scouting &amp; Games focuses navigation and Intelligence on game preparation, tracking and review. Existing records are preserved.</p>
+    <div class="settings-actions"><button id="createGamePilotButton" class="btn" type="button" onclick="createCoachIQGamePilotUI()">Create clean pilot workbook</button></div>
+    <p id="gamePilotWorkbookResult" aria-live="polite">Creates a separate blank workbook. Install the CoachIQ Apps Script files there before handing it to the tester.</p>
+    <button id="saveWorkspaceModeButton" class="btn btn-primary" type="button" onclick="saveCoachIQWorkspaceModeUI()">Save workspace</button>
+  </div>
   <div class="settings-section settings-identity">
     <div class="settings-section-heading">
       <span class="settings-section-number">01</span>
@@ -60,13 +68,13 @@
     </div>
 
     <div class="settings-section">
-      <div class="settings-section-heading"><span class="settings-section-number">06</span><div><h3>Culture Categories</h3><p>Standards your athletes are measured against.</p></div></div>
+      <div class="settings-section-heading" data-full-only><span class="settings-section-number">06</span><div><h3>Culture Categories</h3><p>Standards your athletes are measured against.</p></div></div>
       <div id="cultureContainer" class="settings-list"></div>
       <div class="settings-actions"><button class="btn" onclick="addSettingField('cultureContainer', 'New Category')">+ Add category</button><button class="btn btn-primary" onclick="saveSettingsList('cultureContainer', 'Culture Categories')">Save categories</button></div>
     </div>
 
     <div class="settings-section">
-      <div class="settings-section-heading"><span class="settings-section-number">07</span><div><h3>Point Rewards</h3><p>Recognition athletes can earn.</p></div></div>
+      <div class="settings-section-heading" data-full-only><span class="settings-section-number">07</span><div><h3>Point Rewards</h3><p>Recognition athletes can earn.</p></div></div>
       <div id="pointRewardsContainer" class="settings-list"></div>
       <div class="settings-actions"><button class="btn" onclick="addPointReward()">+ Add reward</button><button class="btn btn-primary" onclick="savePointRewards()">Save rewards</button></div>
     </div>
@@ -78,7 +86,7 @@
       <div class="settings-actions"><button id="enableBackupsButton" class="btn" type="button" onclick="enableCoachIQBackups()">Enable daily backups</button><button id="createBackupButton" class="btn btn-primary" type="button" onclick="createCoachIQBackupNow()">Create backup now</button></div>
     </div>
     <div class="settings-section settings-session-policies">
-      <div class="settings-section-heading"><span class="settings-section-number">09</span><div><h3>Session types</h3><p>Choose what each activity tracks and how attendance affects points.</p></div></div>
+      <div class="settings-section-heading" data-full-only><span class="settings-section-number">09</span><div><h3>Session types</h3><p>Choose what each activity tracks and how attendance affects points.</p></div></div>
       <div id="sessionPoliciesContainer" class="session-policy-list"></div>
       <div class="settings-actions"><button class="btn" type="button" onclick="addSessionPolicyEditor()">+ Add session type</button><button id="saveSessionPoliciesButton" class="btn btn-primary" type="button" onclick="saveSessionPolicySettings()">Save session types</button></div>
     </div>
