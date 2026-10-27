@@ -3173,4 +3173,13 @@ body.live-game-mode .live-analytics-outcomes{flex-shrink:0}
 .live-game-prep-button{color:var(--primary);border:1px solid #b9cbe2;background:#eef5ff;cursor:pointer}
 
 .live-focus-editor>label{display:grid;gap:6px;max-width:360px;margin:12px 0;font-size:12px;font-weight:700}.live-focus-editor>label select{min-width:0;width:100%;min-height:44px;padding:8px;border:1px solid var(--line);font:inherit;background:#fff}
+
+#sidebar .nav-item[hidden],.game-workspace-home [hidden]{display:none!important;}
+.games-workspace #intelligenceSessionsView,.games-workspace [data-full-only],.games-onboarding [data-full-only]{display:none!important;}
+.game-workspace-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:18px;}
+.game-workspace-grid .card{min-width:0;margin:0;padding:22px;}
+.game-workspace-grid a.btn,#sidebar a.nav-item{text-decoration:none;color:inherit;}
+.game-workspace-grid p,.game-workspace-note{line-height:1.6;}
+.game-workspace-note{margin-top:20px;color:var(--ink-soft);}
+@media(max-width:800px){.game-workspace-grid{grid-template-columns:1fr;}}
 </style>

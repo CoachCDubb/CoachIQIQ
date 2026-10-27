@@ -63,6 +63,7 @@ function completeCoachIQOnboarding(data) {
   lock.waitLock(10000);
   try {
     setSettingValues_({
+      "Workspace Mode": data.workspaceMode === "games" ? "games" : "full",
       "Program Name": String(data.programName).trim(),
       "School Name": String(data.schoolName).trim(),
       "Mascot Name": normalizeMascotName_(data.mascotName),

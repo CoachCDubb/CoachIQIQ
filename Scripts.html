@@ -69,6 +69,8 @@ function setCoachIQNavigationLoading_(page,loading){
 function scheduleCoachIQPreload_(){if(typeof window.requestIdleCallback==="function")window.requestIdleCallback(preloadCoachIQPages,{timeout:3000});else setTimeout(preloadCoachIQPages,1200);}
 function updateCoachIQHTML_(element,html){if(!element||element.coachIQRenderedHTML===html)return false;element.innerHTML=html;element.coachIQRenderedHTML=html;return true;}
 function loadPage(page, callback){
+    if(isGamesWorkspace_() && !isGamesWorkspacePage_(page)){page="Dashboard";}
+
     closeLiveReviewDialogs_();
     closeLiveQuickStats_(false);
 
@@ -118,6 +120,7 @@ function loadPage(page, callback){
 
 function renderCoachIQPage_(page, html, requestId, callback){
     if(requestId !== PageNavigation.requestId){return;}
+    if(isGamesWorkspace_() && (page==="Dashboard" || page==="GettingStarted")){html=gameWorkspaceHomeHTML_();}
     const container=document.getElementById("page-content");
     if(!container){PageNavigation.loadingPage=null;setCoachIQNavigationLoading_(page,false);console.error("page-content not found.");return;}
     setCoachIQNavigationLoading_(page,false);
@@ -125,6 +128,7 @@ function renderCoachIQPage_(page, html, requestId, callback){
     const content=document.getElementById("content");if(content){content.scrollTop=0;}
     PageNavigation.currentPage=page;PageNavigation.loadingPage=null;updatePointTerminology();
     document.querySelectorAll(".nav-item").forEach(function(item){item.classList.toggle("active",item.dataset.page===page);});
+    applyStaffAccess(CoachIQ.access || {});
     requestAnimationFrame(function(){
         if(!isCurrentPage(page,requestId)){return;}
         const loaders={Dashboard:loadDashboard,Players:loadPlayers,Sessions:loadSessions,Game:loadLiveGameSetup,
@@ -2453,7 +2457,7 @@ function renderGamePerformanceIntelligence_(data){
   [["COMPLETED GAMES",data.games],["OFFENSIVE POSSESSIONS",data.offense.n],["DEFENSIVE POSSESSIONS",data.defense.n],["DEFENSIVE KILLS",data.kills]].forEach(function(item){const card=document.createElement("article"),label=document.createElement("small"),value=document.createElement("strong");label.textContent=item[0];value.textContent=item[1];card.appendChild(label);card.appendChild(value);metrics.appendChild(card);});
 }
 function loadIntelligence(requestId){
-  const mode=CoachIQ.intelligenceView||"sessions",token=(CoachIQ.intelligenceRequest||0)+1;CoachIQ.intelligenceRequest=token;
+  const mode=(CoachIQ.programSettings||{}).workspaceMode==="games"?"games":(CoachIQ.intelligenceView||"sessions"),token=(CoachIQ.intelligenceRequest||0)+1;CoachIQ.intelligenceRequest=token;
   document.getElementById("intelligenceSessionPanel").hidden=mode!=="sessions";document.getElementById("intelligenceGamePanel").hidden=mode!=="games";
   document.getElementById("intelligenceSessionsView").setAttribute("aria-pressed",String(mode==="sessions"));document.getElementById("intelligenceGamesView").setAttribute("aria-pressed",String(mode==="games"));
   document.getElementById("intelligenceLoading").textContent="Updating analysis…";
@@ -2477,6 +2481,7 @@ function renderIntelligenceList(id,items,format){const container=document.getEle
 function showSettings(settings){
 
   CoachIQ.settings = settings || {};
+  document.getElementById("workspaceMode").value=settings.workspaceMode||"full";
 
   document.getElementById("programName").value =
     settings.programName;
@@ -2603,6 +2608,8 @@ function initializeCoachIQ(){
       if(bootstrap.setupRequired){
         document.getElementById("app").hidden = true;
         document.getElementById("onboardingOverlay").hidden = false;
+        document.getElementById("onboardingWorkspaceMode").value=(bootstrap.settings||{}).workspaceMode||"full";
+        previewOnboardingWorkspace_();
         previewOnboardingTheme();
       }else{
         document.getElementById("onboardingOverlay").hidden = true;
@@ -2628,7 +2635,48 @@ function applyStaffAccess(access){
   document.querySelectorAll("[data-capability]").forEach(function(item){
     const allowed = (access.capabilities || []).indexOf(item.dataset.capability) >= 0;
     item.hidden = !allowed;
+    item.dataset.accessDenied = allowed ? "false" : "true";
   });
+  applyCoachIQWorkspace_();
+}
+
+function previewOnboardingWorkspace_(){document.getElementById("onboardingOverlay").classList.toggle("games-onboarding",document.getElementById("onboardingWorkspaceMode").value==="games");}
+function isGamesWorkspace_(){return (CoachIQ.programSettings||{}).workspaceMode==="games";}
+function isGamesWorkspacePage_(page){return ["Dashboard","GettingStarted","Game","Scouting","Players","PlayerProfile","Staff","AI","Settings"].indexOf(page)>=0;}
+function applyCoachIQWorkspace_(){
+  const games=isGamesWorkspace_();
+  document.body.classList.toggle("games-workspace",games);
+  document.querySelectorAll("#sidebar [data-page]").forEach(function(item){
+    item.hidden=item.dataset.accessDenied==="true" || (games&&!isGamesWorkspacePage_(item.dataset.page));
+  });
+  document.querySelectorAll("[data-games-only]").forEach(function(item){item.hidden=!games;});
+}
+function createCoachIQGamePilotUI(){
+  const button=document.getElementById("createGamePilotButton"),result=document.getElementById("gamePilotWorkbookResult");
+  button.disabled=true;result.textContent="Creating a separate blank workbook…";
+  google.script.run.withSuccessHandler(function(workbook){
+    result.textContent="Workbook created. Open it, install the Apps Script files, then complete setup: ";
+    const link=document.createElement("a");link.href=workbook.url;link.target="_blank";link.rel="noopener";link.textContent=workbook.name;result.appendChild(link);
+    button.disabled=false;
+  }).withFailureHandler(function(error){button.disabled=false;result.textContent=error.message||"Could not create the pilot workbook.";}).createCoachIQGamePilotWorkbook();
+}
+function saveCoachIQWorkspaceModeUI(){
+  const button=document.getElementById("saveWorkspaceModeButton"),mode=document.getElementById("workspaceMode").value;
+  button.disabled=true;
+  google.script.run.withSuccessHandler(function(settings){
+    applyCoachIQTheme(settings);showToast("Workspace saved.");loadPage("Dashboard");
+  }).withFailureHandler(function(error){button.disabled=false;showToast(error.message||"Workspace could not be saved.","error");}).saveCoachIQWorkspaceMode(mode);
+}
+function gameWorkspaceHomeHTML_(){
+  return `<section class="game-workspace-home"><div class="page-header"><div><span class="page-kicker">Scouting &amp; Games</span><h2>Ready for your next game</h2><p>Prepare in CoachIQ. Track offline in GameDay. Bring the result back here.</p></div></div>
+  <div class="game-workspace-grid">
+    <article class="card"><h3>1 · Set up your team</h3><p>Confirm your school, season and team names in Settings. Add active players with their jersey numbers to Players.</p><button class="btn" onclick="loadPage('Players')">Open roster</button></article>
+    <article class="card" data-capability="run_sessions"><h3>2 · Scout the opponent</h3><p>Create the scouting report, opponent roster and the priorities you want to watch tonight.</p><button class="btn" onclick="loadPage('Scouting')">Open scouting</button></article>
+    <article class="card" data-capability="run_sessions"><h3>3 · Prepare the matchup</h3><p>Set up Live Game, choose offense and defense tracking tags, then download the GameDay prep file and team link. Objectives are optional.</p><button class="btn" onclick="loadPage('Game')">Open Live Game</button></article>
+    <article class="card"><h3>4 · Get the iPad ready</h3><p>Import your prep into GameDay. Confirm both rosters and tags. Tap Prepare for offline or Check again while online.</p><a class="btn" href="https://coachcdubb.github.io/CoachIQIQ/" target="_blank" rel="noopener">Open GameDay</a></article>
+    <article class="card"><h3>5 · Prove it works offline</h3><p>Use a practice game. Enable Airplane Mode and turn Wi-Fi off. Record possessions, open a report, close the app fully and reopen from its Home Screen icon. Confirm the plays are still there.</p></article>
+    <article class="card"><h3>6 · Track and review</h3><p>Track in GameDay and save backups to Files at breaks. Finish and export the locked result, then import it through Live Game. Intelligence reviews imported games against recorded scouting evidence.</p><button class="btn" data-capability="view_intelligence" onclick="loadPage('AI')">Review game intelligence</button></article>
+  </div><p class="game-workspace-note">Each team should use its own CoachIQ spreadsheet. GameDay records stay on the device that recorded them; prep and results move by file import/export.</p></section>`;
 }
 
 function getCoachGreeting(hour){
@@ -2670,6 +2718,7 @@ function applyCoachIQTheme(settings){
     if(logoCard){ logoCard.classList.toggle("has-program-logo", Boolean(logoUrl)); }
   }
   updatePointTerminology();
+  applyCoachIQWorkspace_();
 }
 
 function getCoachIQPointLabels(){
@@ -2767,6 +2816,7 @@ function submitCoachIQOnboarding(event){
     };
   }).filter(function(reward){ return reward.name; });
   const data = {
+    workspaceMode: document.getElementById("onboardingWorkspaceMode").value,
     programName: document.getElementById("onboardingProgramName").value,
     schoolName: document.getElementById("onboardingSchoolName").value,
     mascotName: document.getElementById("onboardingMascotName").value,
@@ -2789,6 +2839,7 @@ function submitCoachIQOnboarding(event){
   google.script.run
     .withSuccessHandler(function(bootstrap){
       applyCoachIQTheme(bootstrap.settings);
+      applyStaffAccess(bootstrap.access || {});
       document.getElementById("onboardingOverlay").hidden = true;
       document.getElementById("app").hidden = false;
       button.disabled = false;
@@ -3185,6 +3236,7 @@ function tutorialOpenRoster(){
 }
 
 function startCoachIQTutorial(){
+  if(isGamesWorkspace_()){loadPage("GettingStarted");return;}
   CoachIQTutorial.index = -1;
   document.getElementById("tutorialOverlay").hidden = false;
   advanceCoachIQTutorial();
@@ -4447,6 +4499,8 @@ document.addEventListener("click", function(e){
 
 });
 function loadDashboard(requestId){
+    if(isGamesWorkspace_()){return;}
+
 
     const cachedDashboard=getCoachIQCachedData_("dashboard");if(cachedDashboard){renderDashboardData_(cachedDashboard,requestId);}
 
