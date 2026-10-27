@@ -21,21 +21,24 @@
     <h2 id="coachIQStartupTitle">Opening CoachIQ…</h2>
     <p id="coachIQStartupMessage">Loading your program settings. Your saved records stay in the spreadsheet.</p>
     <pre id="coachIQStartupDetail" style="white-space:pre-wrap;overflow-wrap:anywhere" hidden></pre>
+    <button id="coachIQStartupDownload" type="button" onclick="window.CoachIQStartup.download()" hidden>Download startup diagnostics</button>
     <button id="coachIQStartupRetry" type="button" onclick="window.CoachIQStartup.retry()" hidden>Retry startup</button>
   </section>
   <script>
   // Keep this separate from Scripts.html so even a missing or invalid client bundle is visible.
   window.CoachIQStartup=(function(){
-    let ready=false,timer;
+    let ready=false,timer,lastError=null;
     function fail(error){
       if(ready)return;
       clearTimeout(timer);
+      lastError=lastError||{message:String(error&&error.message||error||"Unknown error")};
       const panel=document.getElementById("coachIQStartup"),detail=document.getElementById("coachIQStartupDetail");
       panel.hidden=false;
       document.getElementById("coachIQStartupTitle").textContent="CoachIQ could not finish opening";
       document.getElementById("coachIQStartupMessage").textContent="Copy the error below so we can identify the problem. If you just updated Apps Script, save all changed files, then close and reopen this dialog. This startup error does not delete your spreadsheet records.";
       detail.textContent=String(error&&error.message||error||"Startup stopped without an error message.");detail.hidden=false;
       document.getElementById("coachIQStartupRetry").hidden=false;
+      document.getElementById("coachIQStartupDownload").hidden=false;
     }
     function begin(){ready=false;clearTimeout(timer);timer=setTimeout(function(){fail("Startup did not respond within 20 seconds. Check your connection and retry. If it continues, check the Apps Script Executions page for getCoachIQBootstrap.");},20000);}
     function complete(){ready=true;clearTimeout(timer);document.getElementById("coachIQStartup").hidden=true;}
@@ -47,9 +50,25 @@
       begin();
       try{if(typeof initializeCoachIQ!=="function")throw new Error("Scripts.html did not load. Replace the complete Scripts.html file, save, then close and reopen CoachIQ.");initializeCoachIQ();}catch(error){fail(error);}
     }
-    window.addEventListener("error",function(event){if(event.message)fail(event.message);});
+    function diagnostics(){
+      const scripts=Array.from(document.scripts||[]).map(function(script,index){
+        const text=String(script.textContent||""),trimmed=text.trim();
+        // Only export recognized static CoachIQ modules, never Google bootstrap code or external URLs.
+        const markers=[[/^const PageNavigation\s*=/,"Scripts/main"],[/^const CoachTraining\s*=/,"Scripts/training"],[/^function startTrainingSimulation\s*\(/,"Scripts/simulation"],[/^function resumeTrainingSimulation\s*\(/,"Scripts/resume"],[/^let currentPlayerProfile\s*=/,"PlayerModule"]];
+        const match=markers.find(function(item){return item[0].test(trimmed);});
+        return match?{index:index,module:match[1],source:text}:{index:index,external:!!script.src,characters:text.length};
+      });
+      return {format:"coachiq-startup-diagnostics-v1",error:lastError,scripts:scripts};
+    }
+    function download(){
+      const blob=new Blob([JSON.stringify(diagnostics(),null,2)],{type:"application/json"});
+      const url=URL.createObjectURL(blob),link=document.createElement("a");
+      link.href=url;link.download="CoachIQ-startup-diagnostics.json";document.body.appendChild(link);link.click();link.remove();
+      setTimeout(function(){URL.revokeObjectURL(url);},60000);
+    }
+    window.addEventListener("error",function(event){if(event.message){if(!ready)lastError={message:event.message,line:Number(event.lineno)||0,column:Number(event.colno)||0};fail(event.message);}});
     window.addEventListener("unhandledrejection",function(event){fail(event.reason);});
-    begin();return {fail:fail,complete:complete,retry:retry};
+    begin();return {fail:fail,complete:complete,retry:retry,diagnostics:diagnostics,download:download};
   })();
   </script>
 
