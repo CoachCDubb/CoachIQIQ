@@ -2659,15 +2659,6 @@ function applyCoachIQWorkspace_(){
   });
   document.querySelectorAll("[data-games-only]").forEach(function(item){item.hidden=!games;});
 }
-function createCoachIQGamePilotUI(){
-  const button=document.getElementById("createGamePilotButton"),result=document.getElementById("gamePilotWorkbookResult");
-  button.disabled=true;result.textContent="Creating a separate blank workbook…";
-  google.script.run.withSuccessHandler(function(workbook){
-    result.textContent="Workbook created. Open it, install the Apps Script files, then complete setup: ";
-    const link=document.createElement("a");link.href=workbook.url;link.target="_blank";link.rel="noopener";link.textContent=workbook.name;result.appendChild(link);
-    button.disabled=false;
-  }).withFailureHandler(function(error){button.disabled=false;result.textContent=error.message||"Could not create the pilot workbook.";}).createCoachIQGamePilotWorkbook();
-}
 function saveCoachIQWorkspaceModeUI(){
   const button=document.getElementById("saveWorkspaceModeButton"),mode=document.getElementById("workspaceMode").value;
   button.disabled=true;
