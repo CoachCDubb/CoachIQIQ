@@ -1,6 +1,6 @@
 import {cleanLiveAnalyticsPossession_,buildLiveAnalyticsSummary_,buildLiveReviewInsights_,buildLiveNextAdjustment_,buildGameScoutingComparison_} from './engine.js';
 import {buildReportContext,reportFingerprint} from './insights.js';
-export const VERSION='2026.10.26.10';
+export const VERSION='2026.10.27.1';
 export const TAGS=[['paintTouch','Paint touch'],['offensiveRebound','OREB'],['transition','Transition'],['cut','Cut'],['driveKick','Drive & kick'],['setPlay','Set play'],['ato','ATO'],['deflection','Deflection'],['putback','Putback'],['pickRoll','Pick & roll'],['postUp','Post-up'],['isolation','Isolation'],['rightHandDrive','Right-hand drive']];
 export const clone=value=>structuredClone(value);
 export const id=prefix=>prefix+crypto.randomUUID();
