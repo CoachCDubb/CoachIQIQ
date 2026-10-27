@@ -2717,7 +2717,7 @@ function applyCoachIQTheme(settings){
   const logo = document.getElementById("programLogo");
   if(logo){
     const requestedLogoUrl = String(settings.logoUrl || "").trim();
-    const logoUrl = requestedLogoUrl.toLowerCase().indexOf("https://") === 0
+    const logoUrl = requestedLogoUrl.toLowerCase().indexOf("https:" + String.fromCharCode(47, 47)) === 0
       ? requestedLogoUrl
       : "";
     logo.hidden = !logoUrl;
