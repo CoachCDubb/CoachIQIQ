@@ -17,6 +17,42 @@
 
 <body>
 
+  <section id="coachIQStartup" role="status" aria-live="polite" style="position:fixed;inset:24px;z-index:20000;overflow:auto;padding:32px;background:#fff;border:1px solid #dce3ed;border-radius:16px;font-family:Arial,sans-serif;color:#182235">
+    <h2 id="coachIQStartupTitle">Opening CoachIQ…</h2>
+    <p id="coachIQStartupMessage">Loading your program settings. Your saved records stay in the spreadsheet.</p>
+    <pre id="coachIQStartupDetail" style="white-space:pre-wrap;overflow-wrap:anywhere" hidden></pre>
+    <button id="coachIQStartupRetry" type="button" onclick="window.CoachIQStartup.retry()" hidden>Retry startup</button>
+  </section>
+  <script>
+  // Keep this separate from Scripts.html so even a missing or invalid client bundle is visible.
+  window.CoachIQStartup=(function(){
+    let ready=false,timer;
+    function fail(error){
+      if(ready)return;
+      clearTimeout(timer);
+      const panel=document.getElementById("coachIQStartup"),detail=document.getElementById("coachIQStartupDetail");
+      panel.hidden=false;
+      document.getElementById("coachIQStartupTitle").textContent="CoachIQ could not finish opening";
+      document.getElementById("coachIQStartupMessage").textContent="Copy the error below so we can identify the problem. If you just updated Apps Script, save all changed files, then close and reopen this dialog. This startup error does not delete your spreadsheet records.";
+      detail.textContent=String(error&&error.message||error||"Startup stopped without an error message.");detail.hidden=false;
+      document.getElementById("coachIQStartupRetry").hidden=false;
+    }
+    function begin(){ready=false;clearTimeout(timer);timer=setTimeout(function(){fail("Startup did not respond within 20 seconds. Check your connection and retry. If it continues, check the Apps Script Executions page for getCoachIQBootstrap.");},20000);}
+    function complete(){ready=true;clearTimeout(timer);document.getElementById("coachIQStartup").hidden=true;}
+    function retry(){
+      document.getElementById("coachIQStartupTitle").textContent="Opening CoachIQ…";
+      document.getElementById("coachIQStartupMessage").textContent="Loading your program settings. Your saved records stay in the spreadsheet.";
+      document.getElementById("coachIQStartupDetail").hidden=true;
+      document.getElementById("coachIQStartupRetry").hidden=true;
+      begin();
+      try{if(typeof initializeCoachIQ!=="function")throw new Error("Scripts.html did not load. Replace the complete Scripts.html file, save, then close and reopen CoachIQ.");initializeCoachIQ();}catch(error){fail(error);}
+    }
+    window.addEventListener("error",function(event){if(event.message)fail(event.message);});
+    window.addEventListener("unhandledrejection",function(event){fail(event.reason);});
+    begin();return {fail:fail,complete:complete,retry:retry};
+  })();
+  </script>
+
   <?!= include('Onboarding'); ?>
 
   <div id="app" hidden>

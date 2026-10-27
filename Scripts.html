@@ -2602,14 +2602,16 @@ function initializeCoachIQ(){
   updateCoachGreeting();
   google.script.run
     .withSuccessHandler(function(bootstrap){
+      try {
+      if(!bootstrap || !bootstrap.settings){throw new Error("Program settings were not returned. Confirm OnboardingService.gs and SettingsService.gs are fully saved.");}
       CoachIQ.settings = bootstrap.settings || {};
       applyCoachIQTheme(bootstrap.settings || {});
       applyStaffAccess(bootstrap.access || {});
       if(bootstrap.setupRequired){
         document.getElementById("app").hidden = true;
         document.getElementById("onboardingOverlay").hidden = false;
-        document.getElementById("onboardingWorkspaceMode").value=(bootstrap.settings||{}).workspaceMode||"full";
-        previewOnboardingWorkspace_();
+        const workspaceInput=document.getElementById("onboardingWorkspaceMode");
+        if(workspaceInput){workspaceInput.value=(bootstrap.settings||{}).workspaceMode||"full";previewOnboardingWorkspace_();}
         previewOnboardingTheme();
       }else{
         document.getElementById("onboardingOverlay").hidden = true;
@@ -2618,12 +2620,18 @@ function initializeCoachIQ(){
         loadPage("Dashboard");
         scheduleCoachIQPreload_();
       }
+      if(window.CoachIQStartup){window.CoachIQStartup.complete();}
+      } catch(error) {
+        console.error(error);
+        if(window.CoachIQStartup){window.CoachIQStartup.fail(error);}else{showToast(error.message||"CoachIQ startup failed.","error");}
+      }
     })
     .withFailureHandler(function(error){
       console.error(error);
       document.getElementById("onboardingOverlay").hidden = true;
       document.getElementById("app").hidden = false;
-      showToast("Unable to initialize CoachIQ.");
+      showToast((error&&error.message)||"Unable to initialize CoachIQ.","error");
+      if(window.CoachIQStartup){window.CoachIQStartup.fail(error);return;}
       // Existing installations must remain usable if onboarding bootstrap fails.
       loadPage("Dashboard");
     })
