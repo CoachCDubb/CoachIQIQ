@@ -11,20 +11,16 @@ This release adds a reversible program-wide workspace preference. Existing insta
 
 No GameDay update is required by this PR. Its existing website continues to serve every tester, with local records kept on each device.
 
-## Create the other team's clean workbook
+## Prepare another program
 
-1. In your updated CoachIQ, open Settings → Workspace → Create clean pilot workbook.
-2. Open the returned workbook link. This creates a separate spreadsheet owned by the account running the action. It copies only header rows from the five core data sheets, creates empty Point Awards, and seeds fresh Settings in Scouting & Games mode. No players, staff accounts, scouting reports, games, source sharing permissions, film links, triggers or script properties are copied. Your original workbook is unchanged.
-3. The new spreadsheet does **not** yet contain an Apps Script project with CoachIQ installed. Open Extensions → Apps Script in the **new** workbook. Add the current repository's root `.gs` and `.html` files with matching names, replacing any default Code.gs. Include the entire root Apps Script app; do not install only the eight update files and do not paste `offline-app`, tests or docs into Apps Script.
-4. Save. Reload the new spreadsheet and use CoachIQ → Launch CoachIQ. Authorize the new project with the appropriate owner account. Its first launch binds that project's spreadsheet reference to this new workbook.
-5. Complete onboarding with the tester's school, season, teams, sport and staff. Confirm Scouting & Games is selected. Generic practice defaults remain internal for compatibility; the focused experience does not require the tester to use Sessions.
-6. Configure staff email access and share **only this pilot workbook/project** with the tester's Google account. Transfer ownership if appropriate and supported by the organizations involved. Do not share your production spreadsheet. Deploy any web-app copy separately with access restricted to the intended testers; avoid an anonymous deployment that runs with owner privileges.
-7. Add their active roster with jersey numbers. Create their scouting report and matchup. Download their team-link and GameDay preparation files; move them to their iPad using Files/iCloud Drive or AirDrop and import them into GameDay.
-8. Follow the in-app checklist, including offline preparation, airplane mode with Wi-Fi off, and closing/reopening the installed Home Screen app. Confirm both rosters, possessions and reports before using it for a real game.
-9. After tracking, export the final locked result from their iPad and import it into **their pilot CoachIQ**, not yours. File transfer is manual; there is no cross-device automatic sync or per-coach sign-in in GameDay.
+Use a clean CoachIQ template with its bound Apps Script project already attached. Make a full workbook copy for each program, authorize that program's Google account, complete onboarding in Scouting & Games mode, configure staff access, and add its roster. Workbook copying carries its bound code; the new owner still needs first-time authorization.
 
-Use a dedicated iPad/browser profile for each tester where possible. Anyone using the same device/browser GameDay storage can see the games saved there. A different spreadsheet does not create a separate GameDay browser database on a shared device.
+The old Settings → Create clean pilot workbook button and its server endpoint have been retired. That workflow created a header-only spreadsheet without installing the app. Existing blank workbooks are not modified or deleted by this change.
 
-## Verification
+Before using a template for another program, verify it is a clean master: no players, staff email profiles, scouting reports, games, film references or operational notes. Do not distribute a populated production workbook. Keep the master blank and create a separate copy for each program. Do not use a copy already filled out for one team as the next team's template.
 
-Nine focused tests cover navigation, restoring Full program mode, retained staff restrictions, unchanged legacy defaults, preference validation, game handoff/offline guidance, header-only pilot creation, and rejecting invalid structure or missing administrator permissions before creating a workbook. Browser layout checks used the real stylesheet/sidebar and game-home markup at 1280, 768 and 390 pixels. Syntax checks pass. The root regression suite has 324 passing tests and one existing Python subprocess `spawnSync EPERM` failure in this sandbox. Actual Google authorization, workbook creation, sharing and the iPad offline test still require validation in the tester's accounts/devices.
+Each program imports its own preparation file into GameDay and returns its locked result to its own CoachIQ workbook. Transfers are manual. A shared iPad/browser shares the locally saved GameDay records.
+
+## Removing the retired workflow from an installed app
+
+After merging this cleanup, replace Settings.html, Scripts.html and SettingsService.gs in that Apps Script project, save, close and reopen CoachIQ. Redeploy only for a web-app URL. The Scouting & Games workspace setting remains. Existing program copies, data, staff permissions and GameDay storage are unchanged. Installed program copies have independent code and do not update automatically from GitHub.
