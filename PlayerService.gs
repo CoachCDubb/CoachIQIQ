@@ -11,8 +11,7 @@ const PLAYER_SHEET = "Players";
  */
 function getPlayers() {
 
-  const sheet = SpreadsheetApp
-    .getActive()
+  const sheet = getCoachIQSpreadsheet_()
     .getSheetByName(PLAYER_SHEET);
 
   const values = sheet.getDataRange().getValues();
@@ -50,8 +49,7 @@ function updatePlayer(player) {
 
   try {
 
-  const sheet = SpreadsheetApp
-    .getActive()
+  const sheet = getCoachIQSpreadsheet_()
     .getSheetByName(PLAYER_SHEET);
 
   const data = sheet.getDataRange().getValues();
@@ -135,8 +133,7 @@ function getNextPlayerId() {
 function addPlayer(player) {
   requireStaffCapability_("manage_roster");
 
-  const sheet = SpreadsheetApp
-    .getActive()
+  const sheet = getCoachIQSpreadsheet_()
     .getSheetByName(PLAYER_SHEET);
 
   sheet.appendRow([
@@ -196,7 +193,7 @@ function importPlayers(roster) {
   lock.waitLock(10000);
 
   try {
-    const sheet = SpreadsheetApp.getActive().getSheetByName(PLAYER_SHEET);
+    const sheet = getCoachIQSpreadsheet_().getSheetByName(PLAYER_SHEET);
 
     if (!sheet) {
       throw new Error("The Players sheet was not found.");
@@ -379,8 +376,7 @@ function archivePlayer(playerId) {
   requireStaffCapability_("manage_roster");
   requirePlayerAccess_(playerId);
 
-  const sheet = SpreadsheetApp
-    .getActive()
+  const sheet = getCoachIQSpreadsheet_()
     .getSheetByName(PLAYER_SHEET);
 
   const data = sheet.getDataRange().getValues();
@@ -422,8 +418,7 @@ function archivePlayer(playerId) {
 }
 function getPlayersByTeams(selectedTeams){
 
-  const sheet = SpreadsheetApp
-    .getActive()
+  const sheet = getCoachIQSpreadsheet_()
     .getSheetByName(PLAYER_SHEET);
 
   const headers = sheet
@@ -457,8 +452,7 @@ function getPlayersByTeams(selectedTeams){
  */
 function getPlayer(playerId){
 
-  const sheet = SpreadsheetApp
-    .getActive()
+  const sheet = getCoachIQSpreadsheet_()
     .getSheetByName(PLAYER_SHEET);
 
   const headers = sheet

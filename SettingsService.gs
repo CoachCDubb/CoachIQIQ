@@ -220,7 +220,7 @@ function saveProgramInformation(data) {
 }
 
 function setSettingValues_(updates) {
-  const sheet = SpreadsheetApp.getActive().getSheetByName(SETTINGS_SHEET);
+  const sheet = getCoachIQSpreadsheet_().getSheetByName(SETTINGS_SHEET);
   if (!sheet) {
     throw new Error("The Settings sheet was not found.");
   }
@@ -367,8 +367,7 @@ function saveStaffProfiles(profiles) {
 function saveTeams(teams) {
   requireStaffCapability_("manage_settings");
 
-  const sheet = SpreadsheetApp
-    .getActive()
+  const sheet = getCoachIQSpreadsheet_()
     .getSheetByName(SETTINGS_SHEET);
 
   const data = sheet.getDataRange().getValues();
