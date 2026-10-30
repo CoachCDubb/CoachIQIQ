@@ -1,4 +1,4 @@
-const ASSETS=['./','./index.html','./style.css','./app.js','./model.js','./insights.js','./drills.js','./drill-ui.js','./drill-db.js','./db.js','./prepare.js','./print.js','./engine.js','./manifest.webmanifest','./icon.svg','./icon-192.png','./icon-512.png','./build.json'];
+const ASSETS=['./','./index.html','./style.css','./app.js','./model.js','./objectives.js','./objective-ui.js','./insights.js','./drills.js','./drill-ui.js','./drill-db.js','./db.js','./prepare.js','./print.js','./engine.js','./manifest.webmanifest','./icon.svg','./icon-192.png','./icon-512.png','./build.json'];
 export async function cacheOfflineFiles({cacheStorage,fetchAsset,baseURL,version,onProgress=()=>{},timeoutMs=15000}){
   if(!cacheStorage)throw Error('This browser does not provide offline file storage. Open GameDay directly in normal Safari browsing.');
   const name='coachiq-gameday-'+version,base=new URL('./',baseURL),cache=await withDeadline(cacheStorage.open(name),'Offline file storage did not respond.',timeoutMs);

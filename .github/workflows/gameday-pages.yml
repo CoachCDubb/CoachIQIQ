@@ -9,6 +9,7 @@ on:
       - 'AnalyticsService.gs'
       - 'ScoutingService.gs'
       - 'GameReviewService.gs'
+      - 'OfflineGameService.gs'
       - '.github/workflows/gameday-pages.yml'
 
 permissions:
