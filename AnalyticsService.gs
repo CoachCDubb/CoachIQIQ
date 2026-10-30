@@ -60,6 +60,8 @@ function cleanLiveAnalyticsPossession_(payload, currentPeriod) {
   const forcedTurnover = teamSide === "defense" && payload.forcedTurnover === true;
   if ((turnover || forcedTurnover) && points !== 0) throw new Error("A turnover possession must end with 0 points.");
   const playEvents = cleanLiveAnalyticsPlayEvents_(payload.playEvents, teamSide);
+  const breakdowns=playEvents.filter(function(event){return event.type==="defenseBreakdown";});
+  if(breakdowns.length>1||(breakdowns.length&&!playEvents.some(function(event){return /^made[23]$/.test(event.type);})))throw new Error("Record one defensive breakdown only on a possession with a made basket.");
   const reboundEvents = playEvents.filter(function(event){return event.type==="offensiveRebound";});
   if(reboundEvents.length && reboundEvents.length!==offensiveRebounds)throw new Error("Rebound events must match the possession rebound count.");
   const scores=playEvents.filter(function(event){return /^made[123]$/.test(event.type)||event.type==="ftMade";}),hasFreeThrows=playEvents.some(function(event){return ["freeThrows","ftMade","ftMiss"].indexOf(event.type)>=0;});
@@ -106,6 +108,9 @@ function buildLivePossessionIntelligence_(possessions){
     (item.playEvents||[]).forEach(function(event){const label=event.type==="customTag"?event.label:labels[event.type];if(label)tags[JSON.stringify([event.type,label])]={type:event.type,label:label};});
     Object.keys(tags).forEach(function(key){const tag=tags[key],groupKey=JSON.stringify([side,key]),group=patterns[groupKey]||(patterns[groupKey]={side:side,type:tag.type,label:tag.label,possessions:0,scored:0,points:0,logNumbers:[]});group.possessions++;group.points+=points;if(points>0)group.scored++;group.logNumbers.push(index+1);});
   });
+  const breakdownCounts=Object.create(null);let taggedBuckets=0,totalBuckets=0;
+  (possessions||[]).filter(function(p){return p.teamSide==="defense";}).forEach(function(p){if((p.playEvents||[]).some(function(e){return /^made[23]$/.test(e.type);}))totalBuckets++;(p.playEvents||[]).filter(function(e){return e.type==="defenseBreakdown";}).forEach(function(e){taggedBuckets++;breakdownCounts[e.label]=(breakdownCounts[e.label]||0)+1;});});
+  if(taggedBuckets)insights.push({kind:"attention",title:"Recorded defensive breakdowns",text:Object.keys(breakdownCounts).map(function(label){return label+": "+breakdownCounts[label];}).join(" · ")+". Reasons recorded on "+taggedBuckets+"/"+totalBuckets+" defensive possessions with a made basket. Coach-entered observations; untagged possessions are unknown.",logNumbers:[]});
   kills.progress=kills.currentStops%3;
   if(kills.totalStops)insights.push({kind:"positive",title:"Defensive kills",text:kills.total+" kill"+(kills.total===1?"":"s")+" earned · "+kills.totalStops+" total stops · longest run "+kills.longestStops+". Current run: "+kills.currentStops+" consecutive stops; "+kills.progress+"/3 toward the next kill.",logNumbers:[]});
   if(kills.progress===2)recommendations.push("One more stop earns the next kill: you have 2 consecutive stops toward it.");
@@ -131,21 +136,22 @@ function buildLivePossessionIntelligence_(possessions){
 function cleanLiveAnalyticsPlayEvents_(events, teamSide) {
   if(events==null)return [];
   if(!Array.isArray(events)||events.length>100)throw new Error("A possession can contain up to 100 play events.");
-  const types=["paintTouch","offensiveRebound","deflection","driveKick","miss2","miss3","putback","andOne","made1","made2","made3","cut","setPlay","ato","pickRoll","postUp","isolation","customTag","freeThrows","ftMade","ftMiss","foulRetained","foulFreeThrows"];
+  const types=["paintTouch","offensiveRebound","deflection","driveKick","miss2","miss3","putback","andOne","made1","made2","made3","cut","setPlay","ato","pickRoll","postUp","isolation","customTag","freeThrows","ftMade","ftMiss","foulRetained","foulFreeThrows","defenseBreakdown"];
   return events.map(function(event){
     if(!event||types.indexOf(event.type)<0)throw new Error("Choose a valid play event.");
     const jersey=String(event.jersey||"").trim();
     if(jersey&&!/^[0-9]{1,3}$/.test(jersey))throw new Error("Use a jersey number of 1–3 digits.");
-    const label=event.type==="customTag"?String(event.label||"").trim():"";
-    if(event.type==="customTag"&&(!label||label.length>40||/[\x00-\x1f]/.test(label)))throw new Error("Custom tags need a name of 1–40 characters.");
-    return {type:event.type,label:label,jersey:jersey,playerSide:["deflection","foulRetained","foulFreeThrows"].indexOf(event.type)>=0?(teamSide==="defense"?"us":"opponent"):(teamSide==="offense"?"us":"opponent")};
+    if(event.type==="defenseBreakdown"&&teamSide!=="defense")throw new Error("Defensive responsibility belongs to a defensive possession.");
+    const label=["customTag","defenseBreakdown"].indexOf(event.type)>=0?String(event.label||"").trim():"";
+    if(["customTag","defenseBreakdown"].indexOf(event.type)>=0&&(!label||label.length>40||/[\x00-\x1f]/.test(label)))throw new Error("Custom tags need a name of 1–40 characters.");
+    return {type:event.type,label:label,jersey:jersey,playerSide:["deflection","foulRetained","foulFreeThrows","defenseBreakdown"].indexOf(event.type)>=0?(teamSide==="defense"?"us":"opponent"):(teamSide==="offense"?"us":"opponent")};
   });
 }
 function liveAnalyticsPlayPoints_(event){return event.type==="ftMade"?1:/^made[123]$/.test(event.type)?Number(event.type.slice(-1)):0;}
 function buildLiveAnalyticsPlayerTotals_(possessions) {
   const totals={};
   possessions.forEach(function(item){(item.playEvents||[]).forEach(function(event){
-    if(!event.jersey)return;
+    if(!event.jersey||event.type==="defenseBreakdown")return;
     const playerSide=event.playerSide||(item.teamSide==="offense"?"us":"opponent"),key=playerSide+":"+event.jersey;
     const player=totals[key]||(totals[key]={jersey:event.jersey,playerSide:playerSide,offensiveRebounds:0,paintTouches:0,deflections:0,points:0,freeThrowsMade:0,freeThrowsAttempted:0});
     if(event.type==="offensiveRebound")player.offensiveRebounds++;
