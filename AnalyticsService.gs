@@ -62,6 +62,8 @@ function cleanLiveAnalyticsPossession_(payload, currentPeriod) {
   const playEvents = cleanLiveAnalyticsPlayEvents_(payload.playEvents, teamSide);
   const breakdowns=playEvents.filter(function(event){return event.type==="defenseBreakdown";});
   if(breakdowns.length>1||(breakdowns.length&&!playEvents.some(function(event){return /^made[23]$/.test(event.type);})))throw new Error("Record one defensive breakdown only on a possession with a made basket.");
+  const turnoverCredits=playEvents.filter(function(e){return e.type==="turnoverCommitted"||e.type==="turnoverForced";});
+  if(turnoverCredits.length>2||(turnoverCredits.length&&!(turnover||forcedTurnover))||turnoverCredits.filter(function(e){return e.type==="turnoverCommitted";}).length>1||turnoverCredits.filter(function(e){return e.type==="turnoverForced";}).length>1||(teamSide==="offense"&&turnoverCredits.some(function(e){return e.type!=="turnoverCommitted";})))throw new Error("Turnover player credit must match the possession turnover outcome.");
   const reboundEvents = playEvents.filter(function(event){return event.type==="offensiveRebound";});
   if(reboundEvents.length && reboundEvents.length!==offensiveRebounds)throw new Error("Rebound events must match the possession rebound count.");
   const scores=playEvents.filter(function(event){return /^made[123]$/.test(event.type)||event.type==="ftMade";}),hasFreeThrows=playEvents.some(function(event){return ["freeThrows","ftMade","ftMiss"].indexOf(event.type)>=0;});
@@ -136,7 +138,7 @@ function buildLivePossessionIntelligence_(possessions){
 function cleanLiveAnalyticsPlayEvents_(events, teamSide) {
   if(events==null)return [];
   if(!Array.isArray(events)||events.length>100)throw new Error("A possession can contain up to 100 play events.");
-  const types=["paintTouch","offensiveRebound","deflection","driveKick","miss2","miss3","putback","andOne","made1","made2","made3","cut","setPlay","ato","pickRoll","postUp","isolation","customTag","freeThrows","ftMade","ftMiss","foulRetained","foulFreeThrows","defenseBreakdown"];
+  const types=["paintTouch","offensiveRebound","deflection","driveKick","miss2","miss3","putback","andOne","made1","made2","made3","cut","setPlay","ato","pickRoll","postUp","isolation","customTag","freeThrows","ftMade","ftMiss","foulRetained","foulFreeThrows","defenseBreakdown","turnoverCommitted","turnoverForced"];
   return events.map(function(event){
     if(!event||types.indexOf(event.type)<0)throw new Error("Choose a valid play event.");
     const jersey=String(event.jersey||"").trim();
@@ -144,7 +146,7 @@ function cleanLiveAnalyticsPlayEvents_(events, teamSide) {
     if(event.type==="defenseBreakdown"&&teamSide!=="defense")throw new Error("Defensive responsibility belongs to a defensive possession.");
     const label=["customTag","defenseBreakdown"].indexOf(event.type)>=0?String(event.label||"").trim():"";
     if(["customTag","defenseBreakdown"].indexOf(event.type)>=0&&(!label||label.length>40||/[\x00-\x1f]/.test(label)))throw new Error("Custom tags need a name of 1–40 characters.");
-    return {type:event.type,label:label,jersey:jersey,playerSide:["deflection","foulRetained","foulFreeThrows","defenseBreakdown"].indexOf(event.type)>=0?(teamSide==="defense"?"us":"opponent"):(teamSide==="offense"?"us":"opponent")};
+    return {type:event.type,label:label,jersey:jersey,playerSide:["deflection","foulRetained","foulFreeThrows","defenseBreakdown","turnoverForced"].indexOf(event.type)>=0?(teamSide==="defense"?"us":"opponent"):(teamSide==="offense"?"us":"opponent")};
   });
 }
 function liveAnalyticsPlayPoints_(event){return event.type==="ftMade"?1:/^made[123]$/.test(event.type)?Number(event.type.slice(-1)):0;}
@@ -153,10 +155,12 @@ function buildLiveAnalyticsPlayerTotals_(possessions) {
   possessions.forEach(function(item){(item.playEvents||[]).forEach(function(event){
     if(!event.jersey||event.type==="defenseBreakdown")return;
     const playerSide=event.playerSide||(item.teamSide==="offense"?"us":"opponent"),key=playerSide+":"+event.jersey;
-    const player=totals[key]||(totals[key]={jersey:event.jersey,playerSide:playerSide,offensiveRebounds:0,paintTouches:0,deflections:0,points:0,freeThrowsMade:0,freeThrowsAttempted:0});
+    const player=totals[key]||(totals[key]={jersey:event.jersey,playerSide:playerSide,offensiveRebounds:0,paintTouches:0,deflections:0,points:0,freeThrowsMade:0,freeThrowsAttempted:0,turnovers:0,forcedTurnovers:0});
     if(event.type==="offensiveRebound")player.offensiveRebounds++;
     if(event.type==="paintTouch")player.paintTouches++;
     if(event.type==="deflection")player.deflections++;
+    if(event.type==="turnoverCommitted")player.turnovers++;
+    if(event.type==="turnoverForced")player.forcedTurnovers++;
     player.points+=liveAnalyticsPlayPoints_(event);if(event.type==="ftMade")player.freeThrowsMade++;if(event.type==="ftMade"||event.type==="ftMiss")player.freeThrowsAttempted++;
   });});
   return Object.keys(totals).sort().map(function(key){return totals[key];});
