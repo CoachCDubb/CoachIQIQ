@@ -99,7 +99,7 @@ function buildLivePossessionIntelligence_(possessions){
   ["offense","defense"].forEach(function(side){paint[side]={withTouch:{possessions:0,scored:0,points:0},withoutTouch:{possessions:0,scored:0,points:0},unknown:0,currentNoTouch:0,longestNoTouch:0,recordedTouches:0,singleTouch:{possessions:0,scored:0,points:0},multipleTouches:{possessions:0,scored:0,points:0}};});
   const labels={freeThrows:"Free throws",foulRetained:"Foul · retained ball",foulFreeThrows:"Foul → FTs",paintTouch:"Paint touch",offensiveRebound:"OREB",transition:"Transition",rightHandDrive:"Right-hand drive",deflection:"Deflection",driveKick:"Drive & kick",cut:"Cut",setPlay:"Set play",ato:"ATO",putback:"Putback",pickRoll:"Pick & roll",postUp:"Post-up",isolation:"Isolation"};
   (possessions||[]).forEach(function(item,index){
-    if(!paint[item.teamSide])return;const points=Number(item.points||0),side=item.teamSide,p=paint[side];
+    if(!paint[item.teamSide])return;if(item.gapBefore){kills.currentStops=0;paint.offense.currentNoTouch=0;paint.defense.currentNoTouch=0;}const points=Number(item.points||0),side=item.teamSide,p=paint[side];
     const touchCount=livePaintTouchCount_(item);p.recordedTouches+=touchCount;if(touchCount){const group=touchCount>=2?p.multipleTouches:p.singleTouch;group.possessions++;group.points+=points;if(points>0)group.scored++;}
     const covered=item.paintTouch===true||(Array.isArray(item.trackedTags)&&item.trackedTags.indexOf("paintTouch")>=0);
     if(covered){const bucket=item.paintTouch?p.withTouch:p.withoutTouch;bucket.possessions++;bucket.points+=points;if(points>0)bucket.scored++;p.currentNoTouch=item.paintTouch?0:p.currentNoTouch+1;p.longestNoTouch=Math.max(p.longestNoTouch,p.currentNoTouch);}else{p.unknown++;p.currentNoTouch=0;}
@@ -109,6 +109,7 @@ function buildLivePossessionIntelligence_(possessions){
     const tags={};Object.keys(labels).forEach(function(type){if(item[type]===true||(type==="offensiveRebound"&&Number(item.offensiveRebounds||0)>0))tags[JSON.stringify([type,labels[type]])]={type:type,label:labels[type]};});
     (item.playEvents||[]).forEach(function(event){const label=event.type==="customTag"?event.label:labels[event.type];if(label)tags[JSON.stringify([event.type,label])]={type:event.type,label:label};});
     Object.keys(tags).forEach(function(key){const tag=tags[key],groupKey=JSON.stringify([side,key]),group=patterns[groupKey]||(patterns[groupKey]={side:side,type:tag.type,label:tag.label,possessions:0,scored:0,points:0,logNumbers:[]});group.possessions++;group.points+=points;if(points>0)group.scored++;group.logNumbers.push(index+1);});
+    if(item.gapAfter){kills.currentStops=0;paint.offense.currentNoTouch=0;paint.defense.currentNoTouch=0;}
   });
   const breakdownCounts=Object.create(null);let taggedBuckets=0,totalBuckets=0;
   (possessions||[]).filter(function(p){return p.teamSide==="defense";}).forEach(function(p){if((p.playEvents||[]).some(function(e){return /^made[23]$/.test(e.type);}))totalBuckets++;(p.playEvents||[]).filter(function(e){return e.type==="defenseBreakdown";}).forEach(function(e){taggedBuckets++;breakdownCounts[e.label]=(breakdownCounts[e.label]||0)+1;});});

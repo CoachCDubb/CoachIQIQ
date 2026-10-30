@@ -1,5 +1,21 @@
 // Generated from CoachIQ canonical analytics. Run node offline-app/tools/build.cjs.
 const Utilities={getUuid:()=>crypto.randomUUID()};
+function cleanOfflineTrackingGaps_(input,period,boundary){
+ if(input==null)return [];if(!Array.isArray(input)||input.length>100)throw new Error("Up to 100 tracking gaps are supported.");const ids=Object.create(null);return input.map(function(g){if(!g||!/^GAP-[a-f0-9-]{36}$/i.test(String(g.id))||ids[g.id]||!Number.isInteger(g.period)||g.period<1||g.period>period||!Number.isInteger(g.boundarySequence)||g.boundarySequence<0||g.boundarySequence>boundary||["offense","defense","both"].indexOf(g.side)<0||isNaN(new Date(g.at).getTime()))throw new Error("Invalid tracking gap.");ids[g.id]=true;const reason=String(g.reason||"").trim(),resolution=String(g.resolution||"").trim();if(!reason||reason.length>160||resolution.length>240||g.resolved===true&&!resolution)throw new Error("A tracking gap needs a description and resolved gaps need a resolution note.");return{id:String(g.id),period:g.period,boundarySequence:g.boundarySequence,side:g.side,reason:reason,at:new Date(g.at).toISOString(),resolved:g.resolved===true,resolution:resolution};});
+}
+
+function offlineGapLog_(possessions,gaps){
+ const log=(possessions||[]).filter(function(p){return !p.voided;}),active=(gaps||[]).filter(function(g){return !g.resolved;});if(!active.length)return log;
+ return log.map(function(p,i){return Object.assign({},p,{gapBefore:active.some(function(g){return g.boundarySequence<p.sequence&&(i===0||g.boundarySequence>=log[i-1].sequence);}),gapAfter:active.some(function(g){return g.boundarySequence>=p.sequence&&(i===log.length-1||g.boundarySequence<log[i+1].sequence);})});});
+}
+
+function offlineTrackingQuality_(possessions,technical,gaps){
+ const sides={our:{points:0,totalPoints:0,unassignedFT:0},opponent:{points:0,totalPoints:0,unassignedFT:0}};
+ (possessions||[]).filter(function(p){return !p.voided;}).forEach(function(p){const side=p.teamSide==="offense"?"our":"opponent",row=sides[side];row.totalPoints+=p.points;let credited=0;(p.playEvents||[]).forEach(function(e){const n=e.type==="ftMade"?1:/^made[123]$/.test(e.type)?Number(e.type.slice(-1)):0;if(e.jersey)credited+=n;if((e.type==="ftMade"||e.type==="ftMiss")&&!e.jersey)row.unassignedFT++;});row.points+=Math.max(0,p.points-credited);});
+ (technical||[]).filter(function(e){return !e.voided;}).forEach(function(e){const row=sides[e.side];if(e.made){row.totalPoints++;if(!e.jersey)row.points++;}if(!e.jersey)row.unassignedFT++;});
+ const active=(gaps||[]).filter(function(g){return !g.resolved;});return{gaps:active.length,lastGapBoundary:active.length?Math.max.apply(null,active.map(function(g){return g.boundarySequence;})):null,our:sides.our,opponent:sides.opponent};
+}
+
 function cleanOfflineTechnicalFreeThrows_(input,adjustments,period,boundary){
  if(input==null)return [];if(!Array.isArray(input)||input.length>200)throw new Error("Up to 200 technical FT attempts are supported.");const ids=Object.create(null),links=Object.create(null);
  return input.map(function(e){if(!e||!/^TECHFT-[a-f0-9-]{36}$/i.test(String(e.id))||ids[e.id]||["our","opponent"].indexOf(e.side)<0||typeof e.made!=="boolean"||!Number.isInteger(e.period)||e.period<1||e.period>period||!Number.isInteger(e.boundarySequence)||e.boundarySequence<0||e.boundarySequence>boundary||isNaN(new Date(e.at).getTime()))throw new Error("Invalid technical free throw.");const jersey=String(e.jersey||"");if(jersey&&!/^\d{1,3}$/.test(jersey))throw new Error("Invalid technical FT shooter.");const link=String(e.scoreAdjustmentId||""),adjustment=(adjustments||[]).find(function(a){return a.id===link;}),voided=e.voided===true;
@@ -39,9 +55,9 @@ function cleanOfflineObjectiveEvents_(input,objectives,period,boundary){
  });
 }
 
-function buildOfflineObjectiveRows_(objectives,events,possessions,period,technicalFreeThrows){
+function buildOfflineObjectiveRows_(objectives,events,possessions,period,technicalFreeThrows,trackingGaps){
  const log=(possessions||[]).filter(function(p){return !p.voided;}),a=buildLiveAnalyticsSummary_(log,period||1),fields={points:"points",offensive_rebounds:"offensiveRebounds",paint_touches:"paintTouches",transition_points:"transitionPoints"};
- const technical=addOfflineTechnicalTotals_(a,technicalFreeThrows);
+ const technical=addOfflineTechnicalTotals_(a,technicalFreeThrows),quality=offlineTrackingQuality_(possessions,technicalFreeThrows,trackingGaps);
  return objectives.filter(function(o){return o.active!==false;}).map(function(o){
   const total={our:0,opponent:0,ourMade:0,ourAttempts:0,opponentMade:0,opponentAttempts:0},automatic=offlineObjectiveAutomatic_(o);
   if(automatic){
@@ -54,7 +70,8 @@ function buildOfflineObjectiveRows_(objectives,events,possessions,period,technic
   const side=o.subject.indexOf("opponent_")===0?"opponent":"our",value=total[side],margin=o.direction==="lower"?total.opponent-total.our:total.our-total.opponent;
   const measured=o.unit!=="percentage"||(o.goalType==="comparison"?total.ourAttempts>0&&total.opponentAttempts>0:total[side+"Attempts"]>0);
   const met=o.goalType==="comparison"?margin>=o.target:o.goalType==="minimum"?value>=o.target:o.goalType==="maximum"?value<=o.target:null;
-  return Object.assign({},o,total,{automatic:automatic,value:value,margin:margin,measured:measured,status:!measured?"No attempts":o.goalType==="track"?"Tracking":met?"On target":"Needs attention"});
+  const incomplete=automatic&&(quality.gaps>0||(o.metric==="points"&&o.subject.indexOf("_player")>0&&quality[side].points>0));
+  return Object.assign({},o,total,{incomplete:incomplete,creditMissingPoints:quality[side].points,automatic:automatic,value:value,margin:margin,measured:measured,status:incomplete?"Incomplete tracking":!measured?"No attempts":o.goalType==="track"?"Tracking":met?"On target":"Needs attention"});
  });
 }
 
@@ -151,7 +168,7 @@ function buildLivePossessionIntelligence_(possessions){
   ["offense","defense"].forEach(function(side){paint[side]={withTouch:{possessions:0,scored:0,points:0},withoutTouch:{possessions:0,scored:0,points:0},unknown:0,currentNoTouch:0,longestNoTouch:0,recordedTouches:0,singleTouch:{possessions:0,scored:0,points:0},multipleTouches:{possessions:0,scored:0,points:0}};});
   const labels={freeThrows:"Free throws",foulRetained:"Foul · retained ball",foulFreeThrows:"Foul → FTs",paintTouch:"Paint touch",offensiveRebound:"OREB",transition:"Transition",rightHandDrive:"Right-hand drive",deflection:"Deflection",driveKick:"Drive & kick",cut:"Cut",setPlay:"Set play",ato:"ATO",putback:"Putback",pickRoll:"Pick & roll",postUp:"Post-up",isolation:"Isolation"};
   (possessions||[]).forEach(function(item,index){
-    if(!paint[item.teamSide])return;const points=Number(item.points||0),side=item.teamSide,p=paint[side];
+    if(!paint[item.teamSide])return;if(item.gapBefore){kills.currentStops=0;paint.offense.currentNoTouch=0;paint.defense.currentNoTouch=0;}const points=Number(item.points||0),side=item.teamSide,p=paint[side];
     const touchCount=livePaintTouchCount_(item);p.recordedTouches+=touchCount;if(touchCount){const group=touchCount>=2?p.multipleTouches:p.singleTouch;group.possessions++;group.points+=points;if(points>0)group.scored++;}
     const covered=item.paintTouch===true||(Array.isArray(item.trackedTags)&&item.trackedTags.indexOf("paintTouch")>=0);
     if(covered){const bucket=item.paintTouch?p.withTouch:p.withoutTouch;bucket.possessions++;bucket.points+=points;if(points>0)bucket.scored++;p.currentNoTouch=item.paintTouch?0:p.currentNoTouch+1;p.longestNoTouch=Math.max(p.longestNoTouch,p.currentNoTouch);}else{p.unknown++;p.currentNoTouch=0;}
@@ -161,6 +178,7 @@ function buildLivePossessionIntelligence_(possessions){
     const tags={};Object.keys(labels).forEach(function(type){if(item[type]===true||(type==="offensiveRebound"&&Number(item.offensiveRebounds||0)>0))tags[JSON.stringify([type,labels[type]])]={type:type,label:labels[type]};});
     (item.playEvents||[]).forEach(function(event){const label=event.type==="customTag"?event.label:labels[event.type];if(label)tags[JSON.stringify([event.type,label])]={type:event.type,label:label};});
     Object.keys(tags).forEach(function(key){const tag=tags[key],groupKey=JSON.stringify([side,key]),group=patterns[groupKey]||(patterns[groupKey]={side:side,type:tag.type,label:tag.label,possessions:0,scored:0,points:0,logNumbers:[]});group.possessions++;group.points+=points;if(points>0)group.scored++;group.logNumbers.push(index+1);});
+    if(item.gapAfter){kills.currentStops=0;paint.offense.currentNoTouch=0;paint.defense.currentNoTouch=0;}
   });
   const breakdownCounts=Object.create(null);let taggedBuckets=0,totalBuckets=0;
   (possessions||[]).filter(function(p){return p.teamSide==="defense";}).forEach(function(p){if((p.playEvents||[]).some(function(e){return /^made[23]$/.test(e.type);}))totalBuckets++;(p.playEvents||[]).filter(function(e){return e.type==="defenseBreakdown";}).forEach(function(e){taggedBuckets++;breakdownCounts[e.label]=(breakdownCounts[e.label]||0)+1;});});
@@ -359,4 +377,4 @@ function buildGameScoutingComparison_(snapshot,report,sourceMode){
   const summary={};[["measured","measured"],["met","met"],["notMet","not_met"],["partial","partial"]].forEach(function(pair){summary[pair[0]]=rows.filter(function(row){return row.status===pair[1];}).length;});summary.review=rows.filter(function(row){return row.status==="review"||row.status==="untracked";}).length;
   return{available:true,sourceMode:sourceMode,source:snapshot,rows:rows,summary:summary};
 }
-export {cleanOfflineTechnicalFreeThrows_,addOfflineTechnicalTotals_,cleanOfflineObjectives_,offlineObjectiveAutomatic_,cleanOfflineObjectiveEvents_,buildOfflineObjectiveRows_,liveAnalyticsPlayPoints_,livePaintTouchCount_,cleanLiveAnalyticsPossession_,cleanLiveAnalyticsTrackedTags_,cleanLiveAnalyticsPlayEvents_,buildLiveAnalyticsPlayerTotals_,buildLiveScoringTagSummary_,buildLivePossessionIntelligence_,buildLiveAnalyticsSummary_,emptyLiveAnalyticsSide_,liveAnalyticsRate_,roundLiveAnalytics_,addLiveAnalyticsRates_,buildLiveNextAdjustment_,buildLiveReviewInsights_,scoutingComparisonMetrics_,scoutingMetricForLabel_,scoutingGameEvidence_,scoutingSectionGameContext_,buildGameScoutingComparison_};
+export {cleanOfflineTrackingGaps_,offlineGapLog_,offlineTrackingQuality_,cleanOfflineTechnicalFreeThrows_,addOfflineTechnicalTotals_,cleanOfflineObjectives_,offlineObjectiveAutomatic_,cleanOfflineObjectiveEvents_,buildOfflineObjectiveRows_,liveAnalyticsPlayPoints_,livePaintTouchCount_,cleanLiveAnalyticsPossession_,cleanLiveAnalyticsTrackedTags_,cleanLiveAnalyticsPlayEvents_,buildLiveAnalyticsPlayerTotals_,buildLiveScoringTagSummary_,buildLivePossessionIntelligence_,buildLiveAnalyticsSummary_,emptyLiveAnalyticsSide_,liveAnalyticsRate_,roundLiveAnalytics_,addLiveAnalyticsRates_,buildLiveNextAdjustment_,buildLiveReviewInsights_,scoutingComparisonMetrics_,scoutingMetricForLabel_,scoutingGameEvidence_,scoutingSectionGameContext_,buildGameScoutingComparison_};
