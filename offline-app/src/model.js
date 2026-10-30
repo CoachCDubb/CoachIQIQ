@@ -1,8 +1,8 @@
 import * as C from './credit.js';
 import * as O from './objectives.js';
 import {cleanLiveAnalyticsPossession_,buildLiveAnalyticsSummary_,buildLiveReviewInsights_,buildLiveNextAdjustment_,buildGameScoutingComparison_} from './engine.js';
-import {buildReportContext,reportFingerprint} from './insights.js';
-export const VERSION='2026.10.30.4';
+import {buildReportContext,reportFingerprint,buildHuddleBrief} from './insights.js';
+export const VERSION='2026.10.30.5';
 export const TAGS=[['paintTouch','Paint touch'],['offensiveRebound','OREB'],['transition','Transition'],['cut','Cut'],['driveKick','Drive & kick'],['setPlay','Set play'],['ato','ATO'],['deflection','Deflection'],['putback','Putback'],['pickRoll','Pick & roll'],['postUp','Post-up'],['isolation','Isolation'],['rightHandDrive','Right-hand drive']];
 export const clone=value=>structuredClone(value);
 export const id=prefix=>prefix+crypto.randomUUID();
@@ -55,3 +55,5 @@ export function copyWithLinkedTeam(original,link,team){
   game.markers.forEach(m=>m.adjustmentId=id('TACTIC-'));game.scoreAdjustments.forEach(a=>a.id=id('SCORE-'));
   game.id=id('OFFGAME-');game.importId=id('OFFIMPORT-');game.revision=0;game.team=team;game.season=clean.season||game.season;game.teamLinkCorrection={sourceGameId:original.id,fromTeam:original.team,toTeam:team,at:new Date().toISOString()};if(game.scouting)game.scouting.team=team;delete game.exportedAt;return game;
 }
+
+export function huddleBrief(context){return buildHuddleBrief(context);}
