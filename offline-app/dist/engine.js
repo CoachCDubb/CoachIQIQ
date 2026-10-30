@@ -1,5 +1,16 @@
 // Generated from CoachIQ canonical analytics. Run node offline-app/tools/build.cjs.
 const Utilities={getUuid:()=>crypto.randomUUID()};
+function cleanOfflineTechnicalFreeThrows_(input,adjustments,period,boundary){
+ if(input==null)return [];if(!Array.isArray(input)||input.length>200)throw new Error("Up to 200 technical FT attempts are supported.");const ids=Object.create(null),links=Object.create(null);
+ return input.map(function(e){if(!e||!/^TECHFT-[a-f0-9-]{36}$/i.test(String(e.id))||ids[e.id]||["our","opponent"].indexOf(e.side)<0||typeof e.made!=="boolean"||!Number.isInteger(e.period)||e.period<1||e.period>period||!Number.isInteger(e.boundarySequence)||e.boundarySequence<0||e.boundarySequence>boundary||isNaN(new Date(e.at).getTime()))throw new Error("Invalid technical free throw.");const jersey=String(e.jersey||"");if(jersey&&!/^\d{1,3}$/.test(jersey))throw new Error("Invalid technical FT shooter.");const link=String(e.scoreAdjustmentId||""),adjustment=(adjustments||[]).find(function(a){return a.id===link;}),voided=e.voided===true;
+ if(e.made){if(!/^SCORE-[a-f0-9-]{36}$/i.test(link)||links[link]||(!voided&&(!adjustment||adjustment.delta!==1||adjustment.side!==e.side||adjustment.period!==e.period))||(voided&&adjustment))throw new Error("Technical FT points must match their score adjustment.");links[link]=true;}else if(link)throw new Error("A missed technical FT cannot add score points.");ids[e.id]=true;return{id:String(e.id),side:e.side,made:e.made,jersey:jersey,period:e.period,boundarySequence:e.boundarySequence,at:new Date(e.at).toISOString(),scoreAdjustmentId:link,voided:voided};});
+}
+
+function addOfflineTechnicalTotals_(analytics,attempts){
+ const totals={our:{made:0,attempted:0},opponent:{made:0,attempted:0}};
+ (attempts||[]).filter(function(e){return !e.voided;}).forEach(function(e){totals[e.side].attempted++;if(e.made)totals[e.side].made++;if(!e.jersey)return;const side=e.side==="our"?"us":"opponent";let p=analytics.playerTotals.find(function(p){return p.jersey===e.jersey&&p.playerSide===side;});if(!p){p={jersey:e.jersey,playerSide:side,points:0,paintTouches:0,offensiveRebounds:0,deflections:0,freeThrowsMade:0,freeThrowsAttempted:0,turnovers:0,forcedTurnovers:0};analytics.playerTotals.push(p);}p.freeThrowsAttempted++;if(e.made){p.freeThrowsMade++;p.points++;}});return totals;
+}
+
 function cleanOfflineObjectives_(input) {
   if(input==null)return [];
   if(!Array.isArray(input)||input.length>12)throw new Error("Choose up to twelve game-plan objectives.");
@@ -28,15 +39,16 @@ function cleanOfflineObjectiveEvents_(input,objectives,period,boundary){
  });
 }
 
-function buildOfflineObjectiveRows_(objectives,events,possessions,period){
+function buildOfflineObjectiveRows_(objectives,events,possessions,period,technicalFreeThrows){
  const log=(possessions||[]).filter(function(p){return !p.voided;}),a=buildLiveAnalyticsSummary_(log,period||1),fields={points:"points",offensive_rebounds:"offensiveRebounds",paint_touches:"paintTouches",transition_points:"transitionPoints"};
+ const technical=addOfflineTechnicalTotals_(a,technicalFreeThrows);
  return objectives.filter(function(o){return o.active!==false;}).map(function(o){
   const total={our:0,opponent:0,ourMade:0,ourAttempts:0,opponentMade:0,opponentAttempts:0},automatic=offlineObjectiveAutomatic_(o);
   if(automatic){
    if(o.subject.indexOf("_player")>0){const side=o.subject==="our_player"?"us":"opponent",player=(a.playerTotals||[]).find(function(p){return p.jersey===o.jersey&&p.playerSide===side;});total[side==="us"?"our":"opponent"]=player?Number(player[fields[o.metric]||"deflections"]||0):0;}
    else if(o.metric==="deflections"){log.forEach(function(p){(p.playEvents||[]).forEach(function(e){if(e.type==="deflection")total[p.teamSide==="defense"?"our":"opponent"]++;});});}
    else if(o.metric==="turnovers"){total.our=a.offense.turnovers;total.opponent=a.defense.forcedTurnovers;}
-   else{total.our=Number(a.offense[fields[o.metric]]||0);total.opponent=Number(a.defense[fields[o.metric]]||0);}
+   else{total.our=Number(a.offense[fields[o.metric]]||0);total.opponent=Number(a.defense[fields[o.metric]]||0);if(o.metric==="points"){total.our+=technical.our.made;total.opponent+=technical.opponent.made;}}
   }else events.filter(function(e){return e.objectiveId===o.id&&!e.voided;}).forEach(function(e){if(o.unit==="percentage"){total[e.side+"Attempts"]++;if(e.kind==="made")total[e.side+"Made"]++;}else total[e.side]+=e.amount;});
   if(o.unit==="percentage")["our","opponent"].forEach(function(side){total[side]=total[side+"Attempts"]?Math.round(total[side+"Made"]/total[side+"Attempts"]*1000)/10:0;});
   const side=o.subject.indexOf("opponent_")===0?"opponent":"our",value=total[side],margin=o.direction==="lower"?total.opponent-total.our:total.our-total.opponent;
@@ -347,4 +359,4 @@ function buildGameScoutingComparison_(snapshot,report,sourceMode){
   const summary={};[["measured","measured"],["met","met"],["notMet","not_met"],["partial","partial"]].forEach(function(pair){summary[pair[0]]=rows.filter(function(row){return row.status===pair[1];}).length;});summary.review=rows.filter(function(row){return row.status==="review"||row.status==="untracked";}).length;
   return{available:true,sourceMode:sourceMode,source:snapshot,rows:rows,summary:summary};
 }
-export {cleanOfflineObjectives_,offlineObjectiveAutomatic_,cleanOfflineObjectiveEvents_,buildOfflineObjectiveRows_,liveAnalyticsPlayPoints_,livePaintTouchCount_,cleanLiveAnalyticsPossession_,cleanLiveAnalyticsTrackedTags_,cleanLiveAnalyticsPlayEvents_,buildLiveAnalyticsPlayerTotals_,buildLiveScoringTagSummary_,buildLivePossessionIntelligence_,buildLiveAnalyticsSummary_,emptyLiveAnalyticsSide_,liveAnalyticsRate_,roundLiveAnalytics_,addLiveAnalyticsRates_,buildLiveNextAdjustment_,buildLiveReviewInsights_,scoutingComparisonMetrics_,scoutingMetricForLabel_,scoutingGameEvidence_,scoutingSectionGameContext_,buildGameScoutingComparison_};
+export {cleanOfflineTechnicalFreeThrows_,addOfflineTechnicalTotals_,cleanOfflineObjectives_,offlineObjectiveAutomatic_,cleanOfflineObjectiveEvents_,buildOfflineObjectiveRows_,liveAnalyticsPlayPoints_,livePaintTouchCount_,cleanLiveAnalyticsPossession_,cleanLiveAnalyticsTrackedTags_,cleanLiveAnalyticsPlayEvents_,buildLiveAnalyticsPlayerTotals_,buildLiveScoringTagSummary_,buildLivePossessionIntelligence_,buildLiveAnalyticsSummary_,emptyLiveAnalyticsSide_,liveAnalyticsRate_,roundLiveAnalytics_,addLiveAnalyticsRates_,buildLiveNextAdjustment_,buildLiveReviewInsights_,scoutingComparisonMetrics_,scoutingMetricForLabel_,scoutingGameEvidence_,scoutingSectionGameContext_,buildGameScoutingComparison_};
