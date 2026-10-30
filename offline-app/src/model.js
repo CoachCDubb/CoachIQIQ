@@ -2,7 +2,7 @@ import * as C from './credit.js';
 import * as O from './objectives.js';
 import {cleanLiveAnalyticsPossession_,buildLiveAnalyticsSummary_,buildLiveReviewInsights_,buildLiveNextAdjustment_,buildGameScoutingComparison_} from './engine.js';
 import {buildReportContext,reportFingerprint} from './insights.js';
-export const VERSION='2026.10.30.3';
+export const VERSION='2026.10.30.4';
 export const TAGS=[['paintTouch','Paint touch'],['offensiveRebound','OREB'],['transition','Transition'],['cut','Cut'],['driveKick','Drive & kick'],['setPlay','Set play'],['ato','ATO'],['deflection','Deflection'],['putback','Putback'],['pickRoll','Pick & roll'],['postUp','Post-up'],['isolation','Isolation'],['rightHandDrive','Right-hand drive']];
 export const clone=value=>structuredClone(value);
 export const id=prefix=>prefix+crypto.randomUUID();
