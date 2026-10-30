@@ -2,7 +2,7 @@ import {cleanOfflineObjectives_,cleanOfflineObjectiveEvents_,buildOfflineObjecti
 export const clean=cleanOfflineObjectives_;
 export const automatic=offlineObjectiveAutomatic_;
 export function validateGame(g){g.objectives=clean(g.objectives);g.objectiveEvents=cleanOfflineObjectiveEvents_(g.objectiveEvents,g.objectives,g.period,g.possessions.length);for(const cp of g.reportCheckpoints||[]){if(cp.snapshot?.objectivePlan!=null)cp.snapshot.objectivePlan=clean(cp.snapshot.objectivePlan);if(cp.snapshot?.objectiveEventCount!=null&&(!Number.isInteger(cp.snapshot.objectiveEventCount)||cp.snapshot.objectiveEventCount<0||cp.snapshot.objectiveEventCount>g.objectiveEvents.length))throw Error('Invalid report objective boundary.');}}
-export function rows(g){return buildOfflineObjectiveRows_(clean(g.objectives),g.objectiveEvents||[],g.possessions,g.period,g.technicalFreeThrows);}
+export function rows(g){return buildOfflineObjectiveRows_(clean(g.objectives),g.objectiveEvents||[],g.possessions,g.period,g.technicalFreeThrows,g.trackingGaps);}
 function editable(g){if(g.status!=='live'||g.transferLocked)throw Error('Game-plan objectives can only change during an unlocked live game.');}
 export function add(g,value){editable(g);const o={...value,id:'objective_'+crypto.randomUUID().replace(/-/g,'')};const plan=clean([...(g.objectives||[]),o]);g.objectives=plan;return o.id;}
 export function archive(g,id){editable(g);const o=(g.objectives||[]).find(o=>o.id===id);if(!o)throw Error('Choose an objective.');o.active=false;}
