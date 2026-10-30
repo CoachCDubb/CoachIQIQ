@@ -1,5 +1,51 @@
 // Generated from CoachIQ canonical analytics. Run node offline-app/tools/build.cjs.
 const Utilities={getUuid:()=>crypto.randomUUID()};
+function cleanOfflineObjectives_(input) {
+  if(input==null)return [];
+  if(!Array.isArray(input)||input.length>12)throw new Error("Choose up to twelve game-plan objectives.");
+  const seen=Object.create(null),metrics=["points","offensive_rebounds","paint_touches","transition_points","turnovers","deflections","fouls","custom"];
+  return input.map(function(raw,index){
+    if(!raw||typeof raw!=="object")throw new Error("Invalid objective.");
+    const id=String(raw.id||""),label=String(raw.label||"").trim(),goalType=raw.goalType||"track",unit=raw.unit||"count",subject=goalType==="comparison"?"both_teams":raw.subject||"our_team",target=Number(raw.target||0);
+    const key=String(raw.categoryKey||raw.metric||label).toLowerCase().replace(/[^a-z0-9]+/g,"_").replace(/^_+|_+$/g,""),metric=raw.metric||(key==="featured_player_points"?"points":metrics.indexOf(key)>=0?key:"custom");
+    if(!/^objective_[a-z0-9_]{1,75}$/.test(id)||seen[id]||!label||label.length>60||/[\x00-\x1f]/.test(label))throw new Error("Every objective needs a unique ID and a name of up to 60 characters.");
+    if(metrics.indexOf(metric)<0||["track","minimum","maximum","comparison"].indexOf(goalType)<0||["our_team","opponent_team","our_player","opponent_player","both_teams"].indexOf(subject)<0||["count","points","percentage"].indexOf(unit)<0||!Number.isFinite(target)||target<0||target>(unit==="percentage"?100:9999))throw new Error("Choose a valid metric, goal, subject and target.");
+    const jersey=String(raw.jersey||"").trim();if(subject.indexOf("_player")>0&&!/^\d{1,3}$/.test(jersey))throw new Error(label+" needs a player jersey number.");
+    seen[id]=true;return{id:id,label:label,metric:metric,categoryKey:key||"custom",goalType:goalType,subject:subject,target:target,direction:raw.direction==="lower"?"lower":"higher",unit:unit,jersey:jersey,playerLabel:String(raw.playerLabel||"").slice(0,100),playerId:String(raw.playerId||"").slice(0,100),active:raw.active!==false,order:index};
+  });
+}
+
+function offlineObjectiveAutomatic_(o){return o.unit!=="percentage"&&(["points","offensive_rebounds","paint_touches","deflections"].indexOf(o.metric)>=0||(["transition_points","turnovers"].indexOf(o.metric)>=0&&o.subject.indexOf("_player")<0));}
+
+function cleanOfflineObjectiveEvents_(input,objectives,period,boundary){
+ if(input==null)return [];if(!Array.isArray(input)||input.length>2000)throw new Error("Up to 2,000 manual objective taps are supported.");
+ const ids=Object.create(null);return input.map(function(e){
+  const o=objectives.find(function(o){return o.id===e.objectiveId;});
+  if(!o||offlineObjectiveAutomatic_(o)||!/^OBJEV-[a-f0-9-]{36}$/i.test(String(e.id))||ids[e.id]||!Number.isInteger(e.period)||e.period<1||e.period>period||!Number.isInteger(e.boundarySequence)||e.boundarySequence<0||e.boundarySequence>boundary||["our","opponent"].indexOf(e.side)<0||!Number.isInteger(e.amount)||e.amount<1||e.amount>3||isNaN(new Date(e.at).getTime()))throw new Error("Invalid manual objective tap.");
+  if((o.subject.indexOf("our_")===0&&e.side!=="our")||(o.subject.indexOf("opponent_")===0&&e.side!=="opponent"))throw new Error("Objective tap has the wrong team.");
+  if(o.unit==="percentage"?(["made","miss"].indexOf(e.kind)<0||e.amount!==1):e.kind!=="count")throw new Error("Invalid objective tap unit.");
+  ids[e.id]=true;return{id:String(e.id),objectiveId:o.id,period:e.period,boundarySequence:e.boundarySequence,side:e.side,amount:e.amount,kind:e.kind,at:new Date(e.at).toISOString(),voided:e.voided===true};
+ });
+}
+
+function buildOfflineObjectiveRows_(objectives,events,possessions,period){
+ const log=(possessions||[]).filter(function(p){return !p.voided;}),a=buildLiveAnalyticsSummary_(log,period||1),fields={points:"points",offensive_rebounds:"offensiveRebounds",paint_touches:"paintTouches",transition_points:"transitionPoints"};
+ return objectives.filter(function(o){return o.active!==false;}).map(function(o){
+  const total={our:0,opponent:0,ourMade:0,ourAttempts:0,opponentMade:0,opponentAttempts:0},automatic=offlineObjectiveAutomatic_(o);
+  if(automatic){
+   if(o.subject.indexOf("_player")>0){const side=o.subject==="our_player"?"us":"opponent",player=(a.playerTotals||[]).find(function(p){return p.jersey===o.jersey&&p.playerSide===side;});total[side==="us"?"our":"opponent"]=player?Number(player[fields[o.metric]||"deflections"]||0):0;}
+   else if(o.metric==="deflections"){log.forEach(function(p){(p.playEvents||[]).forEach(function(e){if(e.type==="deflection")total[p.teamSide==="defense"?"our":"opponent"]++;});});}
+   else if(o.metric==="turnovers"){total.our=a.offense.turnovers;total.opponent=a.defense.forcedTurnovers;}
+   else{total.our=Number(a.offense[fields[o.metric]]||0);total.opponent=Number(a.defense[fields[o.metric]]||0);}
+  }else events.filter(function(e){return e.objectiveId===o.id&&!e.voided;}).forEach(function(e){if(o.unit==="percentage"){total[e.side+"Attempts"]++;if(e.kind==="made")total[e.side+"Made"]++;}else total[e.side]+=e.amount;});
+  if(o.unit==="percentage")["our","opponent"].forEach(function(side){total[side]=total[side+"Attempts"]?Math.round(total[side+"Made"]/total[side+"Attempts"]*1000)/10:0;});
+  const side=o.subject.indexOf("opponent_")===0?"opponent":"our",value=total[side],margin=o.direction==="lower"?total.opponent-total.our:total.our-total.opponent;
+  const measured=o.unit!=="percentage"||(o.goalType==="comparison"?total.ourAttempts>0&&total.opponentAttempts>0:total[side+"Attempts"]>0);
+  const met=o.goalType==="comparison"?margin>=o.target:o.goalType==="minimum"?value>=o.target:o.goalType==="maximum"?value<=o.target:null;
+  return Object.assign({},o,total,{automatic:automatic,value:value,margin:margin,measured:measured,status:!measured?"No attempts":o.goalType==="track"?"Tracking":met?"On target":"Needs attention"});
+ });
+}
+
 function liveAnalyticsPlayPoints_(event){return event.type==="ftMade"?1:/^made[123]$/.test(event.type)?Number(event.type.slice(-1)):0;}
 
 function livePaintTouchCount_(item){const count=(item.playEvents||[]).filter(function(event){return event.type==="paintTouch";}).length;return count||(item.paintTouch===true?1:0);}
@@ -291,4 +337,4 @@ function buildGameScoutingComparison_(snapshot,report,sourceMode){
   const summary={};[["measured","measured"],["met","met"],["notMet","not_met"],["partial","partial"]].forEach(function(pair){summary[pair[0]]=rows.filter(function(row){return row.status===pair[1];}).length;});summary.review=rows.filter(function(row){return row.status==="review"||row.status==="untracked";}).length;
   return{available:true,sourceMode:sourceMode,source:snapshot,rows:rows,summary:summary};
 }
-export {liveAnalyticsPlayPoints_,livePaintTouchCount_,cleanLiveAnalyticsPossession_,cleanLiveAnalyticsTrackedTags_,cleanLiveAnalyticsPlayEvents_,buildLiveAnalyticsPlayerTotals_,buildLiveScoringTagSummary_,buildLivePossessionIntelligence_,buildLiveAnalyticsSummary_,emptyLiveAnalyticsSide_,liveAnalyticsRate_,roundLiveAnalytics_,addLiveAnalyticsRates_,buildLiveNextAdjustment_,buildLiveReviewInsights_,scoutingComparisonMetrics_,scoutingMetricForLabel_,scoutingGameEvidence_,scoutingSectionGameContext_,buildGameScoutingComparison_};
+export {cleanOfflineObjectives_,offlineObjectiveAutomatic_,cleanOfflineObjectiveEvents_,buildOfflineObjectiveRows_,liveAnalyticsPlayPoints_,livePaintTouchCount_,cleanLiveAnalyticsPossession_,cleanLiveAnalyticsTrackedTags_,cleanLiveAnalyticsPlayEvents_,buildLiveAnalyticsPlayerTotals_,buildLiveScoringTagSummary_,buildLivePossessionIntelligence_,buildLiveAnalyticsSummary_,emptyLiveAnalyticsSide_,liveAnalyticsRate_,roundLiveAnalytics_,addLiveAnalyticsRates_,buildLiveNextAdjustment_,buildLiveReviewInsights_,scoutingComparisonMetrics_,scoutingMetricForLabel_,scoutingGameEvidence_,scoutingSectionGameContext_,buildGameScoutingComparison_};
